@@ -5,7 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, collection, writeBatch } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,14 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!db) {
+        toast({
+            variant: "destructive",
+            title: "Erreur de configuration",
+            description: "La base de données n'est pas initialisée. Veuillez vérifier votre configuration Firebase.",
+        });
+        return;
+    }
     setIsLoading(true);
 
     try {
@@ -37,10 +45,12 @@ export default function SignupPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      const batch = writeBatch(db);
+
       // 2. Create tenant document
-      const tenantId = user.uid; // For simplicity, tenantId = first admin's uid
-      const tenantRef = doc(db, "tenants", tenantId);
-      await setDoc(tenantRef, {
+      // In this simplified model, we use a random ID for the tenant
+      const tenantRef = doc(collection(db, "tenants"));
+      batch.set(tenantRef, {
         name: tenantName,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
@@ -48,14 +58,20 @@ export default function SignupPage() {
       });
 
       // 3. Create tenantUsers document for the new admin
+      // The ID is the user's UID for easy lookup
       const tenantUserRef = doc(db, "tenantUsers", user.uid);
-      await setDoc(tenantUserRef, {
-        tenantId: tenantId,
+      batch.set(tenantUserRef, {
+        tenantId: tenantRef.id,
         uid: user.uid,
+        email: user.email, // Denormalize for easier queries
+        name: fullName, // Denormalize for easier display
         role: "Admin",
         status: "active",
         createdAt: serverTimestamp(),
       });
+      
+      await batch.commit();
+
 
       toast({
         title: "Compte créé avec succès !",

@@ -71,8 +71,8 @@ export interface Tenant {
   status: 'active' | 'inactive';
 }
 
+// This replaces the TenantUser interface
 export interface TenantUser {
-    id: string; // {tenantId}_{uid}
     tenantId: string;
     uid: string;
     role: Role;

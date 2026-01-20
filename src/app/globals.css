@@ -65,11 +65,4 @@
     --sidebar-border: 217.2 32.6% 17.5%;
     --sidebar-ring: 43 93% 50%;
   }
-  
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
 }

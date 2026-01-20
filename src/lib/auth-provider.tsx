@@ -31,24 +31,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return (
         <div className="flex min-h-dvh w-full items-center justify-center bg-background p-4 text-foreground">
             <div className="w-full max-w-lg rounded-lg border bg-card p-8 text-center shadow-lg">
-                <h1 className="text-2xl font-bold text-destructive">Firebase Configuration Error</h1>
+                <h1 className="text-2xl font-bold text-destructive">Firebase Initialization Error</h1>
                 <p className="mt-4 text-card-foreground">
-                    Your Firebase environment variables are not set correctly. The application cannot connect to Firebase.
+                    The application could not connect to Firebase. This might be a temporary issue or a problem with the provided configuration.
                 </p>
-                <p className="mt-4 text-sm text-muted-foreground">
-                    Please create a <code>.env.local</code> file in the root of your project and add your Firebase project credentials. You can find these in your Firebase project settings.
-                </p>
-                <div className="mt-6 w-full rounded-md bg-muted p-4 text-left text-xs text-muted-foreground">
-                    <p># .env.local</p>
-                    <p>NEXT_PUBLIC_FIREBASE_API_KEY=...</p>
-                    <p>NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...</p>
-                    <p>NEXT_PUBLIC_FIREBASE_PROJECT_ID=...</p>
-                    <p>NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...</p>
-                    <p>NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...</p>
-                    <p>NEXT_PUBLIC_FIREBASE_APP_ID=...</p>
-                </div>
                  <p className="mt-4 text-sm text-muted-foreground">
-                    After creating the file, you must <strong>restart the development server</strong>.
+                    Please try refreshing the page. If the problem persists, contact support.
                 </p>
             </div>
         </div>
@@ -58,6 +46,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
+        // Look for user data in tenantUsers collection
         const tenantUserRef = doc(db, `tenantUsers/${firebaseUser.uid}`);
         const tenantUserSnap = await getDoc(tenantUserRef);
 

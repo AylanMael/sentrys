@@ -5,33 +5,34 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function myUid() { return request.auth.uid; }
 
-    // User profile / membership (V1: 1 tenant par user, doc id = uid)
+    // User profile / membership
+    // A user can only create, read, or update their OWN document.
     match /tenantUsers/{uid} {
       allow create: if signedIn() && uid == myUid();
       allow read: if signedIn() && uid == myUid();
-      // Empêche un user de s'auto-promouvoir
+      // An update is only allowed if the user is not trying to change their role or tenant.
       allow update: if signedIn() && uid == myUid()
         && request.resource.data.role == resource.data.role
         && request.resource.data.tenantId == resource.data.tenantId;
-      allow delete: if false;
+      allow delete: if false; // Deleting user profiles is not allowed from the client.
     }
 
     // Tenants
     match /tenants/{tenantId} {
-      // Création permise seulement si le user a déjà son tenantUsers/{uid}
-      allow create: if signedIn()
-        && exists(/databases/$(database)/documents/tenantUsers/$(myUid()))
-        && get(/databases/$(database)/documents/tenantUsers/$(myUid())).data.tenantId == tenantId;
+      // A user can create a tenant if they are signed in and they are the creator.
+      // This rule enables the atomic signup flow where a tenant and a user are created together.
+      allow create: if signedIn() && request.resource.data.createdBy == myUid();
 
+      // A user can read a tenant document only if they are a member of that tenant.
       allow read: if signedIn()
         && exists(/databases/$(database)/documents/tenantUsers/$(myUid()))
         && get(/databases/$(database)/documents/tenantUsers/$(myUid())).data.tenantId == tenantId;
 
-      // (pour l’instant) pas d’update/delete côté client
+      // Updating and deleting tenants is not allowed from the client for security.
       allow update, delete: if false;
     }
 
-    // Tout le reste interdit pour l’instant
+    // Default deny: all other paths are closed.
     match /{document=**} {
       allow read, write: if false;
     }

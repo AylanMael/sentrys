@@ -1,26 +1,33 @@
 
 rules_version = '2';
-// Force redeploy by adding a comment
+
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Default deny all
+    // Default deny all access
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Allow user to create their own tenant and user document during signup.
-    // This is the minimum required for the signup flow to work.
-    match /tenants/{tenantId} {
-      allow create: if request.auth != null; // Temporarily relaxed to unblock signup
-      // After signup, a user can read their own tenant doc.
-      // This rule is simplified and will need to be expanded as your app grows.
-      allow read: if get(/databases/$(database)/documents/tenantUsers/$(request.auth.uid)).data.tenantId == tenantId;
-    }
-    
+    // Allow a user to create their own tenantUser document.
+    // This happens during signup.
+    // Also, allow a user to read their own tenantUser document.
+    // This happens on login and page loads to get role/tenant info.
     match /tenantUsers/{userId} {
-      // A user can create their own tenantUser document and read it.
-      allow create, read: if request.auth != null && request.auth.uid == userId;
+      allow read, create: if request.auth.uid == userId;
+    }
+
+    // Allow a user to create a new tenant document, but only if they are
+    // also creating their own tenantUser document in the same request (batch).
+    // This is a key part of the secure signup flow.
+    match /tenants/{tenantId} {
+       allow create: if request.auth.uid != null &&
+                      getAfter(/databases/$(database)/documents/tenantUsers/$(request.auth.uid)).data.tenantId == tenantId;
+      
+       // Allow a user to read their own tenant document.
+       // The rule checks the tenantUser doc to find which tenant the user belongs to.
+       allow read: if request.auth.uid != null &&
+                    get(/databases/$(database)/documents/tenantUsers/$(request.auth.uid)).data.tenantId == tenantId;
     }
   }
 }

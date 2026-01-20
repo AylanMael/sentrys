@@ -124,9 +124,14 @@ export default function DashboardLayout({
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
-        <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 bg-background">
+        <div className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 bg-background">
           {children}
-        </main>
+        </div>
+        <footer className="py-6 px-4 md:px-6 border-t">
+          <p className="text-center text-xs text-muted-foreground">
+            &copy; {new Date().getFullYear()} SENTRYS. Tous droits réservés.
+          </p>
+        </footer>
       </SidebarInset>
     </SidebarProvider>
   );

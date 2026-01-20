@@ -73,7 +73,7 @@ export default function DashboardLayout({
 
   if (loading) {
     return (
-        <div className="flex h-screen w-full items-center justify-center">
+        <div className="flex min-h-screen w-full items-center justify-center">
             <div className="flex flex-col items-center gap-4">
                 <Logo />
                 <Skeleton className="h-4 w-[200px]" />

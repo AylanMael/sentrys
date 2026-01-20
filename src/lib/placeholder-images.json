@@ -1,3 +1,34 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "hero-landing",
+      "description": "Hero image for the landing page showing security operations.",
+      "imageUrl": "https://images.unsplash.com/photo-1672989017411-89143d3b1415?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxzZWN1cml0eSUyMG9wZXJhdGlvbnMlMjBjb21tYW5kJTIwY2VudGVyfGVufDB8fHx8MTc2ODg5NTc4M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "security operations command center"
+    },
+    {
+      "id": "user-avatar-1",
+      "description": "User avatar",
+      "imageUrl": "https://images.unsplash.com/photo-1521119989659-a83eee488004?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxwZXJzb24lMjBwb3J0cmFpdHxlbnwwfHx8fDE3Njg4NzU1MzB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person portrait"
+    },
+    {
+      "id": "agent-avatar-1",
+      "description": "Agent avatar 1",
+      "imageUrl": "https://images.unsplash.com/photo-1746640546704-74e784dcd986?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxzZWN1cml0eSUyMGd1YXJkJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzY4ODk1NzgzfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "security guard portrait"
+    },
+    {
+      "id": "agent-avatar-2",
+      "description": "Agent avatar 2",
+      "imageUrl": "https://images.unsplash.com/photo-1727884032260-6bf73ba803b5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxzZWN1cml0eSUyMGd1YXJkJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzY4ODk1NzgzfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "security guard portrait"
+    },
+    {
+      "id": "agent-avatar-3",
+      "description": "Agent avatar 3",
+      "imageUrl": "https://images.unsplash.com/photo-1767619834226-6e7adadecbc4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxzZWN1cml0eSUyMGd1YXJkJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzY4ODk1NzgzfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "security guard portrait"
+    }
+  ]
 }

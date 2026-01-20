@@ -2,54 +2,40 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return signedIn() && request.auth.uid == userId;
-    }
-
-    // A user can create their own profile during the initial signup.
     match /tenantUsers/{userId} {
-      // CREATE: A user can create their own profile document.
-      // This is part of the atomic signup flow.
-      allow create: if isOwner(userId)
-                    // We must be setting the role to 'Admin' for the initial user.
-                    && request.resource.data.role == 'Admin'
-                    // The document UID must match the authenticated user.
-                    && request.resource.data.uid == userId;
+      // Allow a new user to create their own user document during signup.
+      // - The document ID {userId} must match the authenticated user's UID.
+      // - The 'uid' field in the document must also match the UID.
+      // - The user must be assigned the 'Admin' role initially.
+      allow create: if request.auth != null 
+                    && request.auth.uid == userId
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.role == 'Admin';
 
-      // READ: A user can only read their own profile.
-      allow read: if isOwner(userId);
+      // A user can only read their own user document.
+      allow read: if request.auth != null && request.auth.uid == userId;
 
-      // UPDATE: A user can update their own profile, but cannot change their tenant or role.
-      allow update: if isOwner(userId)
+      // A user can update their own profile, but cannot change their tenant or role.
+      allow update: if request.auth != null && request.auth.uid == userId
                     && request.resource.data.tenantId == resource.data.tenantId
                     && request.resource.data.role == resource.data.role;
 
-      // DELETE: Not allowed from the client.
       allow delete: if false;
     }
 
-    // A tenant document can be created by the user who is designated as its creator.
     match /tenants/{tenantId} {
-      // CREATE: A user can create a tenant if they are the creator.
-      // This is part of the atomic signup flow.
-      allow create: if signedIn()
+      // Allow a user to create a tenant document during signup.
+      // The 'createdBy' field must match the authenticated user's UID.
+      allow create: if request.auth != null 
                     && request.resource.data.createdBy == request.auth.uid;
 
-      // READ: A user can read a tenant doc if they are a member of that tenant.
-      allow read: if signedIn()
+      // A user can read a tenant document if they are a member of that tenant.
+      // We must check if the user's profile document exists before trying to get it.
+      allow read: if request.auth != null
+                  && exists(/databases/$(database)/documents/tenantUsers/$(request.auth.uid))
                   && get(/databases/$(database)/documents/tenantUsers/$(request.auth.uid)).data.tenantId == tenantId;
 
-      // UPDATE, DELETE: Not allowed from the client.
       allow update, delete: if false;
-    }
-
-    // Default deny all other access.
-    match /{document=**} {
-      allow read, write: if false;
     }
   }
 }

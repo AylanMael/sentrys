@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FirestorePermissionError } from "@/lib/firebase/errors";
+import { errorEmitter } from "@/lib/firebase/error-emitter";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -48,38 +50,54 @@ export default function SignupPage() {
       const batch = writeBatch(db);
 
       // 2. Create tenant document
-      // In this simplified model, we use a random ID for the tenant
       const tenantRef = doc(collection(db, "tenants"));
-      batch.set(tenantRef, {
+      const tenantData = {
         name: tenantName,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
         status: "active",
-      });
+      };
+      batch.set(tenantRef, tenantData);
 
       // 3. Create tenantUsers document for the new admin
-      // The ID is the user's UID for easy lookup
       const tenantUserRef = doc(db, "tenantUsers", user.uid);
-      batch.set(tenantUserRef, {
+      const tenantUserData = {
         tenantId: tenantRef.id,
         uid: user.uid,
-        email: user.email, // Denormalize for easier queries
-        name: fullName, // Denormalize for easier display
-        role: "Admin",
-        status: "active",
+        email: user.email,
+        name: fullName,
+        role: "Admin" as const,
+        status: "active" as const,
         createdAt: serverTimestamp(),
-      });
+      };
+      batch.set(tenantUserRef, tenantUserData);
       
-      await batch.commit();
+      batch.commit()
+        .then(() => {
+            toast({
+                title: "Compte créé avec succès !",
+                description: "Votre espace de travail est prêt. Redirection...",
+            });
+            router.push("/dashboard");
+        })
+        .catch((serverError) => {
+            // Re-enable the form for another attempt
+            setIsLoading(false);
+            console.error("Batch write failed:", serverError);
 
+            // Create a rich, contextual error for debugging security rules
+            const permissionError = new FirestorePermissionError({
+                path: `BATCH WRITE to collections: 'tenants', 'tenantUsers'`,
+                operation: 'write',
+                requestResourceData: { tenant: tenantData, tenantUser: tenantUserData },
+            });
+            
+            // Emit the error to be caught by the global listener
+            errorEmitter.emit('permission-error', permissionError);
+        });
 
-      toast({
-        title: "Compte créé avec succès !",
-        description: "Votre espace de travail est prêt. Redirection...",
-      });
-
-      router.push("/dashboard");
-    } catch (error: any) {
+    } catch (error: any) { // This will now primarily catch Auth errors
+      setIsLoading(false);
       console.error(error);
       let description = "Une erreur est survenue. Veuillez réessayer.";
       if (error.code === "auth/email-already-in-use") {
@@ -92,8 +110,6 @@ export default function SignupPage() {
         title: "Échec de l'inscription",
         description,
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 

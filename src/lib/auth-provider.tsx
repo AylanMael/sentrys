@@ -6,6 +6,7 @@ import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import type { Role } from "@/lib/types";
+import { FirebaseErrorListener } from "@/components/FirebaseErrorListener";
 
 interface UserData {
   uid: string;
@@ -105,6 +106,7 @@ NEXT_PUBLIC_FIREBASE_APP_ID=...
 
   return (
     <AuthContext.Provider value={{ user, loading }}>
+      <FirebaseErrorListener />
       {children}
     </AuthContext.Provider>
   );

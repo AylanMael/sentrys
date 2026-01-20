@@ -1,33 +1,39 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Default deny all access
+
+    function signedIn() { return request.auth != null; }
+    function myUid() { return request.auth.uid; }
+
+    // User profile / membership (V1: 1 tenant par user, doc id = uid)
+    match /tenantUsers/{uid} {
+      allow create: if signedIn() && uid == myUid();
+      allow read: if signedIn() && uid == myUid();
+      // Empêche un user de s'auto-promouvoir
+      allow update: if signedIn() && uid == myUid()
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.tenantId == resource.data.tenantId;
+      allow delete: if false;
+    }
+
+    // Tenants
+    match /tenants/{tenantId} {
+      // Création permise seulement si le user a déjà son tenantUsers/{uid}
+      allow create: if signedIn()
+        && exists(/databases/$(database)/documents/tenantUsers/$(myUid()))
+        && get(/databases/$(database)/documents/tenantUsers/$(myUid())).data.tenantId == tenantId;
+
+      allow read: if signedIn()
+        && exists(/databases/$(database)/documents/tenantUsers/$(myUid()))
+        && get(/databases/$(database)/documents/tenantUsers/$(myUid())).data.tenantId == tenantId;
+
+      // (pour l’instant) pas d’update/delete côté client
+      allow update, delete: if false;
+    }
+
+    // Tout le reste interdit pour l’instant
     match /{document=**} {
       allow read, write: if false;
-    }
-
-    // Allow a user to create their own tenantUser document.
-    // This happens during signup.
-    // Also, allow a user to read their own tenantUser document.
-    // This happens on login and page loads to get role/tenant info.
-    match /tenantUsers/{userId} {
-      allow read, create: if request.auth.uid == userId;
-    }
-
-    // Allow a user to create a new tenant document, but only if they are
-    // also creating their own tenantUser document in the same request (batch).
-    // This is a key part of the secure signup flow.
-    match /tenants/{tenantId} {
-       allow create: if request.auth.uid != null &&
-                      getAfter(/databases/$(database)/documents/tenantUsers/$(request.auth.uid)).data.tenantId == tenantId;
-      
-       // Allow a user to read their own tenant document.
-       // The rule checks the tenantUser doc to find which tenant the user belongs to.
-       allow read: if request.auth.uid != null &&
-                    get(/databases/$(database)/documents/tenantUsers/$(request.auth.uid)).data.tenantId == tenantId;
     }
   }
 }

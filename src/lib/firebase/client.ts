@@ -1,19 +1,23 @@
+
 "use client";
 
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
+import { getFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyABPFu91CWi0LkdBXD-1OXgHgheFYLwZFE",
   authDomain: "sentrys.firebaseapp.com",
   projectId: "sentrys",
-  storageBucket: "sentrys.appspot.com",
+  storageBucket: "sentrys.firebasestorage.app",
   messagingSenderId: "782055895046",
-  appId: "1:782055895046:web:474cf111d4b4b759cb9387"
+  appId: "1:782055895046:web:474cf111d4b4b759cb9387",
+  measurementId: "G-4XEPQK00MY"
 };
 
-let app, auth, db;
+let app: FirebaseApp;
+let auth: Auth;
+let db: Firestore;
 
 // Initialize Firebase
 try {

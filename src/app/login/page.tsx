@@ -5,7 +5,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase/client";
 import { useToast } from "@/hooks/use-toast";
 
 import { Button } from "@/components/ui/button";
@@ -30,12 +31,37 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // 1. Sign in with auth
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+
+      // 2. Check for the tenantUser document in Firestore
+      if (!db) {
+        throw new Error("La connexion à Firestore n'est pas disponible.");
+      }
+      const tenantUserRef = doc(db, `tenantUsers/${firebaseUser.uid}`);
+      const tenantUserSnap = await getDoc(tenantUserRef);
+
+      if (!tenantUserSnap.exists()) {
+        // If the user is authenticated but has no corresponding document,
+        // it's an invalid state. Sign them out and show an error.
+        await auth.signOut();
+        toast({
+          variant: "destructive",
+          title: "Échec de la connexion",
+          description: "Votre compte est authentifié, mais aucun profil utilisateur n'a été trouvé. Veuillez utiliser le formulaire d'inscription.",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      // 3. If everything is correct, proceed to dashboard
       toast({
         title: "Connexion réussie",
         description: "Vous allez être redirigé vers votre tableau de bord.",
       });
       router.push("/dashboard");
+
     } catch (error: any) {
       console.error(error);
       let description = "Une erreur est survenue. Veuillez réessayer.";

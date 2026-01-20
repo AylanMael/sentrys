@@ -38,6 +38,7 @@ import {
 import Logo from "@/components/logo";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import NavLink from "@/components/nav-link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const userAvatar = PlaceHolderImages.find((p) => p.id === "user-avatar-1");
 
@@ -94,6 +95,7 @@ export default function DashboardLayout({
           <div className="w-full flex-1">
             {/* Can add a global search here later */}
           </div>
+          <ThemeToggle />
           <Button variant="ghost" size="icon" className="rounded-full">
             <Bell className="h-4 w-4" />
             <span className="sr-only">Activer/Désactiver les notifications</span>

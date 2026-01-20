@@ -32,27 +32,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [firebaseError, setFirebaseError] = useState<string | null>(null);
 
   useEffect(() => {
-    const checkFirebase = async () => {
-      try {
-        // A bid to check if firebase is configured.
-        // This is a hacky way to check for config errors.
-        await getDoc(doc(db, "test", "test"));
-      } catch (error: any) {
-        if (error.code === 'unavailable' || error.code === 'auth/network-request-failed' || error.code === 'permission-denied') {
-           // This will catch when the project ID is wrong, or when there are no security rules.
-           setFirebaseError("Firebase configuration is incorrect or the project is not set up correctly.");
-        }
-      }
-    };
-
     if (!auth || !db) {
         setFirebaseError("Firebase is not initialized. Please check your configuration.");
         setLoading(false);
         return;
-    } else {
-        checkFirebase();
     }
-
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
@@ -77,7 +61,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             } else {
                 // This can happen briefly during signup before the tenantUser doc is created,
                 // or if the user exists in Auth but not in Firestore's tenantUsers collection.
-                // We'll treat them as not logged in to the application.
                 setUser(null);
             }
         } catch (error) {

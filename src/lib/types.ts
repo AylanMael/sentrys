@@ -1,3 +1,4 @@
+
 export type Role = 'Admin' | 'Opérations' | 'Agent';
 
 export interface User {
@@ -60,4 +61,21 @@ export interface Kpi {
   change: string;
   changeType: 'increase' | 'decrease' | 'neutral';
   description: string;
+}
+
+export interface Tenant {
+  id: string;
+  name: string;
+  createdAt: any; // serverTimestamp
+  createdBy: string;
+  status: 'active' | 'inactive';
+}
+
+export interface TenantUser {
+    id: string; // {tenantId}_{uid}
+    tenantId: string;
+    uid: string;
+    role: Role;
+    status: 'active' | 'disabled';
+    createdAt: any; // serverTimestamp
 }

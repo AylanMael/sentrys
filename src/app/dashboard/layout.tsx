@@ -1,6 +1,9 @@
+
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Bell,
   Building2,
@@ -13,6 +16,8 @@ import {
   Users,
 } from "lucide-react";
 
+import { useAuth } from "@/lib/auth-provider";
+import { auth } from "@/lib/firebase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +44,7 @@ import Logo from "@/components/logo";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import NavLink from "@/components/nav-link";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const userAvatar = PlaceHolderImages.find((p) => p.id === "user-avatar-1");
 
@@ -56,6 +62,35 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+        <div className="flex h-screen w-full items-center justify-center">
+            <div className="flex flex-col items-center gap-4">
+                <Logo />
+                <Skeleton className="h-4 w-[200px]" />
+            </div>
+        </div>
+    );
+  }
+
+  if (!user) {
+    return null; // or a redirect component
+  }
+
+  const handleLogout = async () => {
+    await auth.signOut();
+    router.push("/login");
+  };
+
   return (
     <SidebarProvider>
       <Sidebar>
@@ -105,7 +140,7 @@ export default function DashboardLayout({
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={userAvatar?.imageUrl} alt="User avatar" />
-                  <AvatarFallback>AD</AvatarFallback>
+                  <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
@@ -115,11 +150,9 @@ export default function DashboardLayout({
               <DropdownMenuItem>Paramètres</DropdownMenuItem>
               <DropdownMenuItem>Support</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/login">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Déconnexion</span>
-                </Link>
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Déconnexion</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -1,11 +1,16 @@
+
+"use client";
+
 import {
   Activity,
   ArrowUpRight,
   ShieldCheck,
   Siren,
   Building2,
+  Info,
 } from "lucide-react";
 
+import { useAuth } from "@/lib/auth-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,6 +31,7 @@ import {
 import { kpis, incidents } from "@/lib/placeholder-data";
 import { cn } from "@/lib/utils";
 import type { Kpi } from "@/lib/types";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const kpiIcons: { [key: string]: React.ReactNode } = {
   "Missions Actives": <Activity className="h-4 w-4 text-muted-foreground" />,
@@ -35,8 +41,21 @@ const kpiIcons: { [key: string]: React.ReactNode } = {
 };
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  
   return (
     <div className="flex flex-1 flex-col gap-4 md:gap-8">
+
+      {user && (
+         <Alert>
+         <Info className="h-4 w-4" />
+         <AlertTitle>Informations de session</AlertTitle>
+         <AlertDescription>
+           Vous êtes connecté en tant que <span className="font-semibold">{user.email}</span> avec le rôle <Badge variant="secondary">{user.role}</Badge> sur le tenant <span className="font-mono text-xs">{user.tenantId}</span>.
+         </AlertDescription>
+       </Alert>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
         {kpis.map((kpi) => (
           <Card key={kpi.title}>

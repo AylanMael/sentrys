@@ -5,7 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, serverTimestamp, collection, writeBatch } from "firebase/firestore";
+import { doc, serverTimestamp, collection, writeBatch } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,8 @@ export default function SignupPage() {
     }
     setIsLoading(true);
 
+    let tenantData: any, tenantUserData: any;
+
     try {
       // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -51,7 +53,7 @@ export default function SignupPage() {
 
       // 2. Create tenant document
       const tenantRef = doc(collection(db, "tenants"));
-      const tenantData = {
+      tenantData = {
         name: tenantName,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
@@ -61,7 +63,7 @@ export default function SignupPage() {
 
       // 3. Create tenantUsers document for the new admin
       const tenantUserRef = doc(db, "tenantUsers", user.uid);
-      const tenantUserData = {
+      tenantUserData = {
         tenantId: tenantRef.id,
         uid: user.uid,
         email: user.email,
@@ -72,44 +74,42 @@ export default function SignupPage() {
       };
       batch.set(tenantUserRef, tenantUserData);
       
-      batch.commit()
-        .then(() => {
-            toast({
-                title: "Compte créé avec succès !",
-                description: "Votre espace de travail est prêt. Redirection...",
-            });
-            router.push("/dashboard");
-        })
-        .catch((serverError) => {
-            // Re-enable the form for another attempt
-            setIsLoading(false);
-            console.error("Batch write failed:", serverError);
-
-            // Create a rich, contextual error for debugging security rules
-            const permissionError = new FirestorePermissionError({
-                path: `BATCH WRITE to collections: 'tenants', 'tenantUsers'`,
-                operation: 'write',
-                requestResourceData: { tenant: tenantData, tenantUser: tenantUserData },
-            });
-            
-            // Emit the error to be caught by the global listener
-            errorEmitter.emit('permission-error', permissionError);
-        });
-
-    } catch (error: any) { // This will now primarily catch Auth errors
-      setIsLoading(false);
-      console.error(error);
-      let description = "Une erreur est survenue. Veuillez réessayer.";
-      if (error.code === "auth/email-already-in-use") {
-        description = "Cette adresse e-mail est déjà utilisée.";
-      } else if (error.code === "auth/weak-password") {
-        description = "Le mot de passe doit comporter au moins 6 caractères.";
-      }
+      // 4. Commit the batch write
+      await batch.commit();
+      
       toast({
-        variant: "destructive",
-        title: "Échec de l'inscription",
-        description,
+          title: "Compte créé avec succès !",
+          description: "Votre espace de travail est prêt. Redirection...",
       });
+      router.push("/dashboard");
+
+    } catch (error: any) {
+      console.error("Signup Error:", error, error.code);
+
+      // Check if it's a Firestore permission error
+      if (error.code === "permission-denied" || error.code === "firestore/permission-denied") {
+          const permissionError = new FirestorePermissionError({
+              path: `BATCH WRITE to collections: 'tenants', 'tenantUsers'`,
+              operation: 'write',
+              requestResourceData: { tenant: tenantData, tenantUser: tenantUserData },
+          });
+          errorEmitter.emit('permission-error', permissionError);
+      } else {
+        // Handle other errors (mostly from Auth)
+        let description = "Une erreur est survenue. Veuillez réessayer.";
+        if (error.code === "auth/email-already-in-use") {
+          description = "Cette adresse e-mail est déjà utilisée.";
+        } else if (error.code === "auth/weak-password") {
+          description = "Le mot de passe doit comporter au moins 6 caractères.";
+        }
+        toast({
+          variant: "destructive",
+          title: "Échec de l'inscription",
+          description,
+        });
+      }
+    } finally {
+        setIsLoading(false);
     }
   };
 

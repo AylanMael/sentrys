@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Allow user to create their own tenant and user document during signup.
+    // This is the minimum required for the signup flow to work.
+    match /tenants/{tenantId} {
+      allow create: if request.auth != null 
+                    && request.auth.uid == request.resource.data.createdBy;
+      // After signup, a user can read their own tenant doc.
+      // This rule is simplified and will need to be expanded as your app grows.
+      allow read: if get(/databases/$(database)/documents/tenantUsers/$(request.auth.uid)).data.tenantId == tenantId;
+    }
+    
+    match /tenantUsers/{userId} {
+      // A user can create their own tenantUser document and read it.
+      allow create, read: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

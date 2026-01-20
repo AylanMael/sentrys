@@ -24,26 +24,17 @@ const AuthContext = createContext<AuthContextType>({ user: null, loading: true }
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // If Firebase is not configured, display an error message instead of the app.
-  // This prevents the app from crashing and guides the user to fix the configuration.
-  if (!auth || !db) {
-    return (
-        <div className="flex min-h-dvh w-full items-center justify-center bg-background p-4 text-foreground">
-            <div className="w-full max-w-lg rounded-lg border bg-card p-8 text-center shadow-lg">
-                <h1 className="text-2xl font-bold text-destructive">Firebase Initialization Error</h1>
-                <p className="mt-4 text-card-foreground">
-                    The application could not connect to Firebase. This might be a temporary issue or a problem with the provided configuration.
-                </p>
-                 <p className="mt-4 text-sm text-muted-foreground">
-                    Please try refreshing the page. If the problem persists, contact support.
-                </p>
-            </div>
-        </div>
-    );
-  }
+  const [firebaseError, setFirebaseError] = useState(false);
 
   useEffect(() => {
+    // If Firebase is not configured, display an error message instead of the app.
+    // This prevents the app from crashing and guides the user to fix the configuration.
+    if (!auth || !db) {
+        setFirebaseError(true);
+        setLoading(false);
+        return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         // Look for user data in tenantUsers collection
@@ -72,6 +63,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => unsubscribe();
   }, []);
+
+  if (firebaseError) {
+    return (
+        <div className="flex min-h-dvh w-full items-center justify-center bg-background p-4 text-foreground">
+            <div className="w-full max-w-lg rounded-lg border bg-card p-8 text-center shadow-lg">
+                <h1 className="text-2xl font-bold text-destructive">Firebase Initialization Error</h1>
+                <p className="mt-4 text-card-foreground">
+                    The application could not connect to Firebase. This might be a temporary issue or a problem with the provided configuration.
+                </p>
+                 <p className="mt-4 text-sm text-muted-foreground">
+                    Please try refreshing the page. If the problem persists, contact support.
+                </p>
+            </div>
+        </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{ user, loading }}>

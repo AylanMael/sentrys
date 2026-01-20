@@ -27,11 +27,11 @@ import { kpis, incidents } from "@/lib/placeholder-data";
 import { cn } from "@/lib/utils";
 import type { Kpi } from "@/lib/types";
 
-const kpiIcons = {
-  "Active Missions": <Activity className="h-4 w-4 text-muted-foreground" />,
-  "Agents on Duty": <ShieldCheck className="h-4 w-4 text-muted-foreground" />,
-  "Open Incidents": <Siren className="h-4 w-4 text-muted-foreground" />,
-  "Sites Covered": <Building2 className="h-4 w-4 text-muted-foreground" />,
+const kpiIcons: { [key: string]: React.ReactNode } = {
+  "Missions Actives": <Activity className="h-4 w-4 text-muted-foreground" />,
+  "Agents de service": <ShieldCheck className="h-4 w-4 text-muted-foreground" />,
+  "Incidents ouverts": <Siren className="h-4 w-4 text-muted-foreground" />,
+  "Sites couverts": <Building2 className="h-4 w-4 text-muted-foreground" />,
 };
 
 export default function Dashboard() {
@@ -65,9 +65,9 @@ export default function Dashboard() {
         <Card className="xl:col-span-2">
           <CardHeader className="flex flex-row items-center">
             <div className="grid gap-2">
-              <CardTitle>Recent Incidents</CardTitle>
+              <CardTitle>Incidents récents</CardTitle>
               <CardDescription>
-                An overview of the latest reported incidents.
+                Un aperçu des derniers incidents signalés.
               </CardDescription>
             </div>
           </CardHeader>
@@ -76,9 +76,9 @@ export default function Dashboard() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Site</TableHead>
-                  <TableHead>Severity</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Time</TableHead>
+                  <TableHead>Sévérité</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead className="text-right">Heure</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -87,20 +87,20 @@ export default function Dashboard() {
                     <TableCell>
                       <div className="font-medium">{incident.siteName}</div>
                       <div className="hidden text-sm text-muted-foreground md:inline">
-                        Reported by {incident.agentName}
+                        Signalé par {incident.agentName}
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge
                         variant={
-                          incident.severity === "High"
+                          incident.severity === "Élevée"
                             ? "destructive"
-                            : incident.severity === "Medium"
+                            : incident.severity === "Moyenne"
                             ? "secondary"
                             : "outline"
                         }
                         className={cn(
-                          incident.severity === "Medium" &&
+                          incident.severity === "Moyenne" &&
                             "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300"
                         )}
                       >
@@ -108,7 +108,7 @@ export default function Dashboard() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={incident.status === 'Open' ? 'default' : 'outline'} className={cn(incident.status === 'Open' && 'bg-red-500')}>{incident.status}</Badge>
+                      <Badge variant={incident.status === 'Ouvert' ? 'default' : 'outline'} className={cn(incident.status === 'Ouvert' && 'bg-red-500')}>{incident.status}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       {incident.timestamp.toLocaleTimeString()}

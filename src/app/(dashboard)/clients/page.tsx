@@ -31,15 +31,15 @@ export default function ClientsPage() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Client Management</CardTitle>
+            <CardTitle>Gestion des clients</CardTitle>
             <CardDescription>
-              Manage your clients and their associated sites.
+              Gérez vos clients et leurs sites associés.
             </CardDescription>
           </div>
           <Button size="sm" className="gap-1">
             <PlusCircle className="h-3.5 w-3.5" />
             <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-              Add Client
+              Ajouter un client
             </span>
           </Button>
         </div>
@@ -48,8 +48,8 @@ export default function ClientsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Client Name</TableHead>
-              <TableHead>Contact Person</TableHead>
+              <TableHead>Nom du client</TableHead>
+              <TableHead>Personne à contacter</TableHead>
               <TableHead>Sites</TableHead>
               <TableHead>
                 <span className="sr-only">Actions</span>
@@ -77,9 +77,9 @@ export default function ClientsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem>View Details</DropdownMenuItem>
-                      <DropdownMenuItem>Manage Sites</DropdownMenuItem>
-                      <DropdownMenuItem>Edit</DropdownMenuItem>
+                      <DropdownMenuItem>Voir les détails</DropdownMenuItem>
+                      <DropdownMenuItem>Gérer les sites</DropdownMenuItem>
+                      <DropdownMenuItem>Modifier</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

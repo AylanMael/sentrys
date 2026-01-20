@@ -1,4 +1,4 @@
-export type Role = 'Admin' | 'Operations' | 'Agent';
+export type Role = 'Admin' | 'Opérations' | 'Agent';
 
 export interface User {
   id: string;
@@ -6,7 +6,7 @@ export interface User {
   email: string;
   avatarUrl: string;
   role: Role;
-  status: 'Active' | 'Inactive';
+  status: 'Actif' | 'Inactif';
 }
 
 export interface Agent {
@@ -14,7 +14,7 @@ export interface Agent {
   name: string;
   phone: string;
   email: string;
-  status: 'Active' | 'Inactive' | 'On Leave';
+  status: 'Actif' | 'Inactif' | 'En congé';
   avatarUrl: string;
 }
 
@@ -41,7 +41,7 @@ export interface Shift {
   agentAvatarUrl?: string;
   start: Date;
   end: Date;
-  status: 'Draft' | 'Published' | 'Completed' | 'Cancelled';
+  status: 'Brouillon' | 'Publié' | 'Terminé' | 'Annulé';
 }
 
 export interface Incident {
@@ -49,9 +49,9 @@ export interface Incident {
   siteName: string;
   agentName: string;
   timestamp: Date;
-  severity: 'Low' | 'Medium' | 'High';
+  severity: 'Faible' | 'Moyenne' | 'Élevée';
   description: string;
-  status: 'Open' | 'Closed';
+  status: 'Ouvert' | 'Fermé';
 }
 
 export interface Kpi {

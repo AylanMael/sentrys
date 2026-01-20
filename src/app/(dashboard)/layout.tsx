@@ -40,12 +40,12 @@ import NavLink from "@/components/nav-link";
 const userAvatar = PlaceHolderImages.find((p) => p.id === "user-avatar-1");
 
 const navItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/dashboard/planning", icon: CalendarClock, label: "Planning" },
+  { href: "/dashboard", icon: LayoutDashboard, label: "Tableau de bord" },
+  { href: "/dashboard/planning", icon: CalendarClock, label: "Planification" },
   { href: "/dashboard/incidents", icon: Siren, label: "Incidents" },
   { href: "/dashboard/agents", icon: ShieldCheck, label: "Agents" },
   { href: "/dashboard/clients", icon: Building2, label: "Clients" },
-  { href: "/dashboard/users", icon: Users, label: "Users" },
+  { href: "/dashboard/users", icon: Users, label: "Utilisateurs" },
 ];
 
 export default function DashboardLayout({
@@ -79,7 +79,7 @@ export default function DashboardLayout({
               <SidebarMenuButton asChild>
                 <Link href="#">
                   <Settings />
-                  Settings
+                  Paramètres
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -94,7 +94,7 @@ export default function DashboardLayout({
           </div>
           <Button variant="ghost" size="icon" className="rounded-full">
             <Bell className="h-4 w-4" />
-            <span className="sr-only">Toggle notifications</span>
+            <span className="sr-only">Activer/Désactiver les notifications</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -106,15 +106,15 @@ export default function DashboardLayout({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuLabel>Mon compte</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Settings</DropdownMenuItem>
+              <DropdownMenuItem>Paramètres</DropdownMenuItem>
               <DropdownMenuItem>Support</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/login">
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
+                  <span>Déconnexion</span>
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuContent>

@@ -33,15 +33,15 @@ export default function UsersPage() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>User & Role Management</CardTitle>
+            <CardTitle>Gestion des utilisateurs et des rôles</CardTitle>
             <CardDescription>
-              Manage your team members and their access levels.
+              Gérez les membres de votre équipe et leurs niveaux d'accès.
             </CardDescription>
           </div>
           <Button size="sm" className="gap-1">
             <PlusCircle className="h-3.5 w-3.5" />
             <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-              Add User
+              Ajouter un utilisateur
             </span>
           </Button>
         </div>
@@ -50,9 +50,9 @@ export default function UsersPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Utilisateur</TableHead>
+              <TableHead>Rôle</TableHead>
+              <TableHead>Statut</TableHead>
               <TableHead>
                 <span className="sr-only">Actions</span>
               </TableHead>
@@ -80,8 +80,8 @@ export default function UsersPage() {
                 <Badge
                     variant="outline"
                     className={cn({
-                      "text-green-800 bg-green-100 border-green-200 dark:text-green-300 dark:bg-green-900/50 dark:border-green-800": user.status === "Active",
-                      "text-red-800 bg-red-100 border-red-200 dark:text-red-300 dark:bg-red-900/50 dark:border-red-800": user.status === "Inactive",
+                      "text-green-800 bg-green-100 border-green-200 dark:text-green-300 dark:bg-green-900/50 dark:border-green-800": user.status === "Actif",
+                      "text-red-800 bg-red-100 border-red-200 dark:text-red-300 dark:bg-red-900/50 dark:border-red-800": user.status === "Inactif",
                     })}
                   >
                     {user.status}
@@ -97,10 +97,10 @@ export default function UsersPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem>Edit Role</DropdownMenuItem>
-                      <DropdownMenuItem>Reset Password</DropdownMenuItem>
+                      <DropdownMenuItem>Modifier le rôle</DropdownMenuItem>
+                      <DropdownMenuItem>Réinitialiser le mot de passe</DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive">
-                        Deactivate User
+                        Désactiver l'utilisateur
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

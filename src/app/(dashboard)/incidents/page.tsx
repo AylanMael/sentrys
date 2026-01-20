@@ -52,9 +52,9 @@ export default function IncidentsPage() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Incident Reports</CardTitle>
+            <CardTitle>Rapports d'incidents</CardTitle>
             <CardDescription>
-              View, manage, and create incident reports.
+              Consultez, gérez et créez des rapports d'incidents.
             </CardDescription>
           </div>
           <Dialog>
@@ -62,15 +62,15 @@ export default function IncidentsPage() {
               <Button size="sm" className="gap-1">
                 <PlusCircle className="h-3.5 w-3.5" />
                 <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                  New Report
+                  Nouveau rapport
                 </span>
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Create New Incident Report</DialogTitle>
+                <DialogTitle>Créer un nouveau rapport d'incident</DialogTitle>
                 <DialogDescription>
-                  Fill out the details of the incident below.
+                  Remplissez les détails de l'incident ci-dessous.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -82,16 +82,16 @@ export default function IncidentsPage() {
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="severity" className="text-right">
-                    Severity
+                    Sévérité
                   </Label>
                   <Select>
                     <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select severity" />
+                      <SelectValue placeholder="Sélectionnez la sévérité" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="low">Faible</SelectItem>
+                      <SelectItem value="medium">Moyenne</SelectItem>
+                      <SelectItem value="high">Élevée</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -99,11 +99,11 @@ export default function IncidentsPage() {
                   <Label htmlFor="description" className="text-right">
                     Description
                   </Label>
-                  <Textarea id="description" className="col-span-3" placeholder="Describe the incident..."/>
+                  <Textarea id="description" className="col-span-3" placeholder="Décrivez l'incident..."/>
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit">Save Report</Button>
+                <Button type="submit">Enregistrer le rapport</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -114,9 +114,9 @@ export default function IncidentsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Site</TableHead>
-              <TableHead>Severity</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Timestamp</TableHead>
+              <TableHead>Sévérité</TableHead>
+              <TableHead>Statut</TableHead>
+              <TableHead>Horodatage</TableHead>
               <TableHead>
                 <span className="sr-only">Actions</span>
               </TableHead>
@@ -132,12 +132,12 @@ export default function IncidentsPage() {
                 <TableCell>
                   <Badge
                     variant={
-                      incident.severity === "High"
+                      incident.severity === "Élevée"
                         ? "destructive"
                         : "outline"
                     }
                     className={cn(
-                        incident.severity === "Medium" &&
+                        incident.severity === "Moyenne" &&
                         "bg-accent text-accent-foreground border-accent"
                     )}
                   >
@@ -145,7 +145,7 @@ export default function IncidentsPage() {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                <Badge variant={incident.status === 'Open' ? 'default' : 'outline'} className={cn(incident.status === 'Open' && 'bg-red-500 hover:bg-red-500/80')}>{incident.status}</Badge>
+                <Badge variant={incident.status === 'Ouvert' ? 'default' : 'outline'} className={cn(incident.status === 'Ouvert' && 'bg-red-500 hover:bg-red-500/80')}>{incident.status}</Badge>
                 </TableCell>
                 <TableCell>
                   {format(incident.timestamp, "PPP, p")}
@@ -160,8 +160,8 @@ export default function IncidentsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem>View Details</DropdownMenuItem>
-                      <DropdownMenuItem>Mark as Closed</DropdownMenuItem>
+                      <DropdownMenuItem>Voir les détails</DropdownMenuItem>
+                      <DropdownMenuItem>Marquer comme clos</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

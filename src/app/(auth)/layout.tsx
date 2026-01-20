@@ -10,7 +10,7 @@ export default function AuthLayout({
     <div className="flex min-h-dvh w-full items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
-          <Link href="/" aria-label="Back to homepage">
+          <Link href="/" aria-label="Retour à l'accueil">
             <Logo />
           </Link>
         </div>

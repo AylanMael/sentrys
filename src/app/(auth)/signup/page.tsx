@@ -15,54 +15,54 @@ export default function SignupPage() {
   return (
     <Card>
       <CardHeader className="space-y-1 text-center">
-        <CardTitle className="text-2xl">Create an account</CardTitle>
+        <CardTitle className="text-2xl">Créer un compte</CardTitle>
         <CardDescription>
-          Enter your information to create your new security workspace
+          Saisissez vos informations pour créer votre nouvel espace de travail de sécurité
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-            <Label htmlFor="company-name">Company Name</Label>
-            <Input id="company-name" placeholder="Your Security Inc." required />
+            <Label htmlFor="company-name">Nom de l'entreprise</Label>
+            <Input id="company-name" placeholder="Votre Sécurité Inc." required />
         </div>
         <div className="space-y-2">
-            <Label htmlFor="full-name">Full Name</Label>
-            <Input id="full-name" placeholder="John Doe" required />
+            <Label htmlFor="full-name">Nom complet</Label>
+            <Input id="full-name" placeholder="Jean Dupont" required />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" placeholder="john@example.com" required />
+          <Label htmlFor="email">E-mail</Label>
+          <Input id="email" type="email" placeholder="jean@exemple.com" required />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">Mot de passe</Label>
           <Input id="password" type="password" required />
         </div>
         <Button type="submit" className="w-full as-child">
-          <Link href="/dashboard">Create Account</Link>
+          <Link href="/dashboard">Créer un compte</Link>
         </Button>
         
         <p className="px-8 text-center text-sm text-muted-foreground">
-          By clicking continue, you agree to our{" "}
+          En cliquant sur continuer, vous acceptez nos{" "}
           <Link
             href="/terms"
             className="underline underline-offset-4 hover:text-primary"
           >
-            Terms of Service
+            Conditions d'utilisation
           </Link>{" "}
-          and{" "}
+          et{" "}
           <Link
             href="/privacy"
             className="underline underline-offset-4 hover:text-primary"
           >
-            Privacy Policy
+            Politique de confidentialité
           </Link>
           .
         </p>
 
          <div className="mt-4 text-center text-sm">
-          Already have an account?{" "}
+          Vous avez déjà un compte ?{" "}
           <Link href="/login" className="underline">
-            Log in
+            Connectez-vous
           </Link>
         </div>
       </CardContent>

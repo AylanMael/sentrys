@@ -44,7 +44,7 @@ const ShiftRow = ({ shift }: { shift: (typeof shifts)[0] }) => (
           {shift.agentName}
         </div>
       ) : (
-        <span className="text-muted-foreground">Unassigned</span>
+        <span className="text-muted-foreground">Non assigné</span>
       )}
     </TableCell>
     <TableCell>
@@ -66,9 +66,9 @@ const ShiftRow = ({ shift }: { shift: (typeof shifts)[0] }) => (
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-          <DropdownMenuItem>Edit</DropdownMenuItem>
-          <DropdownMenuItem>Assign Agent</DropdownMenuItem>
-          <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+          <DropdownMenuItem>Modifier</DropdownMenuItem>
+          <DropdownMenuItem>Assigner un agent</DropdownMenuItem>
+          <DropdownMenuItem className="text-destructive">Supprimer</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </TableCell>
@@ -76,23 +76,23 @@ const ShiftRow = ({ shift }: { shift: (typeof shifts)[0] }) => (
 );
 
 export default function PlanningPage() {
-  const publishedShifts = shifts.filter((s) => s.status !== "Draft");
-  const draftShifts = shifts.filter((s) => s.status === "Draft");
+  const publishedShifts = shifts.filter((s) => s.status !== "Brouillon");
+  const draftShifts = shifts.filter((s) => s.status === "Brouillon");
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
             <div>
-                <CardTitle>Mission Planning</CardTitle>
+                <CardTitle>Planification des missions</CardTitle>
                 <CardDescription>
-                Manage and schedule agent shifts across all sites.
+                Gérez et planifiez les quarts des agents sur tous les sites.
                 </CardDescription>
             </div>
             <Button size="sm" className="gap-1">
                 <PlusCircle className="h-3.5 w-3.5" />
                 <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                New Shift
+                Nouveau quart
                 </span>
             </Button>
         </div>
@@ -100,8 +100,8 @@ export default function PlanningPage() {
       <CardContent>
         <Tabs defaultValue="published">
           <TabsList>
-            <TabsTrigger value="published">Published</TabsTrigger>
-            <TabsTrigger value="draft">Drafts</TabsTrigger>
+            <TabsTrigger value="published">Publiés</TabsTrigger>
+            <TabsTrigger value="draft">Brouillons</TabsTrigger>
           </TabsList>
           <TabsContent value="published">
             <Table>
@@ -109,9 +109,9 @@ export default function PlanningPage() {
                 <TableRow>
                   <TableHead>Site/Client</TableHead>
                   <TableHead>Agent</TableHead>
-                  <TableHead>Start Time</TableHead>
-                  <TableHead>End Time</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Heure de début</TableHead>
+                  <TableHead>Heure de fin</TableHead>
+                  <TableHead>Statut</TableHead>
                   <TableHead>
                     <span className="sr-only">Actions</span>
                   </TableHead>
@@ -130,9 +130,9 @@ export default function PlanningPage() {
                 <TableRow>
                   <TableHead>Site/Client</TableHead>
                   <TableHead>Agent</TableHead>
-                  <TableHead>Start Time</TableHead>
-                  <TableHead>End Time</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Heure de début</TableHead>
+                  <TableHead>Heure de fin</TableHead>
+                  <TableHead>Statut</TableHead>
                   <TableHead>
                     <span className="sr-only">Actions</span>
                   </TableHead>

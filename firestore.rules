@@ -1,4 +1,6 @@
+
 rules_version = '2';
+// Force redeploy by adding a comment
 service cloud.firestore {
   match /databases/{database}/documents {
     

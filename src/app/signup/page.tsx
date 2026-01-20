@@ -84,8 +84,6 @@ export default function SignupPage() {
       router.push("/dashboard");
 
     } catch (error: any) {
-      console.error("Signup Error:", error, error.code);
-
       // Check if it's a Firestore permission error
       if (error.code === "permission-denied" || error.code === "firestore/permission-denied") {
           const permissionError = new FirestorePermissionError({

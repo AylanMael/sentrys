@@ -1,3 +1,7 @@
+/*
+  The editor may show errors for the @tailwind directives below.
+  These are essential for Tailwind CSS and can be safely ignored.
+*/
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

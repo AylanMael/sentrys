@@ -4,8 +4,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, serverTimestamp, collection, writeBatch } from "firebase/firestore";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FirestorePermissionError } from "@/lib/firebase/errors";
-import { errorEmitter } from "@/lib/firebase/error-emitter";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -42,41 +40,38 @@ export default function SignupPage() {
     }
     setIsLoading(true);
 
-    let tenantData: any, tenantUserData: any;
-
     try {
-      // 1. Create user in Firebase Auth
+      // 1) Create Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      const uid = user.uid;
 
-      const batch = writeBatch(db);
+      // optionnel : nom affiché dans Auth
+      await updateProfile(user, { displayName: fullName });
+    
+      // 2) Create tenantId (simple)
+      const tenantId = uid;
 
-      // 2. Create tenant document
-      const tenantRef = doc(collection(db, "tenants"));
-      tenantData = {
+      // 3) Create tenantUser doc FIRST (required by rules for tenants create)
+      await setDoc(doc(db, "tenantUsers", uid), {
+        tenantId,
+        uid,
+        email,
+        name: fullName,
+        role: "admin",
+        status: "active",
+        createdAt: serverTimestamp(),
+      });
+
+      // 4) Create tenant doc
+      await setDoc(doc(db, "tenants", tenantId), {
         name: tenantName,
         createdAt: serverTimestamp(),
-        createdBy: user.uid,
+        createdBy: uid,
         status: "active",
-      };
-      batch.set(tenantRef, tenantData);
+      });
 
-      // 3. Create tenantUsers document for the new admin
-      const tenantUserRef = doc(db, "tenantUsers", user.uid);
-      tenantUserData = {
-        tenantId: tenantRef.id,
-        uid: user.uid,
-        email: user.email,
-        name: fullName,
-        role: "Admin" as const,
-        status: "active" as const,
-        createdAt: serverTimestamp(),
-      };
-      batch.set(tenantUserRef, tenantUserData);
-      
-      // 4. Commit the batch write
-      await batch.commit();
-      
+      // 5) redirect
       toast({
           title: "Compte créé avec succès !",
           description: "Votre espace de travail est prêt. Redirection...",
@@ -84,15 +79,6 @@ export default function SignupPage() {
       router.push("/dashboard");
 
     } catch (error: any) {
-      // Check if it's a Firestore permission error
-      if (error.code === "permission-denied" || error.code === "firestore/permission-denied") {
-          const permissionError = new FirestorePermissionError({
-              path: `BATCH WRITE to collections: 'tenants', 'tenantUsers'`,
-              operation: 'write',
-              requestResourceData: { tenant: tenantData, tenantUser: tenantUserData },
-          });
-          errorEmitter.emit('permission-error', permissionError);
-      } else {
         // Handle other errors (mostly from Auth)
         let description = "Une erreur est survenue. Veuillez réessayer.";
         if (error.code === "auth/email-already-in-use") {
@@ -100,12 +86,12 @@ export default function SignupPage() {
         } else if (error.code === "auth/weak-password") {
           description = "Le mot de passe doit comporter au moins 6 caractères.";
         }
+        console.error("Signup Error:", error);
         toast({
           variant: "destructive",
           title: "Échec de l'inscription",
           description,
         });
-      }
     } finally {
         setIsLoading(false);
     }

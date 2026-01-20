@@ -2,40 +2,37 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /tenantUsers/{userId} {
-      // Allow a new user to create their own user document during signup.
-      // - The document ID {userId} must match the authenticated user's UID.
-      // - The 'uid' field in the document must also match the UID.
-      // - The user must be assigned the 'Admin' role initially.
-      allow create: if request.auth != null 
-                    && request.auth.uid == userId
-                    && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.role == 'Admin';
+    function signedIn() { return request.auth != null; }
+    function myUid() { return request.auth.uid; }
 
-      // A user can only read their own user document.
-      allow read: if request.auth != null && request.auth.uid == userId;
+    // V1: 1 tenant par user, docId = uid
+    match /tenantUsers/{uid} {
+      allow create: if signedIn() && uid == myUid();
+      allow read: if signedIn() && uid == myUid();
 
-      // A user can update their own profile, but cannot change their tenant or role.
-      allow update: if request.auth != null && request.auth.uid == userId
-                    && request.resource.data.tenantId == resource.data.tenantId
-                    && request.resource.data.role == resource.data.role;
+      // Empêche auto-promotion + changement tenantId
+      allow update: if signedIn()
+        && uid == myUid()
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.tenantId == resource.data.tenantId;
 
       allow delete: if false;
     }
 
     match /tenants/{tenantId} {
-      // Allow a user to create a tenant document during signup.
-      // The 'createdBy' field must match the authenticated user's UID.
-      allow create: if request.auth != null 
-                    && request.resource.data.createdBy == request.auth.uid;
+      allow create: if signedIn()
+        && exists(/databases/$(database)/documents/tenantUsers/$(myUid()))
+        && get(/databases/$(database)/documents/tenantUsers/$(myUid())).data.tenantId == tenantId;
 
-      // A user can read a tenant document if they are a member of that tenant.
-      // We must check if the user's profile document exists before trying to get it.
-      allow read: if request.auth != null
-                  && exists(/databases/$(database)/documents/tenantUsers/$(request.auth.uid))
-                  && get(/databases/$(database)/documents/tenantUsers/$(request.auth.uid)).data.tenantId == tenantId;
+      allow read: if signedIn()
+        && exists(/databases/$(database)/documents/tenantUsers/$(myUid()))
+        && get(/databases/$(database)/documents/tenantUsers/$(myUid())).data.tenantId == tenantId;
 
       allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

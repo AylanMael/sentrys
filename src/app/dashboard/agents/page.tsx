@@ -1,113 +1,138 @@
-import { PlusCircle, MoreHorizontal } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { apiFetch } from "@/lib/api/client-fetch";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { agents } from "@/lib/placeholder-data";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+type Agent = any;
 
 export default function AgentsPage() {
+  const [loading, setLoading] = useState(true);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      setLoading(true);
+      try {
+        const qs = new URLSearchParams();
+
+        // ✅ Toujours envoyer status, y compris "all"
+        qs.set("status", status); // all|active|inactive
+        if (q.trim()) qs.set("q", q.trim());
+
+        const data = await apiFetch<{ ok: boolean; agents?: Agent[] }>(
+          `/api/agents?${qs.toString()}`
+        );
+
+        if (mounted) setAgents(data.ok ? (data.agents ?? []) : []);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [q, status]);
+
+  const countActive = useMemo(
+    () => agents.filter((a) => a.status === "active").length,
+    [agents]
+  );
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Gestion des agents</CardTitle>
-            <CardDescription>
-              Gérez votre personnel de sécurité et leurs documents.
-            </CardDescription>
-          </div>
-          <Button size="sm" className="gap-1">
-            <PlusCircle className="h-3.5 w-3.5" />
-            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-              Ajouter un agent
-            </span>
-          </Button>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Agents</h1>
+          <p className="text-sm text-muted-foreground">
+            {loading
+              ? "Chargement…"
+              : `${agents.length} agents (${countActive} actifs)`}
+          </p>
         </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nom</TableHead>
-              <TableHead>Statut</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead>
-                <span className="sr-only">Actions</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {agents.map((agent) => (
-              <TableRow key={agent.id}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="hidden h-9 w-9 sm:flex">
-                      <AvatarImage src={agent.avatarUrl} alt="Avatar" />
-                      <AvatarFallback>{agent.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div className="grid gap-0.5">
-                        <span className="font-medium">{agent.name}</span>
-                        <span className="text-sm text-muted-foreground hidden md:inline">{agent.email}</span>
+
+        <Button asChild>
+          <Link href="/dashboard/agents/new">Ajouter un agent</Link>
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <CardTitle className="text-base">Liste</CardTitle>
+
+          <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center">
+            <Input
+              placeholder="Rechercher (nom, email, tel)…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="md:w-[280px]"
+            />
+
+            <div className="flex gap-2">
+              <Button
+                variant={status === "all" ? "default" : "outline"}
+                onClick={() => setStatus("all")}
+              >
+                Tous
+              </Button>
+              <Button
+                variant={status === "active" ? "default" : "outline"}
+                onClick={() => setStatus("active")}
+              >
+                Actifs
+              </Button>
+              <Button
+                variant={status === "inactive" ? "default" : "outline"}
+                onClick={() => setStatus("inactive")}
+              >
+                Inactifs
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-2">
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Chargement…</div>
+          ) : agents.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Aucun agent.</div>
+          ) : (
+            <div className="divide-y rounded-md border">
+              {agents.map((a) => (
+                <Link
+                  key={a.id}
+                  href={`/dashboard/agents/${a.id}`}
+                  className="flex items-center justify-between gap-3 p-3 hover:bg-muted/40"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">
+                      {(a.firstName ?? "")} {(a.lastName ?? "")}
+                    </div>
+                    <div className="truncate text-sm text-muted-foreground">
+                      {a.email ?? "—"} • {a.phone ?? "—"}
                     </div>
                   </div>
-                </TableCell>
-                <TableCell>
+
                   <Badge
-                    variant="outline"
-                    className={cn({
-                      "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/50 dark:text-green-300 dark:border-green-800": agent.status === "Actif",
-                      "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/50 dark:text-red-300 dark:border-red-800": agent.status === "Inactif",
-                    })}
+                    variant={a.status === "active" ? "default" : "secondary"}
                   >
-                    {agent.status}
+                    {a.status ?? "—"}
                   </Badge>
-                </TableCell>
-                <TableCell>{agent.phone}</TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button aria-haspopup="true" size="icon" variant="ghost">
-                        <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">Toggle menu</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem>Voir le profil</DropdownMenuItem>
-                      <DropdownMenuItem>Modifier</DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">
-                        Désactiver
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

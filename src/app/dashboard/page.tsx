@@ -1,143 +1,217 @@
-
+// src/app/dashboard/page.tsx
 "use client";
 
-import {
-  Activity,
-  ArrowUpRight,
-  ShieldCheck,
-  Siren,
-  Building2,
-  Info,
-} from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { PlusCircle, Siren } from "lucide-react";
 
-import { useAuth } from "@/lib/auth-provider";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { kpis, incidents } from "@/lib/placeholder-data";
-import { cn } from "@/lib/utils";
-import type { Kpi } from "@/lib/types";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { DashboardStats } from "@/components/dashboard/stats-cards";
+import { RecentIncidentsCard } from "@/components/dashboard/recent-incidents";
+import { Button } from "@/components/ui/button";
 
-const kpiIcons: { [key: string]: React.ReactNode } = {
-  "Missions Actives": <Activity className="h-4 w-4 text-muted-foreground" />,
-  "Agents de service": <ShieldCheck className="h-4 w-4 text-muted-foreground" />,
-  "Incidents ouverts": <Siren className="h-4 w-4 text-muted-foreground" />,
-  "Sites couverts": <Building2 className="h-4 w-4 text-muted-foreground" />,
+import { apiFetch } from "@/lib/api/client-fetch";
+
+type BillingUsageResponse = {
+  ok: boolean;
+  tenantId?: string;
+
+  plan?: {
+    id?: string;
+    name?: string;
+    priceMonthlyCents?: number | null;
+    features?: Record<string, boolean>;
+  };
+
+  subscription?: {
+    planId?: string;
+    status?: string;
+    addons?: any;
+    periodStart?: any;
+    periodEnd?: any;
+  };
+
+  limits?: { agents?: number; sites?: number; tenants?: number };
+
+  usage?: {
+    agents?: number;
+    sites?: number;
+    // backend renvoie "tenants" (normalisé) => on supporte aussi activeTenants si jamais
+    tenants?: number;
+    activeTenants?: number;
+    updatedAt?: any;
+  };
+
+  progress?: { agentsPct?: number; sitesPct?: number; tenantsPct?: number };
+
+  // backend actuel = objet {agents:boolean,...}
+  atLimit?: { agents?: boolean; sites?: boolean; tenants?: boolean };
+
+  // optionnel si tu ajoutes un tableau côté API
+  atLimitList?: string[];
+
+  error?: string;
 };
 
-export default function Dashboard() {
-  const { user } = useAuth();
-  
+function toAtLimitList(b: BillingUsageResponse | null): string[] {
+  if (!b) return [];
+  if (Array.isArray(b.atLimitList)) return b.atLimitList;
+
+  const a = b.atLimit ?? {};
+  const out: string[] = [];
+  if (a.agents) out.push("agents");
+  if (a.sites) out.push("sites");
+  if (a.tenants) out.push("tenants");
+  return out;
+}
+
+export default function DashboardPage() {
+  const [billing, setBilling] = useState<BillingUsageResponse | null>(null);
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadBilling() {
+      setBillingLoading(true);
+      setBillingError(null);
+
+      try {
+        const res = await apiFetch<BillingUsageResponse>("/api/billing/usage");
+
+        if (!mounted) return;
+
+        console.log("BILLING USAGE", res);
+
+        if (!res?.ok) {
+          setBilling(null);
+          setBillingError(res?.error ?? "Impossible de charger les informations d’abonnement.");
+          return;
+        }
+
+        setBilling(res);
+      } catch (e: any) {
+        if (!mounted) return;
+        setBilling(null);
+        setBillingError(e?.message ?? "Erreur inconnue lors du chargement billing.");
+      } finally {
+        if (!mounted) return;
+        setBillingLoading(false);
+      }
+    }
+
+    loadBilling();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // ✅ normalisations UI
+  const usedTenants = billing?.usage?.activeTenants ?? billing?.usage?.tenants ?? 0;
+  const atLimitList = useMemo(() => toAtLimitList(billing), [billing]);
+
   return (
-    <div className="flex flex-1 flex-col gap-4 md:gap-8">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Vue d’ensemble et derniers incidents pour votre tenant.
+          </p>
+        </div>
 
-      {user && (
-         <Alert>
-         <Info className="h-4 w-4" />
-         <AlertTitle>Informations de session</AlertTitle>
-         <AlertDescription>
-           Vous êtes connecté en tant que <span className="font-semibold">{user.email}</span> avec le rôle <Badge variant="secondary">{user.role}</Badge> sur le tenant <span className="font-mono text-xs">{user.tenantId}</span>.
-         </AlertDescription>
-       </Alert>
-      )}
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline">
+            <Link href="/dashboard/incidents">
+              <Siren className="mr-2 h-4 w-4" />
+              Voir les incidents
+            </Link>
+          </Button>
 
-      <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
-        {kpis.map((kpi) => (
-          <Card key={kpi.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{kpi.title}</CardTitle>
-              {kpiIcons[kpi.title as keyof typeof kpiIcons]}
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{kpi.value}</div>
-              <p className="text-xs text-muted-foreground flex items-center">
-                <span
-                  className={cn("mr-1", {
-                    "text-green-600": kpi.changeType === "increase",
-                    "text-red-600": kpi.changeType === "decrease",
-                  })}
-                >
-                  {kpi.change}
-                </span>
-                {kpi.description}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+          <Button asChild>
+            <Link href="/dashboard/incidents">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Nouvel incident
+            </Link>
+          </Button>
+        </div>
       </div>
-      <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader className="flex flex-row items-center">
-            <div className="grid gap-2">
-              <CardTitle>Incidents récents</CardTitle>
-              <CardDescription>
-                Un aperçu des derniers incidents signalés.
-              </CardDescription>
+
+      <DashboardStats />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <RecentIncidentsCard />
+
+        {/* Bloc billing temporaire (à remplacer par une vraie carte premium) */}
+        <div className="rounded-3xl border bg-card p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-sm font-medium">Abonnement & quotas</div>
+              <div className="text-xs text-muted-foreground">
+                Plan, limites et usage en temps réel.
+              </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Site</TableHead>
-                  <TableHead>Sévérité</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead className="text-right">Heure</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {incidents.slice(0, 5).map((incident) => (
-                  <TableRow key={incident.id}>
-                    <TableCell>
-                      <div className="font-medium">{incident.siteName}</div>
-                      <div className="hidden text-sm text-muted-foreground md:inline">
-                        Signalé par {incident.agentName}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          incident.severity === "Élevée"
-                            ? "destructive"
-                            : incident.severity === "Moyenne"
-                            ? "secondary"
-                            : "outline"
-                        }
-                        className={cn(
-                          incident.severity === "Moyenne" &&
-                            "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300"
-                        )}
-                      >
-                        {incident.severity}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={incident.status === 'Ouvert' ? 'default' : 'outline'} className={cn(incident.status === 'Ouvert' && 'bg-red-500')}>{incident.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {incident.timestamp.toLocaleTimeString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+
+            <Button asChild variant="outline" size="sm">
+              <Link href="/dashboard/billing">Gérer</Link>
+            </Button>
+          </div>
+
+          <div className="mt-4 text-sm">
+            {billingLoading ? (
+              <div className="text-muted-foreground">Chargement…</div>
+            ) : billingError ? (
+              <div className="text-destructive">
+                {billingError}
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Ouvre la console (F12) pour voir le log si besoin.
+                </div>
+              </div>
+            ) : billing?.ok ? (
+              <div className="space-y-3">
+                <div className="text-muted-foreground">
+                  <span className="font-medium text-foreground">Plan :</span>{" "}
+                  {billing.plan?.name ?? billing.subscription?.planId ?? "—"}
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-xl border p-3">
+                    <div className="text-xs text-muted-foreground">Agents</div>
+                    <div className="text-sm font-semibold">
+                      {billing.usage?.agents ?? 0} / {billing.limits?.agents ?? "—"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border p-3">
+                    <div className="text-xs text-muted-foreground">Sites</div>
+                    <div className="text-sm font-semibold">
+                      {billing.usage?.sites ?? 0} / {billing.limits?.sites ?? "—"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border p-3">
+                    <div className="text-xs text-muted-foreground">Tenants</div>
+                    <div className="text-sm font-semibold">
+                      {usedTenants} / {billing.limits?.tenants ?? "—"}
+                    </div>
+                  </div>
+                </div>
+
+                {atLimitList.length > 0 ? (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs">
+                    Quota atteint sur :{" "}
+                    <span className="font-medium text-destructive">
+                      {atLimitList.join(", ")}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="text-muted-foreground">Aucune donnée.</div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

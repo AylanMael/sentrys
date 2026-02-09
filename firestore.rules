@@ -2,35 +2,263 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ---------- Helpers ----------
     function signedIn() { return request.auth != null; }
-    function myUid() { return request.auth.uid; }
+    function uid() { return request.auth.uid; }
 
-    // V1: 1 tenant par user, docId = uid
-    match /tenantUsers/{uid} {
-      allow create: if signedIn() && uid == myUid();
-      allow read: if signedIn() && uid == myUid();
+    function tuPath() { return /databases/$(database)/documents/tenantUsers/$(uid()); }
+    function hasTU() { return signedIn() && exists(tuPath()); }
+    function tu() { return get(tuPath()); }
 
-      // Empêche auto-promotion + changement tenantId
+    function myTenantId() { return hasTU() ? tu().data.tenantId : null; }
+    function myRole() { return hasTU() ? tu().data.role : null; }
+
+    function isAdmin() { return hasTU() && myRole() == "admin"; }
+    function isManager() { return hasTU() && (myRole() == "admin" || myRole() == "manager"); }
+    function isAgent() { return hasTU() && myRole() == "agent"; }
+
+    function sameTenantOnCreate() {
+      return hasTU()
+        && ("tenantId" in request.resource.data)
+        && request.resource.data.tenantId == myTenantId();
+    }
+
+    function sameTenantResource() {
+      return hasTU()
+        && ("tenantId" in resource.data)
+        && resource.data.tenantId == myTenantId();
+    }
+
+    function forbidChange(keys) {
+      return !request.resource.data.diff(resource.data).changedKeys().hasAny(keys);
+    }
+
+    // ---------- Sites helpers ----------
+    function sitePath(siteId) {
+      return /databases/$(database)/documents/sites/$(siteId);
+    }
+
+    function siteExists(siteId) {
+      return (siteId is string) && exists(sitePath(siteId));
+    }
+
+    function siteSameTenant(siteId) {
+      return siteExists(siteId) && get(sitePath(siteId)).data.tenantId == myTenantId();
+    }
+
+    // Assigned to site: accessUids OR legacy managerIds/agentIds
+    function isAssignedToSite(siteId) {
+      return hasTU()
+        && siteExists(siteId)
+        && get(sitePath(siteId)).data.tenantId == myTenantId()
+        && (
+          (
+            ("accessUids" in get(sitePath(siteId)).data)
+            && (get(sitePath(siteId)).data.accessUids is list)
+            && get(sitePath(siteId)).data.accessUids.hasAny([uid()])
+          )
+          ||
+          (
+            (
+              !("accessUids" in get(sitePath(siteId)).data)
+              || !(get(sitePath(siteId)).data.accessUids is list)
+            )
+            &&
+            (
+              (
+                ("managerIds" in get(sitePath(siteId)).data)
+                && (get(sitePath(siteId)).data.managerIds is list)
+                && get(sitePath(siteId)).data.managerIds.hasAny([uid()])
+              )
+              ||
+              (
+                ("agentIds" in get(sitePath(siteId)).data)
+                && (get(sitePath(siteId)).data.agentIds is list)
+                && get(sitePath(siteId)).data.agentIds.hasAny([uid()])
+              )
+            )
+          )
+        );
+    }
+
+    // Ensure accessUids == union(managerIds, agentIds)
+    function accessUidsIsUnion(data) {
+      return ("managerIds" in data) && ("agentIds" in data) && ("accessUids" in data)
+        && (data.managerIds is list) && (data.agentIds is list) && (data.accessUids is list)
+        && data.accessUids.hasAll(data.managerIds)
+        && data.accessUids.hasAll(data.agentIds)
+        && data.managerIds.concat(data.agentIds).hasAll(data.accessUids);
+    }
+
+    // ---------- tenantUsers ----------
+    match /tenantUsers/{userId} {
+
+      // V1: création autorisée uniquement pour soi-même, tenantId libre (string),
+      // mais tu dois être authentifié. En prod stricte: à déplacer vers Cloud Function.
+      allow create: if signedIn()
+        && userId == uid()
+        && request.resource.data.uid == uid()
+        && request.resource.data.role in ["admin", "manager", "agent"]
+        && request.resource.data.status in ["active", "disabled"]
+        && request.resource.data.tenantId is string;
+
+      // Lire son propre profil, ou manager/admin lit les users du même tenant
+      allow read: if signedIn()
+        && (
+          userId == uid()
+          || (isManager() && resource.data.tenantId == myTenantId())
+        );
+
+      // Self update: interdire role/tenantId/uid
       allow update: if signedIn()
-        && uid == myUid()
-        && request.resource.data.role == resource.data.role
-        && request.resource.data.tenantId == resource.data.tenantId;
+        && userId == uid()
+        && forbidChange(["role", "tenantId", "uid"]);
+
+      // Admin: peut modifier role/status d'un user du même tenant (optionnel V1)
+      allow update: if isAdmin()
+        && resource.data.tenantId == myTenantId()
+        && forbidChange(["tenantId", "uid", "createdAt", "createdBy"]);
 
       allow delete: if false;
     }
 
+    // ---------- tenants ----------
     match /tenants/{tenantId} {
-      allow create: if signedIn()
-        && exists(/databases/$(database)/documents/tenantUsers/$(myUid()))
-        && get(/databases/$(database)/documents/tenantUsers/$(myUid())).data.tenantId == tenantId;
 
-      allow read: if signedIn()
-        && exists(/databases/$(database)/documents/tenantUsers/$(myUid()))
-        && get(/databases/$(database)/documents/tenantUsers/$(myUid())).data.tenantId == tenantId;
+      // V1: création par un user déjà provisionné (hasTU).
+      // En prod: mieux via Cloud Function à la création de compte.
+      allow create: if hasTU()
+        && tenantId == myTenantId()
+        && request.resource.data.name is string
+        && request.resource.data.status in ["active", "disabled"]
+        && request.resource.data.createdBy == uid();
 
-      allow update, delete: if false;
+      allow read: if hasTU() && tenantId == myTenantId();
+
+      allow update: if isAdmin()
+        && tenantId == myTenantId()
+        && forbidChange(["createdBy", "createdAt"]);
+
+      allow delete: if false;
     }
 
+    // ---------- sites ----------
+    match /sites/{id} {
+
+      allow create: if isManager()
+        && sameTenantOnCreate()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 1
+        && request.resource.data.isActive is bool
+        && accessUidsIsUnion(request.resource.data)
+        && request.resource.data.managerIds.hasAny([uid()]);
+
+      allow read: if sameTenantResource()
+        && (isAdmin() || isAssignedToSite(id));
+
+      allow update: if sameTenantResource()
+        && isManager()
+        && forbidChange(["tenantId", "createdAt", "createdBy"])
+        && accessUidsIsUnion(request.resource.data);
+
+      allow delete: if isAdmin() && sameTenantResource();
+    }
+
+    // ---------- agents ----------
+    match /agents/{id} {
+
+      // Adapte aux champs réels (firstName/lastName/status)
+      allow create: if isManager()
+        && sameTenantOnCreate()
+        && request.resource.data.firstName is string
+        && request.resource.data.lastName is string
+        && request.resource.data.status in ["active", "inactive", "disabled"];
+
+      // V1: lecture possible pour tout user du tenant (utile pour affectations)
+      allow read: if sameTenantResource();
+
+      allow update: if isManager()
+        && sameTenantResource()
+        && forbidChange(["tenantId", "createdAt", "createdBy"]);
+
+      allow delete: if isAdmin() && sameTenantResource();
+    }
+
+    // ---------- incidents ----------
+    match /incidents/{id} {
+
+      allow create: if hasTU()
+        && sameTenantOnCreate()
+        && request.resource.data.siteId is string
+        && siteSameTenant(request.resource.data.siteId)
+        && (isAdmin() || isAssignedToSite(request.resource.data.siteId))
+        && request.resource.data.description is string
+        && request.resource.data.status in ["Ouvert","Clos","ouvert","clos"]
+        && request.resource.data.severity in ["Faible","Moyenne","Élevée","faible","moyenne","elevee","élevée"];
+
+      allow read: if sameTenantResource()
+        && (isAdmin() || isAssignedToSite(resource.data.siteId));
+
+      allow update: if sameTenantResource()
+        && (isAdmin() || isAssignedToSite(resource.data.siteId))
+        && (
+          // manager/admin : presque tout sauf champs protégés
+          (isManager() && forbidChange(["tenantId", "createdAt", "createdBy", "siteId"]))
+          ||
+          // agent : modif limitée (statut + description par ex)
+          (isAgent() && forbidChange(["tenantId", "createdAt", "createdBy", "siteId", "severity", "siteName"]))
+        );
+
+      allow delete: if isAdmin() && sameTenantResource();
+
+      match /comments/{commentId} {
+        function incidentOk() {
+          return hasTU()
+            && exists(/databases/$(database)/documents/incidents/$(id))
+            && get(/databases/$(database)/documents/incidents/$(id)).data.tenantId == myTenantId();
+        }
+
+        function canSeeIncidentSite() {
+          return isAdmin()
+            || isAssignedToSite(get(/databases/$(database)/documents/incidents/$(id)).data.siteId);
+        }
+
+        allow read: if incidentOk() && canSeeIncidentSite();
+
+        allow create: if incidentOk()
+          && canSeeIncidentSite()
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000;
+
+        allow update, delete: if false;
+      }
+    }
+
+    // ---------- vacations ----------
+    match /vacations/{id} {
+
+      allow create: if hasTU()
+        && (isManager() || isAdmin())
+        && sameTenantOnCreate()
+        && request.resource.data.siteId is string
+        && siteSameTenant(request.resource.data.siteId)
+        && request.resource.data.startAt is timestamp
+        && request.resource.data.endAt is timestamp
+        && request.resource.data.requiredAgents is int;
+
+      // lecture: admin/manager ou assignés au site
+      allow read: if sameTenantResource()
+        && (isManager() || isAdmin() || isAssignedToSite(resource.data.siteId));
+
+      allow update: if sameTenantResource()
+        && (isManager() || isAdmin())
+        && forbidChange(["tenantId", "createdAt", "createdBy"]);
+
+      allow delete: if isAdmin() && sameTenantResource();
+    }
+
+    // ---------- Default deny ----------
     match /{document=**} {
       allow read, write: if false;
     }

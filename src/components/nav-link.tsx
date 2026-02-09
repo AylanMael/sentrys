@@ -11,15 +11,25 @@ interface NavLinkProps {
   href: string;
   icon: LucideIcon;
   label: string;
+  /** Si true, le lien est actif quand l’URL commence par href (ex: /dashboard/sites/123) */
+  match?: "exact" | "startsWith";
 }
 
-export default function NavLink({ href, icon: Icon, label }: NavLinkProps) {
-  const pathname = usePathname();
-  const isActive = pathname === href;
+export default function NavLink({
+  href,
+  icon: Icon,
+  label,
+  match = "startsWith",
+}: NavLinkProps) {
+  const pathname = usePathname() ?? "";
+
+  const isActive =
+    match === "exact" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <SidebarMenuButton
       asChild
+      data-active={isActive}
       className={cn(
         isActive &&
           "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground"
@@ -28,7 +38,7 @@ export default function NavLink({ href, icon: Icon, label }: NavLinkProps) {
     >
       <Link href={href}>
         <Icon />
-        {label}
+        <span>{label}</span>
       </Link>
     </SidebarMenuButton>
   );

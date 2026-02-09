@@ -1,4 +1,3 @@
-
 "use client";
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
@@ -12,24 +11,18 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-let app: FirebaseApp;
-let auth: Auth;
-let db: Firestore;
-
-// Initialize Firebase
-try {
-    if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
-        throw new Error("Firebase config is not set in environment variables. Please check your .env.local file.");
-    }
-    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-    auth = getAuth(app);
-    db = getFirestore(app);
-} catch (e) {
-    console.error("Firebase initialization failed:", e);
+// Validation minimale (fail fast)
+if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId) {
+  throw new Error(
+    "Firebase config manquante. Vérifie .env.local (NEXT_PUBLIC_FIREBASE_*) puis redémarre `npm run dev`."
+  );
 }
 
+const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const auth: Auth = getAuth(app);
+const db: Firestore = getFirestore(app);
 
 export { app, auth, db };

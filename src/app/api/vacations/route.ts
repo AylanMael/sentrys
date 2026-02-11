@@ -1,9 +1,9 @@
 // src/app/api/vacations/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import { logActivity } from "@/lib/activity/logger";
 
 export const runtime = "nodejs";
@@ -16,10 +16,6 @@ function json(status: number, body: any) {
 
 function bad(msg: string, extra?: any) {
   return json(400, { ok: false, error: msg, ...extra });
-}
-
-function unauthorized(msg = "Unauthorized", extra?: any) {
-  return json(401, { ok: false, error: msg, ...extra });
 }
 
 function forbidden(msg = "Forbidden", extra?: any) {
@@ -51,13 +47,11 @@ function parseDateTimeIso(v: any): Date | null {
 }
 
 function safeArr(v: unknown): string[] {
-  return Array.isArray(v)
-    ? (v.filter((x) => typeof x === "string") as string[])
-    : [];
+  return Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : [];
 }
 
 function uniq(arr: string[]) {
-  return Array.from(new Set(arr.filter(Boolean)));
+  return Array.from(new Set(arr.map((x) => String(x)).filter(Boolean)));
 }
 
 function parseIntSafe(v: any, def: number) {
@@ -74,76 +68,66 @@ function parseMax(v: string | null, def = 50) {
 
 /* ================= domain ================= */
 
-type VacationStatus =
-  | "planned"
-  | "partially_filled"
-  | "filled"
-  | "closed"
-  | "cancelled";
+type VacationStatus = "planned" | "partially_filled" | "filled" | "closed" | "cancelled";
 
 function asVacationStatus(v: any): VacationStatus {
   const s = String(v ?? "").toLowerCase().trim();
-  if (
-    s === "planned" ||
-    s === "partially_filled" ||
-    s === "filled" ||
-    s === "closed" ||
-    s === "cancelled"
-  ) {
+  if (s === "planned" || s === "partially_filled" || s === "filled" || s === "closed" || s === "cancelled") {
     return s;
   }
   return "planned";
 }
 
 function computeStatus(requiredAgents: number, assignedCount: number): VacationStatus {
-  if (requiredAgents <= 0) return "planned";
-  if (assignedCount <= 0) return "planned";
+  if (requiredAgents <= 0 || assignedCount <= 0) return "planned";
   if (assignedCount >= requiredAgents) return "filled";
   return "partially_filled";
 }
 
-function isFinalStatus(s: VacationStatus): s is "closed" | "cancelled" {
-  return s === "closed" || s === "cancelled";
+/* ================= assignments (create) ================= */
+
+type AssignmentStatus = "assigned" | "cancelled" | "present" | "absent" | "replaced";
+
+function assignmentDocId(vacationId: string, agentId: string) {
+  return `${vacationId}_${agentId}`;
 }
 
-/* ================= auth tenant ================= */
+async function createAssignmentsForVacation(input: {
+  tenantId: string;
+  uid: string;
+  vacationId: string;
+  siteId: string;
+  assignedAgentIds: string[];
+}) {
+  const { tenantId, uid, vacationId, siteId } = input;
+  const ids = uniq(input.assignedAgentIds);
 
-async function requireTenantUser(
-  req: NextRequest
-): Promise<
-  | { ok: true; uid: string; tenantId: string; role?: string; email?: string | null }
-  | { ok: false; res: NextResponse }
-> {
-  const authHeader =
-    req.headers.get("authorization") ||
-    req.headers.get("Authorization") ||
-    req.headers.get("x-auth-token") ||
-    "";
+  if (!ids.length) return { created: 0 };
 
-  if (!authHeader) return { ok: false, res: unauthorized("Missing token") };
+  const now = FieldValue.serverTimestamp();
+  const batch = adminDb.batch();
 
-  const token = authHeader.toLowerCase().startsWith("bearer ")
-    ? authHeader.slice(7).trim()
-    : authHeader.trim();
+  ids.forEach((agentId) => {
+    const ref = adminDb.collection("assignments").doc(assignmentDocId(vacationId, agentId));
+    batch.set(
+      ref,
+      {
+        tenantId,
+        vacationId,
+        siteId,
+        agentId,
+        status: "assigned" as AssignmentStatus,
+        createdAt: now,
+        createdBy: uid,
+        updatedAt: now,
+        updatedBy: uid,
+      },
+      { merge: true }
+    );
+  });
 
-  if (!token) return { ok: false, res: unauthorized("Missing token") };
-
-  try {
-    const decoded = await getAuth().verifyIdToken(token);
-    const uid = decoded.uid;
-    const email = (decoded as any)?.email ?? null;
-
-    const tuSnap = await adminDb.collection("tenantUsers").doc(uid).get();
-    if (!tuSnap.exists) return { ok: false, res: unauthorized("No tenant user") };
-
-    const tu = tuSnap.data() as any;
-    if (!tu?.tenantId) return { ok: false, res: unauthorized("No tenant assigned") };
-    if (tu.status !== "active") return { ok: false, res: unauthorized("User disabled") };
-
-    return { ok: true, uid, tenantId: tu.tenantId, role: tu.role, email };
-  } catch (e: any) {
-    return { ok: false, res: unauthorized("Invalid token", { details: e?.message }) };
-  }
+  await batch.commit();
+  return { created: ids.length };
 }
 
 /* ================= validations métier ================= */
@@ -153,10 +137,7 @@ async function assertSiteBelongsToTenant(siteId: string, tenantId: string) {
   if (!snap.exists) return { ok: false as const, error: "Site not found" };
 
   const data = snap.data() as any;
-  if (data?.tenantId !== tenantId) {
-    // anti fuite cross-tenant
-    return { ok: false as const, error: "Site not found" };
-  }
+  if (data?.tenantId !== tenantId) return { ok: false as const, error: "Site not found" };
 
   return { ok: true as const, site: data };
 }
@@ -166,12 +147,10 @@ async function validateAssignedAgentsForSite(input: {
   siteId: string;
   assignedAgentIds: string[];
 }) {
-  const { tenantId, siteId, assignedAgentIds } = input;
+  const { tenantId, siteId } = input;
 
-  const ids = uniq(assignedAgentIds).slice(0, 200);
-  if (ids.length === 0) {
-    return { ok: true as const, validIds: [], rejected: [] as any[] };
-  }
+  const ids = uniq(input.assignedAgentIds).slice(0, 200);
+  if (ids.length === 0) return { ok: true as const, validIds: [], rejected: [] as any[] };
 
   const siteCheck = await assertSiteBelongsToTenant(siteId, tenantId);
   if (!siteCheck.ok) {
@@ -185,7 +164,6 @@ async function validateAssignedAgentsForSite(input: {
   const allowedOnSite = new Set<string>(safeArr(siteCheck.site?.agentIds));
   const rejected: Array<{ id: string; reason: string }> = [];
 
-  // 1) autorisé sur le site
   const idsAllowed = ids.filter((id) => {
     if (!allowedOnSite.has(id)) {
       rejected.push({ id, reason: "agent_not_allowed_on_site" });
@@ -194,11 +172,8 @@ async function validateAssignedAgentsForSite(input: {
     return true;
   });
 
-  if (idsAllowed.length === 0) {
-    return { ok: true as const, validIds: [], rejected };
-  }
+  if (idsAllowed.length === 0) return { ok: true as const, validIds: [], rejected };
 
-  // 2) existence + tenant + status active
   const refs = idsAllowed.map((id) => adminDb.collection("agents").doc(id));
   const snaps = await adminDb.getAll(...refs);
 
@@ -206,22 +181,13 @@ async function validateAssignedAgentsForSite(input: {
   snaps.forEach((snap, i) => {
     const id = idsAllowed[i];
 
-    if (!snap.exists) {
-      rejected.push({ id, reason: "agent_not_found" });
-      return;
-    }
+    if (!snap.exists) return rejected.push({ id, reason: "agent_not_found" });
 
     const a = snap.data() as any;
-    if (a?.tenantId !== tenantId) {
-      rejected.push({ id, reason: "agent_cross_tenant" });
-      return;
-    }
+    if (a?.tenantId !== tenantId) return rejected.push({ id, reason: "agent_cross_tenant" });
 
     const st = String(a?.status ?? "active").toLowerCase();
-    if (st !== "active") {
-      rejected.push({ id, reason: "agent_inactive" });
-      return;
-    }
+    if (st !== "active") return rejected.push({ id, reason: "agent_inactive" });
 
     valid.push(id);
   });
@@ -279,6 +245,12 @@ export async function GET(req: NextRequest) {
   if (toIsoStr && !to) return bad("to must be an ISO date");
   if (from && to && to.getTime() < from.getTime()) return bad("to must be >= from");
 
+  // ✅ filtre status : on refuse les valeurs inconnues (évite bugs silencieux)
+  const allowedStatus = new Set(["planned", "partially_filled", "filled", "closed", "cancelled", "all"]);
+  if (!allowedStatus.has(statusFilter)) {
+    return bad("Invalid status filter", { allowed: Array.from(allowedStatus) });
+  }
+
   try {
     let q: FirebaseFirestore.Query = adminDb
       .collection("vacations")
@@ -298,9 +270,7 @@ export async function GET(req: NextRequest) {
     const snap = await q.get();
     let vacations = snap.docs.map((d) => pickVacation(d.data(), d.id));
 
-    if (statusFilter !== "all") {
-      vacations = vacations.filter((v) => String(v.status) === statusFilter);
-    }
+    if (statusFilter !== "all") vacations = vacations.filter((v) => String(v.status) === statusFilter);
 
     return json(200, {
       ok: true,
@@ -319,9 +289,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
 
-  const role = String(auth.role ?? "");
-  const canWrite = role === "admin" || role === "manager";
-  if (!canWrite) return forbidden("Insufficient rights");
+  if (!canWrite(auth.role)) return forbidden("Insufficient rights");
 
   let body: any;
   try {
@@ -389,6 +357,16 @@ export async function POST(req: NextRequest) {
     };
 
     const ref = await adminDb.collection("vacations").add(payload);
+
+    // ✅ sync assignments dès la création (si assignedAgentIds > 0)
+    const sync = await createAssignmentsForVacation({
+      tenantId: auth.tenantId,
+      uid: auth.uid,
+      vacationId: ref.id,
+      siteId,
+      assignedAgentIds,
+    });
+
     const created = await ref.get();
     const data = created.data() as any;
 
@@ -412,6 +390,7 @@ export async function POST(req: NextRequest) {
         requiredAgents,
         assignedCount: assignedAgentIds.length,
         status,
+        assignmentsCreated: sync.created,
         rejectedAssigned: validated.rejected ?? [],
       },
       severity: (validated.rejected?.length ?? 0) > 0 ? "warning" : "info",
@@ -432,6 +411,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       tenantId: auth.tenantId,
       warnings,
+      sync,
       id: ref.id,
       vacation: pickVacation(data, ref.id),
     });

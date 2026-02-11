@@ -28,7 +28,7 @@ import {
 export const metadata: Metadata = {
   title: "Tarifs Sentrys — Abonnements sécurité privée (Free, Starter, Pro, Growth)",
   description:
-    "Choisissez le plan Sentrys adapté à votre société de sécurité : Free, Starter, Pro (recommandé) ou Growth (multi-tenant). Quotas, fonctionnalités et options.",
+    "Choisissez le plan Sentrys adapté à votre société de sécurité : Free, Starter, Pro (recommandé) ou Growth (multi-tenant). Comparez fonctionnalités, options et montée en gamme.",
   alternates: { canonical: "/tarifs" },
   openGraph: {
     type: "website",
@@ -68,9 +68,9 @@ const plans: Plan[] = [
     price: "0€",
     period: "/ mois",
     tagline: "Pour démarrer et valider le flux.",
-    bullets: ["Vacations", "Incidents", "Quotas de base"],
+    bullets: ["Vacations & incidents", "Structure de base", "Historique conservé"],
     ctaLabel: "Commencer",
-    ctaHref: "/signup",
+    ctaHref: "/signup?plan=free",
   },
   {
     id: "starter",
@@ -87,9 +87,9 @@ const plans: Plan[] = [
     name: "Pro",
     price: "49€",
     period: "/ mois",
-    tagline: "Le plan recommandé pour la majorité des sociétés.",
+    tagline: "Recommandé pour la majorité des sociétés.",
     highlight: true,
-    bullets: ["Reporting avancé", "Plus de quotas", "Priorité support"],
+    bullets: ["Reporting avancé", "Plus de quotas", "Support prioritaire"],
     ctaLabel: "Choisir Pro",
     ctaHref: "/signup?plan=pro",
   },
@@ -98,8 +98,8 @@ const plans: Plan[] = [
     name: "Growth",
     price: "99€",
     period: "/ mois",
-    tagline: "Pour scaler avec multi-tenant & volume.",
-    bullets: ["Multi-tenant", "Gros volumes", "Accompagnement"],
+    tagline: "Pour scaler avec multi-sociétés & volume.",
+    bullets: ["Multi-tenant (multi-sociétés)", "Gros volumes", "Accompagnement"],
     ctaLabel: "Choisir Growth",
     ctaHref: "/signup?plan=growth",
   },
@@ -157,11 +157,13 @@ const features: FeatureRow[] = [
 function Cell({ ok }: { ok: boolean }) {
   return ok ? (
     <span className="inline-flex items-center justify-center">
-      <CheckCircle2 className="h-4 w-4 text-primary" aria-label="Inclus" />
+      <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" />
+      <span className="sr-only">Inclus</span>
     </span>
   ) : (
-    <span className="text-sm text-muted-foreground" aria-label="Non inclus">
+    <span className="text-sm text-muted-foreground" aria-hidden="true">
       —
+      <span className="sr-only">Non inclus</span>
     </span>
   );
 }
@@ -169,11 +171,11 @@ function Cell({ ok }: { ok: boolean }) {
 export default function TarifsPage() {
   return (
     <PublicLayout>
-      {/* HERO */}
+      {/* HERO (CTA limité) */}
       <section className="relative overflow-hidden py-12 md:py-20">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/10" />
-          <div className="absolute -top-24 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-primary/12 blur-3xl" />
+          <div className="absolute -top-24 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
           <div className="absolute -bottom-28 right-[-120px] h-[420px] w-[520px] rounded-full bg-accent/10 blur-3xl" />
         </div>
 
@@ -198,7 +200,7 @@ export default function TarifsPage() {
             </h1>
 
             <p className="mx-auto mt-4 max-w-2xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Free pour tester, Pro pour la majorité des besoins, Growth pour le multi-tenant et les gros volumes.
+              Free pour tester, Pro pour la majorité des sociétés, Growth pour le multi-tenant et les gros volumes.
               Les quotas (agents, sites, tenants) sont visibles en temps réel dans l’app.
             </p>
 
@@ -233,10 +235,14 @@ export default function TarifsPage() {
               <Card
                 key={p.id}
                 className={[
-                  "relative rounded-3xl",
-                  p.highlight ? "border-primary/40 shadow-md shadow-primary/10" : "",
+                  "relative rounded-3xl overflow-hidden",
+                  p.highlight ? "border-primary/40 shadow-lg shadow-primary/10" : "",
                 ].join(" ")}
               >
+                {p.highlight ? (
+                  <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-primary" />
+                ) : null}
+
                 <CardHeader className="space-y-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{p.name}</CardTitle>
@@ -279,6 +285,7 @@ export default function TarifsPage() {
             ))}
           </div>
 
+          {/* sur-mesure */}
           <div className="mx-auto mt-10 max-w-6xl rounded-3xl border bg-card p-6 md:p-8">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
@@ -287,20 +294,15 @@ export default function TarifsPage() {
                   Multi-sociétés, gros volumes, intégrations paie / reporting avancé, SLA…
                 </p>
               </div>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button asChild variant="outline" className="rounded-full">
-                  <Link href="/contact">Contacter le support</Link>
-                </Button>
-                <Button asChild className="rounded-full">
-                  <Link href="/contact">Demander une démo</Link>
-                </Button>
-              </div>
+              <Button asChild variant="outline" className="rounded-full">
+                <Link href="/contact">Nous contacter</Link>
+              </Button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* COMPARATIF (table stable) */}
+      {/* COMPARATIF (stable + responsive) */}
       <section className="border-t py-12 md:py-16">
         <div className="container">
           <div className="mx-auto max-w-3xl text-center">
@@ -314,10 +316,11 @@ export default function TarifsPage() {
 
           <div className="mx-auto mt-10 max-w-6xl">
             <div className="overflow-x-auto rounded-3xl border bg-card">
-              <table className="w-full min-w-[900px] border-collapse">
+              {/* min-w pour forcer l’affichage des 4 colonnes + scroll horizontal sur mobile */}
+              <table className="w-full min-w-[980px] border-collapse">
                 <thead className="bg-muted/30">
                   <tr className="border-b">
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">
+                    <th className="sticky left-0 z-10 bg-muted/30 px-6 py-4 text-left text-sm font-semibold text-foreground">
                       Fonctionnalités
                     </th>
                     <th className="px-6 py-4 text-center text-sm font-semibold text-foreground">Free</th>
@@ -330,7 +333,7 @@ export default function TarifsPage() {
                 <tbody className="divide-y">
                   {features.map((r) => (
                     <tr key={r.label} className="hover:bg-muted/20 transition">
-                      <td className="px-6 py-5">
+                      <td className="sticky left-0 z-10 bg-card px-6 py-5">
                         <div className="flex items-start gap-3">
                           <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border bg-muted/20">
                             <r.icon className="h-4 w-4 text-primary" />
@@ -365,7 +368,7 @@ export default function TarifsPage() {
         </div>
       </section>
 
-      {/* FAQ + CTA */}
+      {/* FAQ + CTA final (propre) */}
       <section className="border-t bg-muted/30 py-12 md:py-16">
         <div className="container">
           <div className="mx-auto max-w-3xl text-center">
@@ -421,9 +424,9 @@ export default function TarifsPage() {
           <div className="mx-auto mt-10 max-w-5xl rounded-3xl border bg-card p-8 md:p-12">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
-                <p className="text-sm font-semibold">Prêt à passer au niveau supérieur ?</p>
+                <p className="text-sm font-semibold">Prêt à démarrer ?</p>
                 <p className="text-sm text-muted-foreground">
-                  Lancez un essai ou demandez une démo : on vous montre le workflow complet.
+                  Créez un compte en quelques minutes. Vous pourrez upgrader au bon moment.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">

@@ -10,14 +10,16 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
 import {
-  ArrowRight,
   ShieldCheck,
   Sparkles,
   Clock,
   Mail,
   Building2,
   CheckCircle2,
+  ChevronRight,
+  ArrowRight,
 } from "lucide-react";
+
 
 export const metadata: Metadata = {
   title: "Contact Sentrys — Démo, tarifs, questions",
@@ -43,15 +45,16 @@ const trust = [
 export default function ContactPage() {
   return (
     <PublicLayout>
-      {/* HERO */}
       <section className="relative overflow-hidden py-12 md:py-20">
+        {/* background */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/10" />
-          <div className="absolute -top-24 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-primary/12 blur-3xl" />
+          <div className="absolute -top-24 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
           <div className="absolute -bottom-28 right-[-120px] h-[420px] w-[520px] rounded-full bg-accent/10 blur-3xl" />
         </div>
 
         <div className="container">
+          {/* heading */}
           <div className="mx-auto max-w-3xl text-center">
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Badge variant="secondary" className="gap-2">
@@ -68,24 +71,31 @@ export default function ContactPage() {
             </div>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
-              Contactez-nous
+              Contactez Sentrys
             </h1>
 
             <p className="mx-auto mt-4 max-w-2xl text-pretty text-base text-muted-foreground sm:text-lg">
               Démo, tarifs, support ou partenariat : dites-nous ce dont vous avez besoin.
-              On vous répond rapidement avec une solution claire.
+              On vous répond rapidement, avec une solution claire.
             </p>
           </div>
 
           {/* content */}
-          <div className="mx-auto mt-12 grid max-w-6xl gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
+          <div className="mx-auto mt-12 grid max-w-6xl gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
             {/* FORM */}
             <div className="rounded-3xl border bg-card p-6 shadow-sm md:p-8">
-              <div className="flex flex-col gap-1">
-                <p className="text-sm font-semibold">Envoyez un message</p>
-                <p className="text-sm text-muted-foreground">
-                  Donnez un maximum de contexte (taille équipe, nombre de sites, besoin multi-sociétés…).
-                </p>
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">Envoyez un message</p>
+                  <p className="text-sm text-muted-foreground">
+                    Plus vous donnez de contexte (sites, agents, volumes), plus la réponse sera actionnable.
+                  </p>
+                </div>
+
+                <div className="hidden sm:flex items-center gap-2 rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
+                  24–48h ouvrées
+                </div>
               </div>
 
               <Separator className="my-6" />
@@ -96,6 +106,7 @@ export default function ContactPage() {
                     <Label htmlFor="name">Nom complet</Label>
                     <Input id="name" placeholder="Jean Dupont" autoComplete="name" required />
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="email">Adresse email</Label>
                     <Input
@@ -111,25 +122,32 @@ export default function ContactPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="company">Entreprise (optionnel)</Label>
-                    <Input id="company" placeholder="Nom de la société" autoComplete="organization" />
+                    <Input
+                      id="company"
+                      placeholder="Nom de la société"
+                      autoComplete="organization"
+                    />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="reason">Motif</Label>
-                    <select
-                      id="reason"
-                      name="reason"
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      defaultValue="demo"
-                    >
-                      {reasons.map((r) => (
-                        <option key={r.value} value={r.value}>
-                          {r.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        id="reason"
+                        name="reason"
+                        defaultValue="demo"
+                        className="h-10 w-full appearance-none rounded-md border border-input bg-background px-3 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {reasons.map((r) => (
+                          <option key={r.value} value={r.value}>
+                            {r.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronRight className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90 text-muted-foreground" />
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      Pour une démo, indiquez le nombre de sites et d’agents.
+                      Pour une démo : indiquez le nombre de sites et d’agents (même approximatif).
                     </p>
                   </div>
                 </div>
@@ -140,8 +158,11 @@ export default function ContactPage() {
                     id="message"
                     placeholder="Expliquez votre besoin (planning, incidents, multi-sociétés…), vos volumes, et vos contraintes."
                     required
-                    className="min-h-[140px]"
+                    className="min-h-[160px]"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Exemple : “12 sites, 45 agents, besoin de traçabilité incidents + reporting mensuel.”
+                  </p>
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -155,12 +176,13 @@ export default function ContactPage() {
               </form>
             </div>
 
-            {/* SIDE INFO */}
+            {/* SIDE */}
             <aside className="space-y-6">
+              {/* Info */}
               <div className="rounded-3xl border bg-card p-6 shadow-sm">
                 <p className="text-sm font-semibold">Informations</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  On privilégie des réponses concrètes et actionnables.
+                  Notre objectif : vous répondre vite, avec une recommandation concrète.
                 </p>
 
                 <div className="mt-5 space-y-3 text-sm">
@@ -209,20 +231,26 @@ export default function ContactPage() {
                 </ul>
               </div>
 
+              {/* Minimal secondary links */}
               <div className="rounded-3xl border bg-card p-6 shadow-sm">
-                <p className="text-sm font-semibold">Vous préférez avancer tout de suite ?</p>
+                <p className="text-sm font-semibold">Liens utiles</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Créez un compte, explorez l’interface, puis revenez vers nous si besoin.
+                  Préparez votre décision en quelques minutes.
                 </p>
 
-                <div className="mt-5 flex flex-col gap-3">
-                  <Button asChild className="h-11 rounded-full gap-2">
-                    <Link href="/signup">
-                      Créer un compte <ArrowRight className="h-4 w-4" />
+                <div className="mt-5 grid gap-3">
+                  <Button asChild variant="outline" className="h-11 rounded-full justify-between">
+                    <Link href="/tarifs">
+                      Voir les tarifs
+                      <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>
-                  <Button asChild variant="outline" className="h-11 rounded-full">
-                    <Link href="/tarifs">Voir les tarifs</Link>
+
+                  <Button asChild variant="outline" className="h-11 rounded-full justify-between">
+                    <Link href="/fonctionnalites">
+                      Découvrir les fonctionnalités
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
                   </Button>
                 </div>
               </div>

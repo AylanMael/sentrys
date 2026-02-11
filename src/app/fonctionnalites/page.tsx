@@ -5,6 +5,12 @@ import PublicLayout from "@/components/layouts/public-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 import {
   CalendarClock,
@@ -16,6 +22,9 @@ import {
   CheckCircle2,
   ArrowRight,
   Sparkles,
+  Layers,
+  Lock,
+  Target,
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -30,6 +39,7 @@ type Feature = {
   icon: any;
   title: string;
   desc: string;
+  solves: string;
   details: string[];
 };
 
@@ -38,7 +48,9 @@ const featureCards: Feature[] = [
     id: "planning",
     icon: CalendarClock,
     title: "Planning centralisé",
-    desc: "Générez et assignez les vacations. Une vue claire et en temps réel pour vos équipes.",
+    desc: "Générez les besoins, créez les vacations et assignez rapidement les agents.",
+    solves:
+      "Fini les plannings éclatés et les oublis : vous visualisez et ajustez en temps réel.",
     details: [
       "Création de vacations par site",
       "Définition des besoins en agents",
@@ -51,6 +63,8 @@ const featureCards: Feature[] = [
     icon: Siren,
     title: "Gestion des incidents",
     desc: "Tracez chaque incident du début à la fin. Preuves, commentaires, actions, clôture.",
+    solves:
+      "Chaque incident devient exploitable : suivi, responsabilité, historique, traçabilité.",
     details: [
       "Rapports détaillés avec photos / pièces jointes",
       "Fil de commentaires par incident",
@@ -63,6 +77,8 @@ const featureCards: Feature[] = [
     icon: Users,
     title: "Dossiers agents",
     desc: "Profils, documents, qualifications et historique : tout est centralisé et à jour.",
+    solves:
+      "Un référentiel unique pour éviter les documents perdus et mieux affecter.",
     details: [
       "Fiches agents complètes (contact, statut)",
       "Documents & certifications",
@@ -75,6 +91,8 @@ const featureCards: Feature[] = [
     icon: Building2,
     title: "Suivi des sites",
     desc: "Consignes, contacts, risques : toutes les informations clés au même endroit.",
+    solves:
+      "Moins d’erreurs terrain : les consignes et contacts sont accessibles immédiatement.",
     details: [
       "Fiches sites (adresse, contacts, niveau de risque)",
       "Consignes opérationnelles par site",
@@ -87,6 +105,8 @@ const featureCards: Feature[] = [
     icon: BarChart,
     title: "Reporting & pilotage",
     desc: "Des tableaux de bord lisibles pour piloter l’activité et décider plus vite.",
+    solves:
+      "Vous gagnez en visibilité : activité, tendances, incidents, charge, performance.",
     details: [
       "Indicateurs clés sur le dashboard",
       "Suivi incidents / vacations / activité",
@@ -99,6 +119,8 @@ const featureCards: Feature[] = [
     icon: ShieldCheck,
     title: "Sécurité & rôles",
     desc: "Permissions granulaires (Admin, Manager, Agent) pour un accès sécurisé et adapté.",
+    solves:
+      "Chacun voit ce qu’il doit voir : accès contrôlés, traçabilité, sérénité.",
     details: [
       "Rôles prédéfinis & permissions",
       "Authentification sécurisée",
@@ -119,27 +141,49 @@ const quickLinks = [
 
 const valueProps = [
   {
+    icon: Target,
     title: "Moins de friction, plus de contrôle",
     desc: "Une structure claire pour éviter les erreurs de planning et les pertes d’information.",
   },
   {
+    icon: Layers,
     title: "Traçabilité terrain",
     desc: "Chaque incident est suivi : preuves, actions, commentaires, clôture, historique.",
   },
   {
+    icon: Lock,
     title: "Lisible pour tout le monde",
     desc: "Une UX simple pour les managers, et efficace pour les équipes terrain.",
+  },
+];
+
+const faqs = [
+  {
+    q: "Sentrys est-il adapté aux sociétés multi-sites ?",
+    a: "Oui. Chaque site dispose de ses consignes, contacts, risques et d’un historique d’activité (vacations & incidents).",
+  },
+  {
+    q: "Peut-on commencer gratuitement ?",
+    a: "Oui. Vous pouvez démarrer sur un plan gratuit puis évoluer quand vous le souhaitez, sans perdre l’historique.",
+  },
+  {
+    q: "Quels rôles utilisateurs sont disponibles ?",
+    a: "Admin, Manager et Agent, avec des permissions adaptées à chaque besoin.",
+  },
+  {
+    q: "Le multi-sociétés est-il prévu ?",
+    a: "Oui, via le plan Growth (multi-tenant). Idéal pour les groupes ou les structures multi-agences.",
   },
 ];
 
 export default function FonctionnalitesPage() {
   return (
     <PublicLayout>
-      {/* HERO */}
+      {/* HERO (CTA principal unique) */}
       <section className="relative overflow-hidden py-12 md:py-20">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/10" />
-          <div className="absolute -top-24 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-primary/12 blur-3xl" />
+          <div className="absolute -top-24 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
           <div className="absolute -bottom-28 right-[-120px] h-[420px] w-[520px] rounded-full bg-accent/10 blur-3xl" />
         </div>
 
@@ -160,12 +204,12 @@ export default function FonctionnalitesPage() {
             </div>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
-              Toutes les fonctionnalités dont vous avez besoin
+              Des fonctionnalités conçues pour l’exploitation
             </h1>
 
             <p className="mx-auto mt-4 max-w-2xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Sentrys centralise planning, incidents, agents, sites et reporting — pour une exploitation fluide,
-              une traçabilité solide et une visibilité temps réel.
+              Planning, incidents, agents, sites et reporting : Sentrys structure votre activité
+              avec une lecture claire et une traçabilité solide.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
@@ -179,7 +223,6 @@ export default function FonctionnalitesPage() {
               </Button>
             </div>
 
-            {/* Quick nav */}
             <div className="mx-auto mt-10 flex max-w-4xl flex-wrap items-center justify-center gap-2">
               {quickLinks.map((l) => (
                 <a
@@ -201,7 +244,10 @@ export default function FonctionnalitesPage() {
           <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-3">
             {valueProps.map((v) => (
               <div key={v.title} className="rounded-2xl border bg-card p-6">
-                <p className="text-sm font-semibold">{v.title}</p>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border bg-muted/40">
+                  <v.icon className="h-5 w-5 text-primary" />
+                </div>
+                <p className="mt-4 text-sm font-semibold">{v.title}</p>
                 <p className="mt-2 text-sm text-muted-foreground">{v.desc}</p>
               </div>
             ))}
@@ -209,7 +255,7 @@ export default function FonctionnalitesPage() {
         </div>
       </section>
 
-      {/* FEATURES */}
+      {/* FEATURES (sans CTA par carte) */}
       <section className="border-t py-12 md:py-20">
         <div className="container">
           <div className="mx-auto max-w-3xl text-center">
@@ -236,14 +282,22 @@ export default function FonctionnalitesPage() {
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold">{feature.title}</h3>
                     <p className="mt-1 text-sm text-muted-foreground">{feature.desc}</p>
+
+                    <div className="mt-3 rounded-2xl border bg-muted/20 p-4">
+                      <p className="text-sm font-medium">Ce que ça résout</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{feature.solves}</p>
+                    </div>
                   </div>
                 </div>
 
                 <div className="mt-5">
                   <Separator />
-                  <ul className="mt-4 space-y-2">
+                  <ul className="mt-4 grid gap-2 sm:grid-cols-2">
                     {feature.details.map((detail) => (
-                      <li key={detail} className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <li
+                        key={detail}
+                        className="flex items-start gap-2 text-sm text-muted-foreground"
+                      >
                         <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
                         <span>{detail}</span>
                       </li>
@@ -253,34 +307,70 @@ export default function FonctionnalitesPage() {
               </article>
             ))}
           </div>
+        </div>
+      </section>
 
-          <div className="mt-12 text-center">
-            <Button asChild size="lg" className="h-11 rounded-full gap-2">
-              <Link href="/signup">
-                Commencer gratuitement <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
+      {/* FAQ (CTA discret unique) */}
+      <section className="border-t bg-muted/30 py-12 md:py-16">
+        <div className="container">
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+              Questions fréquentes
+            </h2>
+            <p className="mt-3 text-muted-foreground md:text-lg">
+              Réponses rapides aux questions les plus courantes.
+            </p>
+          </div>
+
+          <div className="mx-auto mt-10 max-w-3xl rounded-3xl border bg-card p-6 md:p-8">
+            <Accordion type="single" collapsible className="w-full">
+              {faqs.map((f, i) => (
+                <AccordionItem
+                  key={f.q}
+                  value={`item-${i}`}
+                  className={i === faqs.length - 1 ? "" : "border-b"}
+                >
+                  <AccordionTrigger className="text-left text-sm font-semibold">
+                    {f.q}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-sm text-muted-foreground">
+                    {f.a}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                Vous avez une question spécifique ? Parlons-en.
+              </p>
+              <Button asChild variant="outline" className="rounded-full">
+                <Link href="/contact">Nous contacter</Link>
+              </Button>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* CTA FINAL */}
-      <section className="border-t bg-muted/30 py-12 md:py-16">
+      {/* CTA FINAL unique */}
+      <section className="border-t py-12 md:py-16">
         <div className="container">
           <div className="mx-auto max-w-5xl rounded-3xl border bg-card p-8 md:p-12">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
-                <p className="text-sm font-semibold">Vous voulez voir le workflow complet en situation ?</p>
+                <p className="text-sm font-semibold">Prêt à structurer vos opérations ?</p>
                 <p className="text-sm text-muted-foreground">
-                  Sites → besoins → vacations → incidents → reporting. Une démo suffit pour comprendre le gain.
+                  Créez un compte et testez votre workflow en conditions réelles.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Button asChild size="lg" className="h-11 rounded-full">
-                  <Link href="/signup">Créer un compte</Link>
+                <Button asChild size="lg" className="h-11 rounded-full gap-2">
+                  <Link href="/signup">
+                    Créer un compte <ArrowRight className="h-4 w-4" />
+                  </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="h-11 rounded-full">
-                  <Link href="/contact">Demander une démo</Link>
+                  <Link href="/tarifs">Comparer les plans</Link>
                 </Button>
               </div>
             </div>

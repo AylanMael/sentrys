@@ -4,7 +4,14 @@ import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import PublicLayout from "@/components/layouts/public-layout";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 import {
   ArrowRight,
@@ -16,6 +23,9 @@ import {
   Building2,
   BarChart,
   CheckCircle2,
+  ClipboardList,
+  Layers,
+  Lock,
 } from "lucide-react";
 
 import { PlaceHolderImages } from "@/lib/placeholder-images";
@@ -48,62 +58,79 @@ const featureCards = [
   {
     icon: CalendarClock,
     title: "Planning centralisé",
-    desc: "Générez et assignez les vacations. Une vue claire et en temps réel pour vos équipes.",
+    desc: "Générez les besoins, créez les vacations et assignez rapidement les agents.",
   },
   {
     icon: Siren,
     title: "Gestion des incidents",
-    desc: "Tracez chaque incident du début à la fin. Preuves, commentaires, actions, clôture.",
+    desc: "Rapports, preuves, commentaires, actions, clôture et historique par site.",
   },
   {
     icon: Users,
     title: "Dossiers agents",
-    desc: "Profils, documents, qualifications et historique : tout est centralisé et à jour.",
+    desc: "Profils, documents, qualifications et historique missions/incidents.",
   },
   {
     icon: Building2,
     title: "Suivi des sites",
-    desc: "Consignes, contacts, risques et informations clés de chaque site au même endroit.",
+    desc: "Consignes, contacts, risques : toute l’information opérationnelle au même endroit.",
   },
   {
     icon: BarChart,
     title: "Reporting",
-    desc: "Des tableaux de bord lisibles pour piloter l’activité et décider plus vite.",
+    desc: "Des indicateurs lisibles pour piloter l’activité et décider plus vite.",
   },
   {
     icon: ShieldCheck,
     title: "Sécurité & rôles",
-    desc: "Permissions granulaires (Admin, Manager, Agent) pour un accès sécurisé et adapté.",
+    desc: "Permissions granulaires (Admin, Manager, Agent) + traçabilité des actions clés.",
   },
 ];
 
 const bullets = [
-  "Moins d’erreurs et d’oubli sur le planning",
-  "Traçabilité des incidents et des actions correctives",
-  "Informations sites & consignes centralisées",
+  "Moins d’erreurs et d’oublis sur le planning",
+  "Traçabilité des incidents et actions correctives",
+  "Consignes & informations sites centralisées",
   "Accès par rôles (admin / manager / agent)",
 ];
 
 const steps = [
+  { k: "01", icon: Layers, t: "Structurez", d: "Créez clients, sites, consignes, contacts et risques." },
+  { k: "02", icon: ClipboardList, t: "Planifiez", d: "Définissez les besoins et générez vos vacations." },
+  { k: "03", icon: Users, t: "Affectez", d: "Assignez les agents et suivez les ajustements en temps réel." },
+  { k: "04", icon: Siren, t: "Tracez", d: "Incidents, preuves, commentaires, clôture et historique complet." },
+];
+
+const differentiators = [
   {
-    k: "01",
-    t: "Structurez",
-    d: "Créez clients, sites, consignes, contacts et risques.",
+    icon: Sparkles,
+    title: "Clarté opérationnelle",
+    desc: "Une structure simple : sites → besoins → vacations → incidents → reporting.",
   },
   {
-    k: "02",
-    t: "Planifiez",
-    d: "Définissez les besoins et générez vos vacations.",
+    icon: Lock,
+    title: "Sécurité & contrôle",
+    desc: "Rôles, permissions, journalisation : chacun voit ce qui le concerne.",
   },
   {
-    k: "03",
-    t: "Affectez",
-    d: "Assignez les agents et suivez les ajustements en temps réel.",
+    icon: ShieldCheck,
+    title: "Traçabilité terrain",
+    desc: "Incidents suivis, preuves attachées, historique consultable à tout moment.",
+  },
+];
+
+const faqs = [
+  {
+    q: "Sentrys est-il adapté aux sociétés multi-sites ?",
+    a: "Oui. Chaque site dispose de ses consignes, contacts, risques et d’un historique d’activité (vacations & incidents).",
   },
   {
-    k: "04",
-    t: "Tracez",
-    d: "Incidents, preuves, commentaires, clôture et historique complet.",
+    q: "Puis-je commencer gratuitement ?",
+    a: "Oui. Vous pouvez démarrer sur un plan gratuit puis évoluer sans perdre votre historique.",
+  },
+  {
+    q: "Quels rôles utilisateurs sont disponibles ?",
+    a: "Admin, Manager et Agent, avec des permissions adaptées à chaque besoin.",
   },
 ];
 
@@ -111,7 +138,7 @@ export default function Home() {
   return (
     <PublicLayout>
       {/* HERO */}
-      <section className="relative overflow-hidden py-24 sm:py-32 lg:py-40">
+      <section className="relative overflow-hidden py-14 md:py-20 lg:py-24">
         {/* background */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/10" />
@@ -120,49 +147,60 @@ export default function Home() {
         </div>
 
         <div className="container">
-          <div className="mx-auto max-w-4xl text-center">
+          <div className="mx-auto max-w-5xl text-center">
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Badge
                 variant="outline"
                 className="gap-2 border-primary/20 bg-primary/10 text-primary"
               >
                 <Sparkles className="h-4 w-4" />
-                <span>Plateforme de sécurité nouvelle génération</span>
+                Plateforme de sécurité nouvelle génération
               </Badge>
 
               <Badge variant="secondary" className="gap-2">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Traçabilité • Contrôle • Clarté</span>
+                Traçabilité • Contrôle • Clarté
               </Badge>
             </div>
 
-            <h1 className="mt-8 text-balance text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+            <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
               Pilotez vos opérations de sécurité avec clarté
             </h1>
 
-            <p className="mx-auto mt-6 max-w-3xl text-pretty text-lg text-muted-foreground sm:text-xl">
-              Sentrys centralise la gestion de vos <strong>agents</strong>, <strong>sites</strong>,
-              <strong> plannings</strong> et <strong>incidents</strong> pour gagner en efficacité,
-              en traçabilité et en sérénité.
+            <p className="mx-auto mt-4 max-w-3xl text-pretty text-base text-muted-foreground sm:text-lg">
+              Sentrys centralise <strong>agents</strong>, <strong>sites</strong>, <strong>plannings</strong> et{" "}
+              <strong>incidents</strong> pour gagner en efficacité, en traçabilité et en sérénité.
             </p>
 
-            <div className="mt-10 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:gap-4">
-              <Button asChild size="lg" className="h-12 rounded-full text-base gap-2 bg-accent text-accent-foreground hover:bg-accent/80">
+            <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:gap-4">
+              <Button
+                asChild
+                size="lg"
+                className="h-11 rounded-full text-base gap-2 bg-accent text-accent-foreground hover:bg-accent/80"
+              >
                 <Link href="/signup">
                   Démarrer gratuitement <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild size="lg" variant="outline" className="h-12 rounded-full text-base">
+              <Button asChild size="lg" variant="outline" className="h-11 rounded-full text-base">
                 <Link href="/contact">Demander une démo</Link>
               </Button>
+            </div>
+
+            {/* Proof bar (sans chiffres inventés) */}
+            <div className="mx-auto mt-8 flex max-w-4xl flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
+              <span className="rounded-full border bg-card px-3 py-1.5">Onboarding guidé</span>
+              <span className="rounded-full border bg-card px-3 py-1.5">Accès par rôles</span>
+              <span className="rounded-full border bg-card px-3 py-1.5">Historique & traçabilité</span>
+              <span className="rounded-full border bg-card px-3 py-1.5">Multi-sociétés (Growth)</span>
             </div>
           </div>
 
           {/* Preview */}
-          <div className="relative mx-auto mt-20 max-w-6xl">
-            <div className="absolute -inset-8 rounded-3xl bg-gradient-to-b from-primary/10 to-transparent blur-2xl" />
+          <div className="relative mx-auto mt-12 max-w-6xl lg:mt-14">
+            <div className="absolute -inset-6 rounded-3xl bg-gradient-to-b from-primary/10 to-transparent blur-2xl" />
 
-            <div className="relative overflow-hidden rounded-2xl border bg-card shadow-xl shadow-primary/10">
+            <div className="relative overflow-hidden rounded-2xl border bg-card shadow-2xl shadow-primary/10">
               <div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/35" />
@@ -190,34 +228,64 @@ export default function Home() {
                 )}
               </div>
             </div>
+
+            {/* Bullets */}
+            <div className="mx-auto mt-6 grid max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {bullets.map((b) => (
+                <div key={b} className="rounded-2xl border bg-card p-4">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
+                    <p className="text-sm text-muted-foreground">{b}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* DIFFERENTIATORS */}
+      <section className="border-t bg-muted/20 py-12 md:py-16">
+        <div className="container">
+          <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-3">
+            {differentiators.map((d) => (
+              <div key={d.title} className="rounded-3xl border bg-card p-6">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border bg-muted/40">
+                  <d.icon className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="mt-4 text-base font-semibold">{d.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{d.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* WORKFLOW */}
-      <section className="border-t py-24 sm:py-32">
+      <section id="workflow" className="border-t py-12 md:py-16">
         <div className="container">
           <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
               Un workflow simple, propre, traçable
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              De vos besoins terrain aux affectations, tout est structuré et lisible pour réduire
-              les frictions opérationnelles.
+            <p className="mt-3 text-muted-foreground md:text-lg">
+              De vos besoins terrain aux affectations, tout est structuré et lisible.
             </p>
           </div>
 
-          <div className="mx-auto mt-16 grid max-w-6xl gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="mx-auto mt-10 grid max-w-6xl gap-4 md:grid-cols-2 lg:grid-cols-4">
             {steps.map((s) => (
               <div
                 key={s.k}
-                className="group relative rounded-2xl border bg-card p-6 shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                className="group rounded-3xl border bg-card p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-primary">{s.k}</span>
-                  <span className="h-10 w-10 rounded-xl border bg-muted/40" />
+                  <span className="text-xs font-semibold text-primary">{s.k}</span>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl border bg-muted/40">
+                    <s.icon className="h-5 w-5 text-primary" />
+                  </div>
                 </div>
-                <h3 className="mt-4 text-base font-semibold text-foreground">{s.t}</h3>
+                <h3 className="mt-4 text-sm font-semibold text-foreground">{s.t}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{s.d}</p>
               </div>
             ))}
@@ -226,43 +294,40 @@ export default function Home() {
       </section>
 
       {/* FEATURES */}
-      <section id="fonctionnalites" className="w-full border-t bg-muted/20 py-24 sm:py-32">
+      <section id="fonctionnalites" className="w-full border-t bg-muted/20 py-12 md:py-16">
         <div className="container">
           <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
               Un outil unique pour tout piloter
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Fini les tableurs et les échanges d’emails. Centralisez vos opérations sur une
-              plateforme unique, simple et sécurisée.
+            <p className="mt-3 text-muted-foreground md:text-lg">
+              Centralisez vos opérations sur une plateforme unique, simple et sécurisée.
             </p>
           </div>
 
-          <div className="mx-auto mt-16 grid max-w-5xl gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {featureCards.map((feature) => (
               <div
                 key={feature.title}
-                className="group relative flex flex-col rounded-3xl border bg-card p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                className="group flex flex-col rounded-3xl border bg-card p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
               >
-                <div className="flex-grow">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border bg-muted/40 transition group-hover:bg-primary/10">
-                    <feature.icon className="h-6 w-6 text-primary" />
-                  </div>
-                  <h3 className="mt-4 text-base font-semibold text-foreground">{feature.title}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">{feature.desc}</p>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border bg-muted/40 transition group-hover:bg-primary/10">
+                  <feature.icon className="h-5 w-5 text-primary" />
                 </div>
-                <Link
-                  href="/fonctionnalites"
-                  className="mt-4 flex items-center text-sm font-medium text-primary"
-                >
-                  En savoir plus <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
+                <h3 className="mt-4 text-base font-semibold">{feature.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{feature.desc}</p>
+
+                <div className="mt-4">
+                  <Link href="/fonctionnalites" className="text-sm font-medium text-primary">
+                    En savoir plus <ArrowRight className="ml-1 inline h-4 w-4" />
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
 
-          <div className="mt-16 text-center">
-            <Button asChild size="lg" variant="outline" className="h-12 rounded-full text-base">
+          <div className="mt-10 text-center">
+            <Button asChild size="lg" variant="outline" className="h-11 rounded-full text-base">
               <Link href="/fonctionnalites">
                 Voir toutes les fonctionnalités <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -271,8 +336,63 @@ export default function Home() {
         </div>
       </section>
 
+      {/* FAQ (Accordion) */}
+<section id="faq" className="border-t py-12 md:py-16">
+  <div className="container">
+    <div className="mx-auto max-w-3xl text-center">
+      <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+        Questions fréquentes
+      </h2>
+      <p className="mt-3 text-muted-foreground md:text-lg">
+        Réponses rapides aux questions les plus courantes.
+      </p>
+    </div>
+
+    <div className="mx-auto mt-10 max-w-3xl rounded-3xl border bg-card p-6 md:p-8">
+      <Accordion type="single" collapsible className="w-full">
+        <AccordionItem value="item-1" className="border-b">
+          <AccordionTrigger className="text-left text-sm font-semibold">
+            Sentrys est-il adapté aux sociétés multi-sites ?
+          </AccordionTrigger>
+          <AccordionContent className="text-sm text-muted-foreground">
+            Oui. Chaque site dispose de ses consignes, contacts, risques et d’un historique
+            d’activité (vacations & incidents).
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="item-2" className="border-b">
+          <AccordionTrigger className="text-left text-sm font-semibold">
+            Puis-je commencer gratuitement ?
+          </AccordionTrigger>
+          <AccordionContent className="text-sm text-muted-foreground">
+            Oui. Vous pouvez démarrer sur un plan gratuit puis évoluer sans perdre votre historique.
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="item-3">
+          <AccordionTrigger className="text-left text-sm font-semibold">
+            Quels rôles utilisateurs sont disponibles ?
+          </AccordionTrigger>
+          <AccordionContent className="text-sm text-muted-foreground">
+            Admin, Manager et Agent, avec des permissions adaptées à chaque besoin.
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-muted-foreground">
+          Vous avez une question spécifique ? Parlons-en.
+        </p>
+        <Button asChild variant="outline" className="rounded-full">
+          <Link href="/contact">Nous contacter</Link>
+        </Button>
+      </div>
+    </div>
+  </div>
+</section>
+
       {/* FINAL CTA */}
-      <section className="py-24 sm:py-32">
+      <section className="border-t bg-muted/20 py-12 md:py-16">
         <div className="container">
           <div className="relative overflow-hidden rounded-3xl border bg-card p-8 md:p-12">
             <div
@@ -280,19 +400,23 @@ export default function Home() {
               className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/10 to-transparent"
             />
             <div className="grid gap-8 md:grid-cols-2 md:items-center">
-              <div className="space-y-4">
-                <h2 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+              <div className="space-y-3">
+                <h2 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
                   Prêt à moderniser vos opérations ?
                 </h2>
-                <p className="text-lg text-muted-foreground">
+                <p className="text-sm text-muted-foreground md:text-lg">
                   Créez votre compte en quelques minutes ou planifiez une démo personnalisée.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row md:justify-end">
-                <Button asChild size="lg" className="h-12 rounded-full text-base bg-accent text-accent-foreground hover:bg-accent/80">
+                <Button
+                  asChild
+                  size="lg"
+                  className="h-11 rounded-full text-base bg-accent text-accent-foreground hover:bg-accent/80"
+                >
                   <Link href="/signup">Essayer Sentrys gratuitement</Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="h-12 rounded-full text-base">
+                <Button asChild size="lg" variant="outline" className="h-11 rounded-full text-base">
                   <Link href="/contact">Demander une démo</Link>
                 </Button>
               </div>

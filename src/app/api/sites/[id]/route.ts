@@ -49,9 +49,7 @@ function normalizeText(v: any) {
 }
 
 function safeArr(v: unknown): string[] {
-  return Array.isArray(v)
-    ? (v.filter((x) => typeof x === "string") as string[])
-    : [];
+  return Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : [];
 }
 
 function uniq(arr: string[]) {
@@ -103,6 +101,11 @@ function pickSite(d: any, id: string) {
     createdAtIso: toIso(d.createdAt),
     updatedAtIso: toIso(d.updatedAt),
   };
+}
+
+function diff(from: any, to: any) {
+  if (from === to) return null;
+  return { from: from ?? null, to: to ?? null };
 }
 
 /* ================= loader ================= */
@@ -162,10 +165,7 @@ async function validateAgentsForTenant(input: { tenantId: string; ids: string[] 
 
 /* ================= GET ================= */
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
 
@@ -189,10 +189,7 @@ export async function GET(
 
 /* ================= PATCH ================= */
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
 
@@ -220,6 +217,8 @@ export async function PATCH(
 
     const patch: any = {};
     const warnings: any[] = [];
+    const changed: string[] = [];
+    const changes: Record<string, any> = {};
 
     let nextIsActive = prevIsActive;
 
@@ -227,6 +226,12 @@ export async function PATCH(
       if (typeof body.isActive !== "boolean") return bad("isActive must be a boolean");
       nextIsActive = body.isActive;
       patch.isActive = nextIsActive;
+
+      const d = diff(prevIsActive, nextIsActive);
+      if (d) {
+        changed.push("isActive");
+        changes.isActive = d;
+      }
 
       if (!prevIsActive && nextIsActive) {
         const quota = await assertWithinLimitsTx({
@@ -239,7 +244,7 @@ export async function PATCH(
           await logActivity({
             tenantId: auth.tenantId,
             actorUid: auth.uid,
-            actorEmail: (auth as any).email ?? null,
+            actorEmail: auth.email ?? null,
             actorRole: auth.role ?? null,
             action: "billing.limit_reached",
             entityType: "billing",
@@ -271,6 +276,9 @@ export async function PATCH(
 
       patch.agentIds = validated.validIds;
 
+      changed.push("agentIds");
+      changes.agentIds = { fromCount: safeArr(prev.agentIds).length, toCount: validated.validIds.length };
+
       if (validated.rejected.length > 0) {
         warnings.push({
           code: "site_agentIds_rejected",
@@ -283,32 +291,109 @@ export async function PATCH(
     if (body.managerIds !== undefined) {
       if (!Array.isArray(body.managerIds)) return bad("managerIds must be an array");
       patch.managerIds = uniq(body.managerIds.map(normalizeId).filter(Boolean)).slice(0, 200);
+
+      changed.push("managerIds");
+      changes.managerIds = { fromCount: safeArr(prev.managerIds).length, toCount: patch.managerIds.length };
     }
 
     if (body.accessUids !== undefined) {
       if (role !== "admin") return forbidden("accessUids: admin only");
       if (!Array.isArray(body.accessUids)) return bad("accessUids must be an array");
       patch.accessUids = uniq(body.accessUids.map(normalizeId).filter(Boolean)).slice(0, 200);
+
+      changed.push("accessUids");
+      changes.accessUids = { fromCount: safeArr(prev.accessUids).length, toCount: patch.accessUids.length };
     }
 
     if (body.name !== undefined) {
       const v = normalizeText(body.name);
       if (!v) return bad("name cannot be empty");
       patch.name = v;
+
+      const d = diff(prev.name ?? null, v);
+      if (d) {
+        changed.push("name");
+        changes.name = d;
+      }
     }
 
-    if (body.clientName !== undefined) patch.clientName = normalizeText(body.clientName) || null;
-    if (body.siteType !== undefined) patch.siteType = normalizeText(body.siteType) || "bureaux";
+    if (body.clientName !== undefined) {
+      const v = normalizeText(body.clientName) || null;
+      patch.clientName = v;
+
+      const d = diff(prev.clientName ?? null, v);
+      if (d) {
+        changed.push("clientName");
+        changes.clientName = d;
+      }
+    }
+
+    if (body.siteType !== undefined) {
+      const v = normalizeText(body.siteType) || "bureaux";
+      patch.siteType = v;
+
+      const d = diff(prev.siteType ?? null, v);
+      if (d) {
+        changed.push("siteType");
+        changes.siteType = d;
+      }
+    }
 
     if (body.riskLevel !== undefined) {
       const r = Number(body.riskLevel);
-      patch.riskLevel = Number.isFinite(r) ? Math.min(Math.max(Math.floor(r), 1), 5) : 3;
+      const v = Number.isFinite(r) ? Math.min(Math.max(Math.floor(r), 1), 5) : 3;
+      patch.riskLevel = v;
+
+      const d = diff(prev.riskLevel ?? null, v);
+      if (d) {
+        changed.push("riskLevel");
+        changes.riskLevel = d;
+      }
     }
 
-    if (body.address !== undefined) patch.address = normalizeText(body.address) || null;
-    if (body.city !== undefined) patch.city = normalizeText(body.city) || null;
-    if (body.postalCode !== undefined) patch.postalCode = normalizeText(body.postalCode) || null;
-    if (body.instructions !== undefined) patch.instructions = normalizeText(body.instructions) || null;
+    if (body.address !== undefined) {
+      const v = normalizeText(body.address) || null;
+      patch.address = v;
+
+      const d = diff(prev.address ?? null, v);
+      if (d) {
+        changed.push("address");
+        changes.address = d;
+      }
+    }
+
+    if (body.city !== undefined) {
+      const v = normalizeText(body.city) || null;
+      patch.city = v;
+
+      const d = diff(prev.city ?? null, v);
+      if (d) {
+        changed.push("city");
+        changes.city = d;
+      }
+    }
+
+    if (body.postalCode !== undefined) {
+      const v = normalizeText(body.postalCode) || null;
+      patch.postalCode = v;
+
+      const d = diff(prev.postalCode ?? null, v);
+      if (d) {
+        changed.push("postalCode");
+        changes.postalCode = d;
+      }
+    }
+
+    if (body.instructions !== undefined) {
+      const v = normalizeText(body.instructions) || null;
+      patch.instructions = v;
+
+      const d = diff(prev.instructions ?? null, v);
+      if (d) {
+        changed.push("instructions");
+        changes.instructions = d;
+      }
+    }
 
     if (
       patch.name !== undefined ||
@@ -327,6 +412,8 @@ export async function PATCH(
         address: patch.address ?? prev.address ?? null,
         postalCode: patch.postalCode ?? prev.postalCode ?? null,
       });
+
+      changed.push("search");
     }
 
     patch.updatedAt = FieldValue.serverTimestamp();
@@ -338,20 +425,19 @@ export async function PATCH(
       if (prevIsActive && !nextIsActive) {
         await adjustUsage(auth.tenantId, "sites", -1);
       }
+      // inactive->active déjà “réservé” par assertWithinLimitsTx
     }
 
     const updated = await loaded.ref.get();
     const d = updated.data() as any;
 
-    // ✅ activity log
     const nextNameForMsg = String(d?.name ?? prev?.name ?? "—");
-    const action =
-      prevIsActive && !nextIsActive ? "site.archived" : "site.updated";
+    const action = prevIsActive && !nextIsActive ? "site.archived" : "site.updated";
 
     await logActivity({
       tenantId: auth.tenantId,
       actorUid: auth.uid,
-      actorEmail: (auth as any).email ?? null,
+      actorEmail: auth.email ?? null,
       actorRole: auth.role ?? null,
       action,
       entityType: "site",
@@ -363,8 +449,11 @@ export async function PATCH(
       meta: {
         siteId: updated.id,
         name: nextNameForMsg,
-        isActive: typeof d?.isActive === "boolean" ? d.isActive : true,
-        warnings,
+        prevIsActive,
+        nextIsActive: typeof d?.isActive === "boolean" ? d.isActive : true,
+        changed,
+        changes: Object.keys(changes).length ? changes : undefined,
+        warnings: warnings.length ? warnings : undefined,
       },
       severity: action === "site.archived" ? "warning" : "info",
     });
@@ -381,11 +470,11 @@ export async function PATCH(
 }
 
 /* ================= DELETE ================= */
-
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+/**
+ * DELETE /api/sites/:id
+ * => soft delete : isActive=false (+ décrémente usage si le site était actif)
+ */
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
 
@@ -402,6 +491,7 @@ export async function DELETE(
     const prev = loaded.data as any;
     const prevIsActive = typeof prev.isActive === "boolean" ? prev.isActive : true;
 
+    // idempotent => pas de re-log
     if (!prevIsActive) {
       return json(200, { ok: true, id: siteId, updated: { isActive: false } });
     }
@@ -417,17 +507,16 @@ export async function DELETE(
 
     await adjustUsage(auth.tenantId, "sites", -1);
 
-    // ✅ activity log
     await logActivity({
       tenantId: auth.tenantId,
       actorUid: auth.uid,
-      actorEmail: (auth as any).email ?? null,
+      actorEmail: auth.email ?? null,
       actorRole: auth.role ?? null,
       action: "site.archived",
       entityType: "site",
       entityId: siteId,
       message: `Site archivé : ${prev?.name ?? "—"}`,
-      meta: { siteId, name: prev?.name ?? null },
+      meta: { siteId, name: prev?.name ?? null, prevIsActive: true, nextIsActive: false },
       severity: "warning",
     });
 

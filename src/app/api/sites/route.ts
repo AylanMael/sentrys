@@ -41,9 +41,7 @@ function normalizeText(v: any) {
 }
 
 function safeArr(v: unknown): string[] {
-  return Array.isArray(v)
-    ? (v.filter((x) => typeof x === "string") as string[])
-    : [];
+  return Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : [];
 }
 
 function uniq(arr: string[]) {
@@ -106,7 +104,9 @@ function pickSite(d: any, id: string) {
 }
 
 /* ================= GET ================= */
-
+/**
+ * GET /api/sites?max=50&isActive=true&q=paris
+ */
 export async function GET(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
@@ -121,19 +121,19 @@ export async function GET(req: NextRequest) {
       .collection("sites")
       .where("tenantId", "==", auth.tenantId);
 
-    if (isActive !== null) {
-      ref = ref.where("isActive", "==", isActive);
-    }
+    if (isActive !== null) ref = ref.where("isActive", "==", isActive);
 
     const snap = await ref.limit(max).get();
     let sites = snap.docs.map((doc) => pickSite(doc.data(), doc.id));
 
+    // ✅ tri robuste (ISO string)
     sites.sort((a: any, b: any) => {
-      const au = (a as any)?.updatedAt?._seconds ?? 0;
-      const bu = (b as any)?.updatedAt?._seconds ?? 0;
+      const au = a.updatedAtIso ? Date.parse(a.updatedAtIso) : 0;
+      const bu = b.updatedAtIso ? Date.parse(b.updatedAtIso) : 0;
       if (bu !== au) return bu - au;
-      const ac = (a as any)?.createdAt?._seconds ?? 0;
-      const bc = (b as any)?.createdAt?._seconds ?? 0;
+
+      const ac = a.createdAtIso ? Date.parse(a.createdAtIso) : 0;
+      const bc = b.createdAtIso ? Date.parse(b.createdAtIso) : 0;
       return bc - ac;
     });
 
@@ -153,7 +153,9 @@ export async function GET(req: NextRequest) {
 }
 
 /* ================= POST ================= */
-
+/**
+ * POST /api/sites
+ */
 export async function POST(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
@@ -203,7 +205,7 @@ export async function POST(req: NextRequest) {
         await logActivity({
           tenantId: auth.tenantId,
           actorUid: auth.uid,
-          actorEmail: (auth as any).email ?? null,
+          actorEmail: auth.email ?? null,
           actorRole: auth.role ?? null,
           action: "billing.limit_reached",
           entityType: "billing",
@@ -249,11 +251,10 @@ export async function POST(req: NextRequest) {
     const ref = await adminDb.collection("sites").add(payload);
     const created = await ref.get();
 
-    // ✅ activity log
     await logActivity({
       tenantId: auth.tenantId,
       actorUid: auth.uid,
-      actorEmail: (auth as any).email ?? null,
+      actorEmail: auth.email ?? null,
       actorRole: auth.role ?? null,
       action: "site.created",
       entityType: "site",

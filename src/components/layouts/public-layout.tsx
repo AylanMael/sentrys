@@ -20,6 +20,7 @@ import {
 const nav = [
   { label: "Fonctionnalités", href: "/fonctionnalites" },
   { label: "Tarifs", href: "/tarifs" },
+  { label: "Blog", href: "/blog" },
   { label: "Contact", href: "/contact" },
 ];
 

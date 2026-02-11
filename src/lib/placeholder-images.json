@@ -2,9 +2,9 @@
   "placeholderImages": [
     {
       "id": "hero-landing",
-      "description": "A collaborative team using a digital interface for their business operations.",
-      "imageUrl": "https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxzbWFsbCUyMGJ1c2luZXNzJTIwcGF5bWVudHxlbnwwfHx8fDE3MjA3MDM0ODF8MA&ixlib=rb-4.1.0&q=80&w=1080",
-      "imageHint": "team collaboration interface"
+      "description": "A modern, dark-themed dashboard showing data analytics and charts.",
+      "imageUrl": "https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxkYXRhJTIwZGFzaGJvYXJkfGVufDB8fHx8MTc3MDc0NzYwMXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "data dashboard"
     },
     {
       "id": "user-avatar-1",

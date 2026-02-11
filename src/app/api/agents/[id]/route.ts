@@ -84,6 +84,19 @@ function fullName(a: any) {
   return x || "Agent";
 }
 
+function normalizeStatus(v: any): AgentStatus {
+  const s = normalizeText(v).toLowerCase();
+  return s === "inactive" ? "inactive" : "active";
+}
+
+async function safeLogActivity(payload: any) {
+  try {
+    await logActivity(payload);
+  } catch (e) {
+    console.warn("[activity.log] failed (non-blocking)", e);
+  }
+}
+
 /* ================= loader ================= */
 
 async function loadAgentOr404(agentId: string, tenantId: string) {
@@ -160,48 +173,45 @@ export async function PATCH(
 
     const prev = loaded.data as any;
 
-    const prevStatus: AgentStatus =
-      String(prev?.status ?? "active") === "inactive" ? "inactive" : "active";
+    const prevStatus: AgentStatus = normalizeStatus(prev?.status);
 
     const patch: any = {};
-    const changeMeta: Record<string, any> = {};
+    const changes: Record<string, any> = {};
 
     if (body.firstName !== undefined) {
       const v = normalizeText(body.firstName);
       if (!v) return bad("firstName cannot be empty");
       patch.firstName = v;
-      if (v !== prev.firstName) changeMeta.firstName = { from: prev.firstName ?? null, to: v };
+      if (v !== (prev.firstName ?? null)) changes.firstName = { from: prev.firstName ?? null, to: v };
     }
 
     if (body.lastName !== undefined) {
       const v = normalizeText(body.lastName);
       if (!v) return bad("lastName cannot be empty");
       patch.lastName = v;
-      if (v !== prev.lastName) changeMeta.lastName = { from: prev.lastName ?? null, to: v };
+      if (v !== (prev.lastName ?? null)) changes.lastName = { from: prev.lastName ?? null, to: v };
     }
 
     if (body.email !== undefined) {
       const v = normalizeText(body.email) || null;
       patch.email = v;
-      if (v !== (prev.email ?? null)) changeMeta.email = { from: prev.email ?? null, to: v };
+      if (v !== (prev.email ?? null)) changes.email = { from: prev.email ?? null, to: v };
     }
 
     if (body.phone !== undefined) {
       const v = normalizeText(body.phone) || null;
       patch.phone = v;
-      if (v !== (prev.phone ?? null)) changeMeta.phone = { from: prev.phone ?? null, to: v };
+      if (v !== (prev.phone ?? null)) changes.phone = { from: prev.phone ?? null, to: v };
     }
 
     let nextStatus: AgentStatus = prevStatus;
     if (body.status !== undefined) {
-      const s = normalizeText(body.status).toLowerCase();
-      nextStatus = s === "inactive" ? "inactive" : "active";
+      nextStatus = normalizeStatus(body.status);
       patch.status = nextStatus;
-
-      if (nextStatus !== prevStatus) {
-        changeMeta.status = { from: prevStatus, to: nextStatus };
-      }
+      if (nextStatus !== prevStatus) changes.status = { from: prevStatus, to: nextStatus };
     }
+
+    const statusChanged = prevStatus !== nextStatus;
 
     // ✅ Réactivation => re-check quota
     if (prevStatus === "inactive" && nextStatus === "active") {
@@ -226,6 +236,11 @@ export async function PATCH(
     const nextLast = patch.lastName ?? prev.lastName;
     const nextEmail = patch.email ?? prev.email ?? null;
     const nextPhone = patch.phone ?? prev.phone ?? null;
+
+    if (!normalizeText(nextFirst) || !normalizeText(nextLast)) {
+      return bad("firstName/lastName cannot be empty");
+    }
+
     patch.search = buildSearch(nextFirst, nextLast, nextEmail, nextPhone);
 
     patch.updatedAt = FieldValue.serverTimestamp();
@@ -234,7 +249,7 @@ export async function PATCH(
     await loaded.ref.set(patch, { merge: true });
 
     // ✅ Ajustement usage si changement status (active<->inactive)
-    if (body.status !== undefined && prevStatus !== nextStatus) {
+    if (statusChanged) {
       if (prevStatus === "active" && nextStatus === "inactive") {
         await adjustUsage(auth.tenantId, "agents", -1);
       }
@@ -244,32 +259,34 @@ export async function PATCH(
     const updatedSnap = await loaded.ref.get();
     const data = updatedSnap.data() as any;
 
-    // ✅ Activity log (non bloquant)
     const label = fullName({ ...prev, ...patch });
-    const statusChanged = prevStatus !== nextStatus;
 
-    await logActivity({
+    const action = statusChanged
+      ? nextStatus === "active"
+        ? "agent.activated"
+        : "agent.deactivated"
+      : "agent.updated";
+
+    const message = statusChanged
+      ? nextStatus === "active"
+        ? `${label} réactivé`
+        : `${label} désactivé`
+      : `${label} mis à jour`;
+
+    await safeLogActivity({
       tenantId: auth.tenantId,
       actorUid: auth.uid,
-      actorEmail: (auth as any).email ?? null,
+      actorEmail: null, // requireTenantUser ne renvoie pas l’email pour l’instant
       actorRole: auth.role ?? null,
-      action: statusChanged
-        ? nextStatus === "active"
-          ? "agent.activated"
-          : "agent.deactivated"
-        : "agent.updated",
+      action,
       entityType: "agent",
       entityId: updatedSnap.id,
-      message: statusChanged
-        ? nextStatus === "active"
-          ? `${label} réactivé`
-          : `${label} désactivé`
-        : `${label} mis à jour`,
+      message,
+      severity: statusChanged && nextStatus === "inactive" ? "warning" : "info",
       meta: {
         agentId: updatedSnap.id,
-        changes: Object.keys(changeMeta).length ? changeMeta : undefined,
+        changes: Object.keys(changes).length ? changes : undefined,
       },
-      severity: statusChanged && nextStatus === "inactive" ? "warning" : "info",
     });
 
     return json(200, {
@@ -305,9 +322,7 @@ export async function DELETE(
     if (!loaded.ok) return loaded.res;
 
     const prev = loaded.data as any;
-
-    const prevStatus: AgentStatus =
-      String(prev?.status ?? "active") === "inactive" ? "inactive" : "active";
+    const prevStatus: AgentStatus = normalizeStatus(prev?.status);
 
     // idempotent
     if (prevStatus === "inactive") {
@@ -325,17 +340,16 @@ export async function DELETE(
 
     await adjustUsage(auth.tenantId, "agents", -1);
 
-    // ✅ Activity log
-    await logActivity({
+    await safeLogActivity({
       tenantId: auth.tenantId,
       actorUid: auth.uid,
-      actorEmail: (auth as any).email ?? null,
+      actorEmail: null,
       actorRole: auth.role ?? null,
       action: "agent.deactivated",
       entityType: "agent",
       entityId: agentId,
       message: `${fullName(prev)} désactivé`,
-      meta: { agentId },
+      meta: { agentId, prevStatus: "active", nextStatus: "inactive" },
       severity: "warning",
     });
 

@@ -49,9 +49,28 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Sentrys",
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    description:
+      "Sentrys centralise la gestion des agents, sites, vacations, planning et incidents. Une plateforme moderne pour piloter vos opérations de sécurité privée.",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "EUR",
+    },
+  };
+
   return (
     <html lang="fr" suppressHydrationWarning>
       <body className="min-h-dvh bg-background text-foreground antialiased font-sans selection:bg-primary/20 selection:text-foreground">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 rounded-md border bg-background px-3 py-2 text-sm shadow"

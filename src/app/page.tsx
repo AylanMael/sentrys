@@ -242,13 +242,21 @@ export default function Home() {
             {featureCards.map((feature) => (
               <div
                 key={feature.title}
-                className="group relative rounded-2xl border bg-card p-6 shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                className="group relative flex flex-col rounded-3xl border bg-card p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border bg-muted/40 transition group-hover:bg-primary/10">
-                  <feature.icon className="h-6 w-6 text-primary" />
+                <div className="flex-grow">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border bg-muted/40 transition group-hover:bg-primary/10">
+                    <feature.icon className="h-6 w-6 text-primary" />
+                  </div>
+                  <h3 className="mt-4 text-base font-semibold text-foreground">{feature.title}</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">{feature.desc}</p>
                 </div>
-                <h3 className="mt-4 text-base font-semibold text-foreground">{feature.title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">{feature.desc}</p>
+                <Link
+                  href="/fonctionnalites"
+                  className="mt-4 flex items-center text-sm font-medium text-primary"
+                >
+                  En savoir plus <ArrowRight className="ml-1 h-4 w-4" />
+                </Link>
               </div>
             ))}
           </div>

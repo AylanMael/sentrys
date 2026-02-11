@@ -15,6 +15,7 @@ import {
   Siren,
   Users,
   MapPin,
+  CreditCard,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-provider";
@@ -37,6 +38,7 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
@@ -52,6 +54,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 // ✅ Ajuste ce chemin selon l’endroit où tu as créé DashboardGate
 import { DashboardGate } from "@/components/auth/DashboardGate";
 
+// ✅ Billing hook
+import { useBillingUsage } from "@/hooks/use-billing-usage";
+
 const userAvatar = PlaceHolderImages.find((p) => p.id === "user-avatar-1");
 
 export default function DashboardLayout({
@@ -62,13 +67,13 @@ export default function DashboardLayout({
   const { user, loading } = useAuth();
   const router = useRouter();
 
+  // ✅ charge le billing une fois (sidebar)
+  const billing = useBillingUsage(Boolean(user)); // évite call si pas user
+
   const navItems = useMemo(() => {
     const base = [
       { href: "/dashboard", icon: LayoutDashboard, label: "Tableau de bord" },
-
-      // ✅ Vacations = module principal de planification (listing + filtres)
       { href: "/dashboard/vacations", icon: CalendarClock, label: "Vacations" },
-
       { href: "/dashboard/incidents", icon: Siren, label: "Incidents" },
       { href: "/dashboard/sites", icon: MapPin, label: "Sites" },
       { href: "/dashboard/agents", icon: ShieldCheck, label: "Agents" },
@@ -80,13 +85,6 @@ export default function DashboardLayout({
 
     return base.filter((item) => {
       if (item.href === "/dashboard/users") return isAdminOrManager;
-
-      // Option A (recommandée) : les agents voient "Vacations" (lecture planning)
-      // => on laisse "/dashboard/vacations" visible à tous
-
-      // Option B (si ton back n’est pas prêt) :
-      // if (item.href === "/dashboard/vacations") return isAdminOrManager;
-
       return true;
     });
   }, [user?.role]);
@@ -96,7 +94,6 @@ export default function DashboardLayout({
     router.push("/login");
   };
 
-  // ✅ Loader pendant que useAuth hydrate (DashboardGate fera aussi un check /api/me)
   if (loading) {
     return (
       <div className="flex min-h-screen w-full items-center justify-center">
@@ -128,6 +125,27 @@ export default function DashboardLayout({
                   <NavLink href={item.href} icon={item.icon} label={item.label} />
                 </SidebarMenuItem>
               ))}
+
+              {/* ✅ Billing / Abonnement */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Abonnement">
+                  <Link href="/dashboard/billing">
+                    <CreditCard />
+                    <span>Abonnement</span>
+                  </Link>
+                </SidebarMenuButton>
+
+                {/* Badge quota / plan (compact et parlant) */}
+                {billing.loading ? null : billing.error ? (
+                  <SidebarMenuBadge variant="outline">!</SidebarMenuBadge>
+                ) : billing.hasLimitIssue ? (
+                  <SidebarMenuBadge variant="destructive">
+                    {billing.atLimitList.length}
+                  </SidebarMenuBadge>
+                ) : billing.isFree ? (
+                  <SidebarMenuBadge variant="outline">FREE</SidebarMenuBadge>
+                ) : null}
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarContent>
 
@@ -148,7 +166,7 @@ export default function DashboardLayout({
         <SidebarInset>
           <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6 sticky top-0 z-30">
             <SidebarTrigger className="md:hidden" />
-            <div className="w-full flex-1">{/* Search global plus tard */}</div>
+            <div className="w-full flex-1" />
 
             <ThemeToggle />
 
@@ -161,10 +179,7 @@ export default function DashboardLayout({
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="relative h-8 w-8 rounded-full"
-                >
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={userAvatar?.imageUrl} alt="User avatar" />
                     <AvatarFallback>

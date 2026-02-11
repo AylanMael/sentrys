@@ -5,6 +5,7 @@ import { FieldValue } from "firebase-admin/firestore";
 
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import { assertWithinLimitsTx, adjustUsage } from "@/lib/billing/limits";
+import { logActivity } from "@/lib/activity/logger";
 
 export const runtime = "nodejs";
 
@@ -74,6 +75,13 @@ function pickAgent(d: any, id: string) {
     createdAtIso: toIso(d.createdAt),
     updatedAtIso: toIso(d.updatedAt),
   };
+}
+
+function fullName(a: any) {
+  const fn = normalizeText(a?.firstName);
+  const ln = normalizeText(a?.lastName);
+  const x = `${fn} ${ln}`.trim();
+  return x || "Agent";
 }
 
 /* ================= loader ================= */
@@ -151,37 +159,58 @@ export async function PATCH(
     if (!loaded.ok) return loaded.res;
 
     const prev = loaded.data as any;
-    const prevStatus: AgentStatus = (String(prev?.status ?? "active") === "inactive"
-      ? "inactive"
-      : "active") as AgentStatus;
+
+    const prevStatus: AgentStatus =
+      String(prev?.status ?? "active") === "inactive" ? "inactive" : "active";
 
     const patch: any = {};
+    const changeMeta: Record<string, any> = {};
 
     if (body.firstName !== undefined) {
       const v = normalizeText(body.firstName);
       if (!v) return bad("firstName cannot be empty");
       patch.firstName = v;
+      if (v !== prev.firstName) changeMeta.firstName = { from: prev.firstName ?? null, to: v };
     }
 
     if (body.lastName !== undefined) {
       const v = normalizeText(body.lastName);
       if (!v) return bad("lastName cannot be empty");
       patch.lastName = v;
+      if (v !== prev.lastName) changeMeta.lastName = { from: prev.lastName ?? null, to: v };
     }
 
-    if (body.email !== undefined) patch.email = normalizeText(body.email) || null;
-    if (body.phone !== undefined) patch.phone = normalizeText(body.phone) || null;
+    if (body.email !== undefined) {
+      const v = normalizeText(body.email) || null;
+      patch.email = v;
+      if (v !== (prev.email ?? null)) changeMeta.email = { from: prev.email ?? null, to: v };
+    }
+
+    if (body.phone !== undefined) {
+      const v = normalizeText(body.phone) || null;
+      patch.phone = v;
+      if (v !== (prev.phone ?? null)) changeMeta.phone = { from: prev.phone ?? null, to: v };
+    }
 
     let nextStatus: AgentStatus = prevStatus;
     if (body.status !== undefined) {
       const s = normalizeText(body.status).toLowerCase();
       nextStatus = s === "inactive" ? "inactive" : "active";
       patch.status = nextStatus;
+
+      if (nextStatus !== prevStatus) {
+        changeMeta.status = { from: prevStatus, to: nextStatus };
+      }
     }
 
-    // ✅ Si on réactive un agent (inactive -> active), on re-check quota
+    // ✅ Réactivation => re-check quota
     if (prevStatus === "inactive" && nextStatus === "active") {
-      const quota = await assertWithinLimitsTx({ tenantId: auth.tenantId, kind: "agents", delta: 1 });
+      const quota = await assertWithinLimitsTx({
+        tenantId: auth.tenantId,
+        kind: "agents",
+        delta: 1,
+      });
+
       if (!quota.ok) {
         return forbidden(quota.message, {
           code: quota.code,
@@ -204,17 +233,44 @@ export async function PATCH(
 
     await loaded.ref.set(patch, { merge: true });
 
-    // ✅ Ajustement usage si changement de status (active<->inactive)
+    // ✅ Ajustement usage si changement status (active<->inactive)
     if (body.status !== undefined && prevStatus !== nextStatus) {
       if (prevStatus === "active" && nextStatus === "inactive") {
         await adjustUsage(auth.tenantId, "agents", -1);
       }
-      // inactive->active : déjà réservé dans assertWithinLimitsTx (tx a +1)
-      // donc pas besoin de adjustUsage ici
+      // inactive->active : déjà réservé par assertWithinLimitsTx (+1)
     }
 
     const updatedSnap = await loaded.ref.get();
     const data = updatedSnap.data() as any;
+
+    // ✅ Activity log (non bloquant)
+    const label = fullName({ ...prev, ...patch });
+    const statusChanged = prevStatus !== nextStatus;
+
+    await logActivity({
+      tenantId: auth.tenantId,
+      actorUid: auth.uid,
+      actorEmail: (auth as any).email ?? null,
+      actorRole: auth.role ?? null,
+      action: statusChanged
+        ? nextStatus === "active"
+          ? "agent.activated"
+          : "agent.deactivated"
+        : "agent.updated",
+      entityType: "agent",
+      entityId: updatedSnap.id,
+      message: statusChanged
+        ? nextStatus === "active"
+          ? `${label} réactivé`
+          : `${label} désactivé`
+        : `${label} mis à jour`,
+      meta: {
+        agentId: updatedSnap.id,
+        changes: Object.keys(changeMeta).length ? changeMeta : undefined,
+      },
+      severity: statusChanged && nextStatus === "inactive" ? "warning" : "info",
+    });
 
     return json(200, {
       ok: true,
@@ -249,10 +305,11 @@ export async function DELETE(
     if (!loaded.ok) return loaded.res;
 
     const prev = loaded.data as any;
+
     const prevStatus: AgentStatus =
       String(prev?.status ?? "active") === "inactive" ? "inactive" : "active";
 
-    // déjà inactif => idempotent
+    // idempotent
     if (prevStatus === "inactive") {
       return json(200, { ok: true, id: agentId, updated: { status: "inactive" } });
     }
@@ -266,8 +323,21 @@ export async function DELETE(
       { merge: true }
     );
 
-    // décrémente l'usage (agents actifs)
     await adjustUsage(auth.tenantId, "agents", -1);
+
+    // ✅ Activity log
+    await logActivity({
+      tenantId: auth.tenantId,
+      actorUid: auth.uid,
+      actorEmail: (auth as any).email ?? null,
+      actorRole: auth.role ?? null,
+      action: "agent.deactivated",
+      entityType: "agent",
+      entityId: agentId,
+      message: `${fullName(prev)} désactivé`,
+      meta: { agentId },
+      severity: "warning",
+    });
 
     return json(200, { ok: true, id: agentId, updated: { status: "inactive" } });
   } catch (e: any) {

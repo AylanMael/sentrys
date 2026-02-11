@@ -5,6 +5,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import { assertWithinLimitsTx } from "@/lib/billing/limits";
+import { logActivity } from "@/lib/activity/logger";
 
 export const runtime = "nodejs";
 
@@ -125,10 +126,7 @@ function pickAgent(d: any, id: string) {
 }
 
 /* ================= GET ================= */
-/**
- * GET /api/agents?ids=a,b,c
- * GET /api/agents?status=all|active|inactive&max=50&q=karim
- */
+
 export async function GET(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
@@ -142,7 +140,6 @@ export async function GET(req: NextRequest) {
   const max = parseMax(url.searchParams.get("max"), 50);
 
   try {
-    // ✅ Mode ids : getAll, pas d’index
     if (ids.length > 0) {
       const refs = ids.map((id) => adminDb.collection("agents").doc(id));
       const snaps = await adminDb.getAll(...refs);
@@ -153,7 +150,7 @@ export async function GET(req: NextRequest) {
         if (!snap.exists) return;
 
         const d = snap.data() as any;
-        if (d?.tenantId !== tenantId) return; // anti fuite cross-tenant
+        if (d?.tenantId !== tenantId) return;
 
         found.push(pickAgent(d, id));
       });
@@ -164,7 +161,6 @@ export async function GET(req: NextRequest) {
       return json(200, { ok: true, tenantId, count: ordered.length, agents: ordered });
     }
 
-    // ✅ Listing
     let ref: FirebaseFirestore.Query = adminDb
       .collection("agents")
       .where("tenantId", "==", tenantId);
@@ -178,12 +174,10 @@ export async function GET(req: NextRequest) {
     const snap = await ref.get();
     let agents = snap.docs.map((d) => pickAgent(d.data(), d.id));
 
-    // tri en mémoire si pas d’orderBy "pertinent"
     if (status !== "all") {
       agents.sort((a: any, b: any) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0));
     }
 
-    // filtre q en mémoire
     if (q) {
       agents = agents.filter((a: any) => {
         const hay = String(
@@ -201,10 +195,7 @@ export async function GET(req: NextRequest) {
 }
 
 /* ================= POST ================= */
-/**
- * POST /api/agents
- * body: { firstName, lastName, email?, phone?, status? }
- */
+
 export async function POST(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
@@ -231,11 +222,23 @@ export async function POST(req: NextRequest) {
   if (!lastName) return bad("lastName is required");
 
   try {
-    // ✅ quota seulement si on crée un agent actif
     if (status === "active") {
       const quota = await assertWithinLimitsTx({ tenantId, kind: "agents", delta: 1 });
 
       if (!quota.ok) {
+        await logActivity({
+          tenantId,
+          actorUid: auth.uid,
+          actorEmail: (auth as any).email ?? null,
+          actorRole: auth.role ?? null,
+          action: "billing.limit_reached",
+          entityType: "billing",
+          entityId: "agents",
+          message: `Limite atteinte : création d’agent bloquée`,
+          meta: { kind: "agents", firstName, lastName, code: quota.code, limits: quota.limits, usage: quota.usage },
+          severity: "warning",
+        });
+
         return forbidden(quota.message, {
           code: quota.code,
           limits: quota.limits,
@@ -262,6 +265,27 @@ export async function POST(req: NextRequest) {
 
     const ref = await adminDb.collection("agents").add(payload);
     const created = await ref.get();
+
+    // ✅ activity log
+    await logActivity({
+      tenantId,
+      actorUid: auth.uid,
+      actorEmail: (auth as any).email ?? null,
+      actorRole: auth.role ?? null,
+      action: "agent.created",
+      entityType: "agent",
+      entityId: ref.id,
+      message: `Agent créé : ${firstName} ${lastName}`,
+      meta: {
+        agentId: ref.id,
+        firstName,
+        lastName,
+        email,
+        phone,
+        status,
+      },
+      severity: "info",
+    });
 
     return json(201, {
       ok: true,

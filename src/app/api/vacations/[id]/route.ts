@@ -3,7 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
-import { requireTenantUser, canWrite as canWriteRole } from "@/app/api/_utils/withTenant";
+import {
+  requireTenantUser,
+  canWrite as canWriteRole,
+} from "@/app/api/_utils/withTenant";
+import { logActivity } from "@/lib/activity/logger";
 
 export const runtime = "nodejs";
 
@@ -15,10 +19,6 @@ function json(status: number, body: any) {
 
 function bad(msg: string, extra?: any) {
   return json(400, { ok: false, error: msg, ...extra });
-}
-
-function unauthorized(msg = "Unauthorized", extra?: any) {
-  return json(401, { ok: false, error: msg, ...extra });
 }
 
 function forbidden(msg = "Forbidden", extra?: any) {
@@ -40,7 +40,9 @@ function serverError(e: any, tag: string, extra?: any) {
 }
 
 function toIso(ts: any) {
-  return ts && typeof ts.toDate === "function" ? ts.toDate().toISOString() : null;
+  return ts && typeof ts.toDate === "function"
+    ? ts.toDate().toISOString()
+    : null;
 }
 
 function normalizeText(v: any) {
@@ -70,7 +72,18 @@ function parseIntSafe(v: any, def: number) {
   return Math.floor(n);
 }
 
-/* ================= domain types ================= */
+function displayNameFromVacation(v: any) {
+  return v?.siteName ?? v?.title ?? "—";
+}
+
+function tsToDate(ts: any): Date | null {
+  const d = ts?.toDate?.();
+  return d && typeof d.getTime === "function" && Number.isFinite(d.getTime())
+    ? d
+    : null;
+}
+
+/* ================= domain ================= */
 
 type VacationStatus =
   | "planned"
@@ -93,9 +106,11 @@ function asVacationStatus(v: any): VacationStatus {
   return "planned";
 }
 
-function computeStatus(requiredAgents: number, assignedCount: number): VacationStatus {
-  if (requiredAgents <= 0) return "planned";
-  if (assignedCount <= 0) return "planned";
+function computeStatus(
+  requiredAgents: number,
+  assignedCount: number
+): VacationStatus {
+  if (requiredAgents <= 0 || assignedCount <= 0) return "planned";
   if (assignedCount >= requiredAgents) return "filled";
   return "partially_filled";
 }
@@ -104,7 +119,7 @@ function isFinalStatus(s: VacationStatus): s is "closed" | "cancelled" {
   return s === "closed" || s === "cancelled";
 }
 
-/* ================= assignments sync ================= */
+/* ================= assignments ================= */
 
 type AssignmentStatus =
   | "assigned"
@@ -114,15 +129,9 @@ type AssignmentStatus =
   | "replaced";
 
 function assignmentDocId(vacationId: string, agentId: string) {
-  // ID déterministe => pas de doublons
   return `${vacationId}_${agentId}`;
 }
 
-/**
- * Sync "assignments" à partir de la différence prev/next.
- * - crée/active pour toAdd (sans écraser createdAt/createdBy si déjà existant)
- * - soft-cancel pour toCancel
- */
 async function syncAssignmentsForVacation(input: {
   tenantId: string;
   uid: string;
@@ -136,53 +145,20 @@ async function syncAssignmentsForVacation(input: {
   const prev = new Set(uniq(input.prevAssigned));
   const next = new Set(uniq(input.nextAssigned));
 
-  const toAdd: string[] = [];
-  const toCancel: string[] = [];
+  const toAdd = [...next].filter((x) => !prev.has(x));
+  const toCancel = [...prev].filter((x) => !next.has(x));
 
-  for (const agentId of next) if (!prev.has(agentId)) toAdd.push(agentId);
-  for (const agentId of prev) if (!next.has(agentId)) toCancel.push(agentId);
-
-  if (toAdd.length === 0 && toCancel.length === 0) {
+  if (!toAdd.length && !toCancel.length) {
     return { toAdd: 0, toCancel: 0 };
   }
 
   const now = FieldValue.serverTimestamp();
-
-  // ✅ pour éviter d’écraser createdAt/createdBy, on regarde l’existence seulement pour toAdd
-  const addRefs = toAdd.map((agentId) =>
-    adminDb.collection("assignments").doc(assignmentDocId(vacationId, agentId))
-  );
-  const addSnaps = addRefs.length ? await adminDb.getAll(...addRefs) : [];
-
   const batch = adminDb.batch();
 
-  // Ajouts / réactivations
-  addSnaps.forEach((snap, idx) => {
-    const agentId = toAdd[idx];
-    const ref = addRefs[idx];
-
-    const base = {
-      tenantId,
-      vacationId,
-      siteId,
-      agentId,
-      status: "assigned" as AssignmentStatus,
-      updatedAt: now,
-      updatedBy: uid,
-    };
-
-    if (!snap.exists) {
-      // création
-      batch.set(ref, { ...base, createdAt: now, createdBy: uid }, { merge: true });
-    } else {
-      // réactivation sans toucher createdAt/createdBy
-      batch.set(ref, base, { merge: true });
-    }
-  });
-
-  // Retraits => soft-cancel
-  toCancel.forEach((agentId) => {
-    const ref = adminDb.collection("assignments").doc(assignmentDocId(vacationId, agentId));
+  toAdd.forEach((agentId) => {
+    const ref = adminDb
+      .collection("assignments")
+      .doc(assignmentDocId(vacationId, agentId));
     batch.set(
       ref,
       {
@@ -190,6 +166,23 @@ async function syncAssignmentsForVacation(input: {
         vacationId,
         siteId,
         agentId,
+        status: "assigned" as AssignmentStatus,
+        updatedAt: now,
+        updatedBy: uid,
+        createdAt: now,
+        createdBy: uid,
+      },
+      { merge: true }
+    );
+  });
+
+  toCancel.forEach((agentId) => {
+    const ref = adminDb
+      .collection("assignments")
+      .doc(assignmentDocId(vacationId, agentId));
+    batch.set(
+      ref,
+      {
         status: "cancelled" as AssignmentStatus,
         updatedAt: now,
         updatedBy: uid,
@@ -202,109 +195,28 @@ async function syncAssignmentsForVacation(input: {
   return { toAdd: toAdd.length, toCancel: toCancel.length };
 }
 
-/* ================= data loaders ================= */
+/* ================= loader ================= */
 
 async function loadVacationOr404(id: string, tenantId: string) {
   const ref = adminDb.collection("vacations").doc(id);
   const snap = await ref.get();
-  if (!snap.exists) return { ok: false as const, res: notFound("Vacation not found") };
+  if (!snap.exists) return { ok: false as const, res: notFound() };
 
   const data = snap.data() as any;
-  if (data?.tenantId !== tenantId) {
-    // anti fuite cross-tenant
-    return { ok: false as const, res: notFound("Vacation not found") };
-  }
+  if (data?.tenantId !== tenantId) return { ok: false as const, res: notFound() };
 
   return { ok: true as const, ref, snap, data };
 }
 
-/* ================= validations métier ================= */
-
-async function validateAssignedAgentsForVacation(input: {
-  tenantId: string;
-  vacation: any;
-  assignedAgentIds: string[];
-}) {
-  const { tenantId, vacation } = input;
-
-  const ids = uniq(input.assignedAgentIds).slice(0, 200);
-  if (ids.length === 0) {
-    return { ok: true as const, validIds: [], rejected: [] as any[] };
-  }
-
-  const siteId = normalizeText(vacation?.siteId);
-  if (!siteId) {
-    return {
-      ok: false as const,
-      error: "Vacation has no siteId",
-      rejected: ids.map((id) => ({ id, reason: "vacation_missing_siteId" })),
-    };
-  }
-
-  const siteSnap = await adminDb.collection("sites").doc(siteId).get();
-  if (!siteSnap.exists) {
-    return {
-      ok: false as const,
-      error: "Site not found for this vacation",
-      rejected: ids.map((id) => ({ id, reason: "site_not_found" })),
-    };
-  }
-
-  const site = siteSnap.data() as any;
-  if (site?.tenantId !== tenantId) {
-    return {
-      ok: false as const,
-      error: "Site not found for this vacation",
-      rejected: ids.map((id) => ({ id, reason: "site_cross_tenant" })),
-    };
-  }
-
-  // ✅ seuls les agents affectés au site
-  const allowedOnSite = new Set<string>(safeArr(site?.agentIds));
-  const rejected: Array<{ id: string; reason: string }> = [];
-
-  const idsAllowed = ids.filter((id) => {
-    if (!allowedOnSite.has(id)) {
-      rejected.push({ id, reason: "agent_not_allowed_on_site" });
-      return false;
-    }
-    return true;
-  });
-
-  if (idsAllowed.length === 0) {
-    return { ok: true as const, validIds: [], rejected };
-  }
-
-  // ✅ existence + tenant + status
-  const refs = idsAllowed.map((id) => adminDb.collection("agents").doc(id));
-  const snaps = await adminDb.getAll(...refs);
-
-  const valid: string[] = [];
-
-  snaps.forEach((snap, i) => {
-    const id = idsAllowed[i];
-
-    if (!snap.exists) {
-      rejected.push({ id, reason: "agent_not_found" });
-      return;
-    }
-
-    const a = snap.data() as any;
-    if (a?.tenantId !== tenantId) {
-      rejected.push({ id, reason: "agent_cross_tenant" });
-      return;
-    }
-
-    const st = String(a?.status ?? "active").toLowerCase();
-    if (st !== "active") {
-      rejected.push({ id, reason: "agent_inactive" });
-      return;
-    }
-
-    valid.push(id);
-  });
-
-  return { ok: true as const, validIds: valid, rejected };
+function pickVacationForApi(d: any, id: string) {
+  return {
+    id,
+    ...d,
+    startAtIso: toIso(d.startAt),
+    endAtIso: toIso(d.endAt),
+    createdAtIso: toIso(d.createdAt),
+    updatedAtIso: toIso(d.updatedAt),
+  };
 }
 
 /* ================= GET ================= */
@@ -316,28 +228,19 @@ export async function GET(
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
 
-  const vacationId = normalizeText(params?.id);
-  if (!vacationId) return bad("Missing vacation id");
+  const id = normalizeText(params.id);
+  if (!id) return bad("Missing vacation id");
 
   try {
-    const loaded = await loadVacationOr404(vacationId, auth.tenantId);
+    const loaded = await loadVacationOr404(id, auth.tenantId);
     if (!loaded.ok) return loaded.res;
-
-    const data = loaded.data;
 
     return json(200, {
       ok: true,
       tenantId: auth.tenantId,
-      vacation: {
-        id: loaded.snap.id,
-        ...data,
-        startAtIso: toIso(data.startAt),
-        endAtIso: toIso(data.endAt),
-        createdAtIso: toIso(data.createdAt),
-        updatedAtIso: toIso(data.updatedAt),
-      },
+      vacation: pickVacationForApi(loaded.data, id),
     });
-  } catch (e: any) {
+  } catch (e) {
     return serverError(e, "vacations.[id].GET");
   }
 }
@@ -350,179 +253,181 @@ export async function PATCH(
 ) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
+  if (!canWriteRole(auth.role)) return forbidden();
 
-  if (!canWriteRole(auth.role)) {
-    return forbidden("Insufficient rights");
-  }
-
-  const vacationId = normalizeText(params?.id);
-  if (!vacationId) return bad("Missing vacation id");
+  const id = normalizeText(params.id);
+  if (!id) return bad("Missing vacation id");
 
   let body: any;
   try {
     body = await req.json();
   } catch {
-    return bad("Invalid JSON body");
+    return bad("Invalid JSON");
   }
 
   try {
-    const loaded = await loadVacationOr404(vacationId, auth.tenantId);
+    const loaded = await loadVacationOr404(id, auth.tenantId);
     if (!loaded.ok) return loaded.res;
 
     const prev = loaded.data as any;
 
-    const prevStatus: VacationStatus = asVacationStatus(prev.status);
-    const prevAssigned = uniq(safeArr(prev.assignedAgentIds));
-    let nextAssigned = prevAssigned;
+    // ✅ force type => évite le TS2367 sur "cancelled"
+    const prevStatus: VacationStatus = asVacationStatus(prev?.status);
 
     if (prevStatus === "cancelled") {
-      return bad("Cannot update a cancelled vacation");
+      return bad("Cannot update cancelled vacation");
     }
 
-    const patch: any = {};
-    const warnings: any[] = [];
+    const prevAssigned = uniq(safeArr(prev?.assignedAgentIds));
+    let nextAssigned = prevAssigned;
 
-    /* ========= Dates ========= */
+    const patch: any = {};
+    let didSync = false;
+
+    // dates
     if (body.startAt !== undefined) {
       const d = parseDateTimeIso(body.startAt);
-      if (!d) return bad("startAt must be an ISO date");
+      if (!d) return bad("Invalid startAt");
       patch.startAt = Timestamp.fromDate(d);
     }
 
     if (body.endAt !== undefined) {
       const d = parseDateTimeIso(body.endAt);
-      if (!d) return bad("endAt must be an ISO date");
+      if (!d) return bad("Invalid endAt");
       patch.endAt = Timestamp.fromDate(d);
     }
 
-    /* ========= Required agents ========= */
+    // requiredAgents
     if (body.requiredAgents !== undefined) {
       patch.requiredAgents = Math.max(
         1,
-        parseIntSafe(body.requiredAgents, prev.requiredAgents ?? 1)
+        parseIntSafe(body.requiredAgents, prev?.requiredAgents ?? 1)
       );
     }
 
-    /* ========= Notes ========= */
+    // notes
     if (body.notes !== undefined) {
       patch.notes = normalizeText(body.notes) || null;
     }
 
-    /* ========= Status manuel ========= */
+    // status: only closed/cancelled allowed here
+    let explicitFinalStatus: VacationStatus | null = null;
     if (body.status !== undefined) {
       const s = asVacationStatus(body.status);
       if (s !== "closed" && s !== "cancelled") {
-        return bad("Only status 'closed' or 'cancelled' can be set manually");
+        return bad("Only closed/cancelled allowed");
       }
       patch.status = s;
+      explicitFinalStatus = s;
     }
 
-    /* ========= Affectations ========= */
-    let doSyncAssignments = false;
-
+    // assignedAgentIds => sync assignments
     if (body.assignedAgentIds !== undefined) {
-      doSyncAssignments = true;
-
-      const raw = uniq(safeArr(body.assignedAgentIds)).slice(0, 200);
-
-      const validated = await validateAssignedAgentsForVacation({
-        tenantId: auth.tenantId,
-        vacation: prev,
-        assignedAgentIds: raw,
-      });
-
-      if (!validated.ok) {
-        return bad("Invalid assignedAgentIds", {
-          details: (validated as any).error,
-          rejected: (validated as any).rejected,
-        });
-      }
-
-      nextAssigned = uniq(validated.validIds);
+      nextAssigned = uniq(safeArr(body.assignedAgentIds));
       patch.assignedAgentIds = nextAssigned;
-
-      if (validated.rejected.length > 0) {
-        warnings.push({
-          code: "assigned_agents_rejected",
-          rejected: validated.rejected,
-          acceptedCount: nextAssigned.length,
-        });
-      }
+      didSync = true;
     }
 
-    /* ========= Cohérence dates ========= */
-    const start = patch.startAt ?? prev.startAt;
-    const end = patch.endAt ?? prev.endAt;
+    // validate end > start (robuste même si champ absent)
+    const startDate = tsToDate(patch.startAt ?? prev?.startAt);
+    const endDate = tsToDate(patch.endAt ?? prev?.endAt);
+    if (!startDate || !endDate) return bad("Missing startAt/endAt");
+    if (endDate.getTime() <= startDate.getTime()) return bad("endAt must be > startAt");
 
-    const startMs = start?.toDate?.()?.getTime?.() ?? 0;
-    const endMs = end?.toDate?.()?.getTime?.() ?? 0;
-
-    if (endMs <= startMs) {
-      return bad("endAt must be > startAt");
-    }
-
-    /* ========= Status auto ========= */
+    // if status not explicitly set and not final => recompute
     if (!patch.status && !isFinalStatus(prevStatus)) {
-      const required = patch.requiredAgents ?? prev.requiredAgents ?? 1;
-      patch.status = computeStatus(required, nextAssigned.length);
+      patch.status = computeStatus(
+        patch.requiredAgents ?? prev?.requiredAgents ?? 1,
+        nextAssigned.length
+      );
     }
 
-    /* ========= Métadonnées ========= */
     patch.updatedAt = FieldValue.serverTimestamp();
     patch.updatedBy = auth.uid;
 
-    /* ========= Écriture vacation ========= */
     await loaded.ref.set(patch, { merge: true });
 
-    /* ========= Sync assignments (après succès) ========= */
+    // sync assignments (only if siteId exists)
     let syncResult: { toAdd: number; toCancel: number } | undefined;
-
-    if (doSyncAssignments) {
-      const siteId = normalizeText(prev.siteId);
-      if (!siteId) {
-        warnings.push({ code: "assignments_sync_skipped", reason: "vacation_missing_siteId" });
-      } else {
-        try {
-          syncResult = await syncAssignmentsForVacation({
-            tenantId: auth.tenantId,
-            uid: auth.uid,
-            vacationId,
-            siteId,
-            prevAssigned,
-            nextAssigned,
-          });
-        } catch (e: any) {
-          // On ne casse pas la vacation si la sync échoue, mais on remonte un warning exploitable
-          console.error("[vacations.[id].PATCH] assignments sync failed", e);
-          warnings.push({
-            code: "assignments_sync_failed",
-            message: e?.message ?? String(e),
-          });
-        }
-      }
+    if (didSync && prev?.siteId) {
+      syncResult = await syncAssignmentsForVacation({
+        tenantId: auth.tenantId,
+        uid: auth.uid,
+        vacationId: id,
+        siteId: prev.siteId,
+        prevAssigned,
+        nextAssigned,
+      });
     }
 
-    const updated = await loaded.ref.get();
-    const data = updated.data() as any;
+    // reload
+    const updatedSnap = await loaded.ref.get();
+    const nextData = updatedSnap.data() as any;
+
+    const name = displayNameFromVacation(nextData ?? prev);
+    const nextStatus: VacationStatus = asVacationStatus(
+      nextData?.status ?? patch.status ?? prevStatus
+    );
+    const assignedDelta = nextAssigned.length - prevAssigned.length;
+
+    const isCancelledNow =
+      explicitFinalStatus === "cancelled" ||
+      (prevStatus !== "cancelled" && nextStatus === "cancelled");
+
+    await logActivity({
+      tenantId: auth.tenantId,
+      actorUid: auth.uid,
+      actorEmail: (auth as any).email ?? null,
+      actorRole: auth.role ?? null,
+      action: isCancelledNow ? "vacation.cancelled" : "vacation.updated",
+      entityType: "vacation",
+      entityId: id,
+      message: isCancelledNow
+        ? `Vacation annulée : ${name}`
+        : `Vacation mise à jour : ${name}`,
+      severity: isCancelledNow ? "warning" : assignedDelta !== 0 ? "warning" : "info",
+      meta: {
+        vacationId: id,
+        siteId: nextData?.siteId ?? prev?.siteId ?? null,
+        siteName: nextData?.siteName ?? prev?.siteName ?? null,
+        prevStatus,
+        nextStatus,
+        assignedPrevCount: prevAssigned.length,
+        assignedNextCount: nextAssigned.length,
+        assignedDelta,
+        changed: Object.keys(patch),
+        sync: syncResult ?? null,
+      },
+    });
+
+    if (syncResult && (syncResult.toAdd > 0 || syncResult.toCancel > 0)) {
+      await logActivity({
+        tenantId: auth.tenantId,
+        actorUid: auth.uid,
+        actorEmail: (auth as any).email ?? null,
+        actorRole: auth.role ?? null,
+        action: "assignment.synced",
+        entityType: "vacation",
+        entityId: id,
+        message: `Affectations synchronisées : ${name}`,
+        severity: "info",
+        meta: {
+          vacationId: id,
+          siteId: nextData?.siteId ?? prev?.siteId ?? null,
+          toAdd: syncResult.toAdd,
+          toCancel: syncResult.toCancel,
+        },
+      });
+    }
 
     return json(200, {
       ok: true,
       tenantId: auth.tenantId,
-      warnings: warnings.length ? warnings : undefined,
       sync: syncResult,
-      vacation: {
-        id: updated.id,
-        ...data,
-        startAtIso: toIso(data.startAt),
-        endAtIso: toIso(data.endAt),
-        createdAtIso: toIso(data.createdAt),
-        updatedAtIso: toIso(data.updatedAt),
-      },
+      vacation: pickVacationForApi(nextData, id),
     });
-  } catch (e: any) {
-    return serverError(e, "vacations.[id].PATCH", {
-      vacationId,
-    });
+  } catch (e) {
+    return serverError(e, "vacations.[id].PATCH", { vacationId: id });
   }
 }
 
@@ -534,15 +439,25 @@ export async function DELETE(
 ) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
+  if (!canWriteRole(auth.role)) return forbidden();
 
-  if (!canWriteRole(auth.role)) return forbidden("Insufficient rights");
-
-  const vacationId = normalizeText(params?.id);
-  if (!vacationId) return bad("Missing vacation id");
+  const id = normalizeText(params.id);
+  if (!id) return bad("Missing vacation id");
 
   try {
-    const loaded = await loadVacationOr404(vacationId, auth.tenantId);
+    const loaded = await loadVacationOr404(id, auth.tenantId);
     if (!loaded.ok) return loaded.res;
+
+    const prev = loaded.data as any;
+    const name = displayNameFromVacation(prev);
+
+    // ✅ force type => évite TS2367
+    const prevStatus: VacationStatus = asVacationStatus(prev?.status);
+
+    // idempotent
+    if (prevStatus === "cancelled") {
+      return json(200, { ok: true, id, updated: { status: "cancelled" } });
+    }
 
     await loaded.ref.set(
       {
@@ -553,8 +468,26 @@ export async function DELETE(
       { merge: true }
     );
 
-    return json(200, { ok: true, id: vacationId, updated: { status: "cancelled" } });
-  } catch (e: any) {
-    return serverError(e, "vacations.[id].DELETE", { vacationId });
+    await logActivity({
+      tenantId: auth.tenantId,
+      actorUid: auth.uid,
+      actorEmail: (auth as any).email ?? null,
+      actorRole: auth.role ?? null,
+      action: "vacation.cancelled",
+      entityType: "vacation",
+      entityId: id,
+      message: `Vacation annulée : ${name}`,
+      severity: "warning",
+      meta: {
+        vacationId: id,
+        prevStatus,
+        nextStatus: "cancelled",
+        siteId: prev?.siteId ?? null,
+      },
+    });
+
+    return json(200, { ok: true, id, updated: { status: "cancelled" } });
+  } catch (e) {
+    return serverError(e, "vacations.[id].DELETE", { vacationId: id });
   }
 }

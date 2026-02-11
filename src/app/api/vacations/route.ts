@@ -4,6 +4,8 @@ import { adminDb } from "@/lib/firebase/admin";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import { logActivity } from "@/lib/activity/logger";
+
 export const runtime = "nodejs";
 
 /* ================= helpers ================= */
@@ -18,6 +20,10 @@ function bad(msg: string, extra?: any) {
 
 function unauthorized(msg = "Unauthorized", extra?: any) {
   return json(401, { ok: false, error: msg, ...extra });
+}
+
+function forbidden(msg = "Forbidden", extra?: any) {
+  return json(403, { ok: false, error: msg, ...extra });
 }
 
 function serverError(e: any, tag: string) {
@@ -105,7 +111,7 @@ function isFinalStatus(s: VacationStatus): s is "closed" | "cancelled" {
 async function requireTenantUser(
   req: NextRequest
 ): Promise<
-  | { ok: true; uid: string; tenantId: string; role?: string }
+  | { ok: true; uid: string; tenantId: string; role?: string; email?: string | null }
   | { ok: false; res: NextResponse }
 > {
   const authHeader =
@@ -125,6 +131,7 @@ async function requireTenantUser(
   try {
     const decoded = await getAuth().verifyIdToken(token);
     const uid = decoded.uid;
+    const email = (decoded as any)?.email ?? null;
 
     const tuSnap = await adminDb.collection("tenantUsers").doc(uid).get();
     if (!tuSnap.exists) return { ok: false, res: unauthorized("No tenant user") };
@@ -133,7 +140,7 @@ async function requireTenantUser(
     if (!tu?.tenantId) return { ok: false, res: unauthorized("No tenant assigned") };
     if (tu.status !== "active") return { ok: false, res: unauthorized("User disabled") };
 
-    return { ok: true, uid, tenantId: tu.tenantId, role: tu.role };
+    return { ok: true, uid, tenantId: tu.tenantId, role: tu.role, email };
   } catch (e: any) {
     return { ok: false, res: unauthorized("Invalid token", { details: e?.message }) };
   }
@@ -225,7 +232,6 @@ async function validateAssignedAgentsForSite(input: {
 /* ================= pick ================= */
 
 function pickVacation(d: any, id: string) {
-  // compat: certains endroits utilisent siteName, d'autres title
   const siteName = d.siteName ?? d.title ?? null;
 
   return {
@@ -233,10 +239,7 @@ function pickVacation(d: any, id: string) {
     tenantId: d.tenantId,
     siteId: d.siteId ?? null,
 
-    // ✅ important pour ton UI dashboard/vacations
     siteName,
-
-    // on garde title si tu veux (non utilisé par ton UI actuellement)
     title: d.title ?? null,
 
     status: asVacationStatus(d.status),
@@ -253,12 +256,7 @@ function pickVacation(d: any, id: string) {
 }
 
 /* ================= GET ================= */
-/**
- * GET /api/vacations?siteId=...&status=...&from=ISO&to=ISO&max=50
- *
- * - listing index-friendly: tenantId + (siteId?) + (startAt range?) + orderBy(startAt)
- * - status filtré en mémoire pour éviter index composites
- */
+
 export async function GET(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
@@ -277,7 +275,6 @@ export async function GET(req: NextRequest) {
   const from = fromIso ? parseDateTimeIso(fromIso) : null;
   const to = toIsoStr ? parseDateTimeIso(toIsoStr) : null;
 
-  // validations dates
   if (fromIso && !from) return bad("from must be an ISO date");
   if (toIsoStr && !to) return bad("to must be an ISO date");
   if (from && to && to.getTime() < from.getTime()) return bad("to must be >= from");
@@ -317,26 +314,14 @@ export async function GET(req: NextRequest) {
 }
 
 /* ================= POST ================= */
-/**
- * POST /api/vacations
- * body: {
- *   siteId: string,
- *   siteName?: string|null,   // ✅ utilisé par ton UI
- *   title?: string|null,      // fallback
- *   startAt: ISO,
- *   endAt: ISO,
- *   requiredAgents?: number,
- *   assignedAgentIds?: string[],
- *   notes?: string|null
- * }
- */
+
 export async function POST(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
 
   const role = String(auth.role ?? "");
   const canWrite = role === "admin" || role === "manager";
-  if (!canWrite) return unauthorized("Insufficient rights");
+  if (!canWrite) return forbidden("Insufficient rights");
 
   let body: any;
   try {
@@ -356,7 +341,6 @@ export async function POST(req: NextRequest) {
 
   const requiredAgents = Math.max(1, parseIntSafe(body.requiredAgents, 1));
 
-  // compat UI: siteName (préféré) sinon title
   const siteName = body.siteName !== undefined ? normalizeText(body.siteName) || null : null;
   const title = body.title !== undefined ? normalizeText(body.title) || null : null;
 
@@ -385,7 +369,6 @@ export async function POST(req: NextRequest) {
       tenantId: auth.tenantId,
       siteId,
 
-      // ✅ on stocke les deux (au choix), mais au minimum siteName pour ton UI
       siteName: siteName ?? title ?? null,
       title: title ?? null,
 
@@ -409,6 +392,31 @@ export async function POST(req: NextRequest) {
     const created = await ref.get();
     const data = created.data() as any;
 
+    // ✅ activity log
+    const displayName = payload.siteName ?? payload.title ?? "—";
+    await logActivity({
+      tenantId: auth.tenantId,
+      actorUid: auth.uid,
+      actorEmail: auth.email ?? null,
+      actorRole: auth.role ?? null,
+      action: "vacation.created",
+      entityType: "vacation",
+      entityId: ref.id,
+      message: `Vacation créée : ${displayName}`,
+      meta: {
+        vacationId: ref.id,
+        siteId,
+        siteName: payload.siteName ?? null,
+        startAtIso: start.toISOString(),
+        endAtIso: end.toISOString(),
+        requiredAgents,
+        assignedCount: assignedAgentIds.length,
+        status,
+        rejectedAssigned: validated.rejected ?? [],
+      },
+      severity: (validated.rejected?.length ?? 0) > 0 ? "warning" : "info",
+    });
+
     const warnings =
       validated.rejected.length > 0
         ? [
@@ -424,7 +432,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       tenantId: auth.tenantId,
       warnings,
-      id: ref.id, // ✅ utile (ta page create l'utilise aussi)
+      id: ref.id,
       vacation: pickVacation(data, ref.id),
     });
   } catch (e: any) {

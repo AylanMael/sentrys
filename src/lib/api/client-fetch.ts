@@ -7,28 +7,57 @@ type ApiError = {
   details?: any;
 };
 
+type ApiFetchInit = Omit<RequestInit, "body" | "headers"> & {
+  headers?: HeadersInit;
+  body?: any; // ✅ autorise objet (sera JSON.stringify si objet simple)
+};
+
+function isPlainObject(v: any) {
+  if (!v || typeof v !== "object") return false;
+  if (v instanceof FormData) return false;
+  if (v instanceof Blob) return false;
+  if (v instanceof ArrayBuffer) return false;
+  if (v instanceof URLSearchParams) return false;
+  return true;
+}
+
 export async function apiFetch<T>(
   input: RequestInfo | URL,
-  init: RequestInit = {}
+  init: ApiFetchInit = {}
 ): Promise<T> {
   const user = getAuth().currentUser;
   if (!user) throw new Error("Not authenticated");
 
-  // Force refresh = false (par défaut), tu peux le passer à true si tu veux
   const token = await user.getIdToken(false);
 
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${token}`);
 
-  // Si body présent et pas déjà un content-type, on met JSON par défaut
-  const hasBody = init.body !== undefined && init.body !== null;
-  if (hasBody && !headers.has("content-type")) {
-    headers.set("content-type", "application/json");
+  // ✅ Normalisation body
+  let body: BodyInit | null | undefined = init.body as any;
+  const hasBody = body !== undefined && body !== null;
+
+  if (hasBody) {
+    const hasContentType =
+      headers.has("content-type") || headers.has("Content-Type");
+
+    // Objet simple => JSON
+    if (isPlainObject(body)) {
+      if (!hasContentType) headers.set("content-type", "application/json");
+      body = JSON.stringify(body);
+    } else {
+      // string => si pas de content-type, on suppose JSON (utile pour PATCH/POST rapides)
+      if (!hasContentType && typeof body === "string") {
+        headers.set("content-type", "application/json");
+      }
+      // FormData/Blob/etc => on laisse tel quel + pas de content-type forcé
+    }
   }
 
   const res = await fetch(input, {
     ...init,
     headers,
+    body,
     // Bonnes pratiques Next/Fetch : éviter cache sur appels API authentifiés
     cache: init.cache ?? "no-store",
   });

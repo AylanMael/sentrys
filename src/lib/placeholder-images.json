@@ -2,9 +2,9 @@
   "placeholderImages": [
     {
       "id": "hero-landing",
-      "description": "Hero image for the landing page showing security operations.",
-      "imageUrl": "https://images.unsplash.com/photo-1672989017411-89143d3b1415?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxzZWN1cml0eSUyMG9wZXJhdGlvbnMlMjBjb21tYW5kJTIwY2VudGVyfGVufDB8fHx8MTc2ODg5NTc4M3ww&ixlib=rb-4.1.0&q=80&w=1080",
-      "imageHint": "security operations command center"
+      "description": "A collaborative team using a digital interface for their business operations.",
+      "imageUrl": "https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxzbWFsbCUyMGJ1c2luZXNzJTIwcGF5bWVudHxlbnwwfHx8fDE3MjA3MDM0ODF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "team collaboration interface"
     },
     {
       "id": "user-avatar-1",

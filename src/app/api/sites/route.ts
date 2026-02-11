@@ -5,6 +5,7 @@ import { FieldValue } from "firebase-admin/firestore";
 
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import { assertWithinLimitsTx } from "@/lib/billing/limits";
+import { logActivity } from "@/lib/activity/logger";
 
 export const runtime = "nodejs";
 
@@ -105,9 +106,7 @@ function pickSite(d: any, id: string) {
 }
 
 /* ================= GET ================= */
-/**
- * GET /api/sites?max=50&isActive=true&q=paris
- */
+
 export async function GET(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
@@ -126,11 +125,9 @@ export async function GET(req: NextRequest) {
       ref = ref.where("isActive", "==", isActive);
     }
 
-    // ✅ pas d’orderBy => pas d’index composite
     const snap = await ref.limit(max).get();
     let sites = snap.docs.map((doc) => pickSite(doc.data(), doc.id));
 
-    // tri mémoire (updatedAt -> createdAt)
     sites.sort((a: any, b: any) => {
       const au = (a as any)?.updatedAt?._seconds ?? 0;
       const bu = (b as any)?.updatedAt?._seconds ?? 0;
@@ -156,10 +153,7 @@ export async function GET(req: NextRequest) {
 }
 
 /* ================= POST ================= */
-/**
- * POST /api/sites
- * body: { name, clientName?, siteType?, riskLevel?, address?, city?, postalCode?, instructions?, isActive?, agentIds?, managerIds?, accessUids? }
- */
+
 export async function POST(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
@@ -198,7 +192,6 @@ export async function POST(req: NextRequest) {
   const search = buildSearch({ name, clientName, city, address, postalCode });
 
   try {
-    // ✅ quota sites uniquement si on crée un site actif
     if (isActive) {
       const quota = await assertWithinLimitsTx({
         tenantId: auth.tenantId,
@@ -207,6 +200,19 @@ export async function POST(req: NextRequest) {
       });
 
       if (!quota.ok) {
+        await logActivity({
+          tenantId: auth.tenantId,
+          actorUid: auth.uid,
+          actorEmail: (auth as any).email ?? null,
+          actorRole: auth.role ?? null,
+          action: "billing.limit_reached",
+          entityType: "billing",
+          entityId: "sites",
+          message: `Limite atteinte : création de site bloquée`,
+          meta: { kind: "sites", name, code: quota.code, limits: quota.limits, usage: quota.usage },
+          severity: "warning",
+        });
+
         return forbidden(quota.message, {
           code: quota.code,
           limits: quota.limits,
@@ -242,6 +248,27 @@ export async function POST(req: NextRequest) {
 
     const ref = await adminDb.collection("sites").add(payload);
     const created = await ref.get();
+
+    // ✅ activity log
+    await logActivity({
+      tenantId: auth.tenantId,
+      actorUid: auth.uid,
+      actorEmail: (auth as any).email ?? null,
+      actorRole: auth.role ?? null,
+      action: "site.created",
+      entityType: "site",
+      entityId: ref.id,
+      message: `Site créé : ${name}`,
+      meta: {
+        siteId: ref.id,
+        name,
+        clientName,
+        city,
+        isActive,
+        riskLevel,
+      },
+      severity: "info",
+    });
 
     return json(201, {
       ok: true,

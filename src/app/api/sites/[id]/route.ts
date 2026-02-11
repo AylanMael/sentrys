@@ -5,6 +5,7 @@ import { FieldPath, FieldValue } from "firebase-admin/firestore";
 
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import { assertWithinLimitsTx, adjustUsage } from "@/lib/billing/limits";
+import { logActivity } from "@/lib/activity/logger";
 
 export const runtime = "nodejs";
 
@@ -121,13 +122,7 @@ async function loadSiteOr404(siteId: string, tenantId: string) {
 }
 
 /* ================= validations ================= */
-/**
- * Valide une liste d'agents :
- * - existe
- * - tenantId match
- * - status active
- * Mode tolérant: renvoie validIds + rejected[]
- */
+
 async function validateAgentsForTenant(input: { tenantId: string; ids: string[] }) {
   const { tenantId } = input;
   const ids = uniq(input.ids.map(normalizeId)).filter(Boolean).slice(0, 200);
@@ -166,9 +161,7 @@ async function validateAgentsForTenant(input: { tenantId: string; ids: string[] 
 }
 
 /* ================= GET ================= */
-/**
- * GET /api/sites/:id
- */
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -195,14 +188,7 @@ export async function GET(
 }
 
 /* ================= PATCH ================= */
-/**
- * PATCH /api/sites/:id
- * => réservé admin/manager
- *
- * - agentIds: validés (existe + tenant + active) en mode tolérant
- * - accessUids: admin-only
- * - isActive: gère quota usage (active sites)
- */
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -235,14 +221,13 @@ export async function PATCH(
     const patch: any = {};
     const warnings: any[] = [];
 
-    // isActive (quota + usage)
     let nextIsActive = prevIsActive;
+
     if (body.isActive !== undefined) {
       if (typeof body.isActive !== "boolean") return bad("isActive must be a boolean");
       nextIsActive = body.isActive;
       patch.isActive = nextIsActive;
 
-      // ✅ inactive -> active => check quota + reserve (+1 in tx)
       if (!prevIsActive && nextIsActive) {
         const quota = await assertWithinLimitsTx({
           tenantId: auth.tenantId,
@@ -251,6 +236,19 @@ export async function PATCH(
         });
 
         if (!quota.ok) {
+          await logActivity({
+            tenantId: auth.tenantId,
+            actorUid: auth.uid,
+            actorEmail: (auth as any).email ?? null,
+            actorRole: auth.role ?? null,
+            action: "billing.limit_reached",
+            entityType: "billing",
+            entityId: "sites",
+            message: `Limite atteinte : réactivation de site bloquée`,
+            meta: { kind: "sites", siteId, code: quota.code, limits: quota.limits, usage: quota.usage },
+            severity: "warning",
+          });
+
           return forbidden(quota.message, {
             code: quota.code,
             limits: quota.limits,
@@ -261,7 +259,6 @@ export async function PATCH(
       }
     }
 
-    // agentIds (validated)
     if (body.agentIds !== undefined) {
       if (!Array.isArray(body.agentIds)) return bad("agentIds must be an array");
 
@@ -283,20 +280,17 @@ export async function PATCH(
       }
     }
 
-    // managerIds (IDs libres)
     if (body.managerIds !== undefined) {
       if (!Array.isArray(body.managerIds)) return bad("managerIds must be an array");
       patch.managerIds = uniq(body.managerIds.map(normalizeId).filter(Boolean)).slice(0, 200);
     }
 
-    // accessUids admin-only
     if (body.accessUids !== undefined) {
       if (role !== "admin") return forbidden("accessUids: admin only");
       if (!Array.isArray(body.accessUids)) return bad("accessUids must be an array");
       patch.accessUids = uniq(body.accessUids.map(normalizeId).filter(Boolean)).slice(0, 200);
     }
 
-    // fields text
     if (body.name !== undefined) {
       const v = normalizeText(body.name);
       if (!v) return bad("name cannot be empty");
@@ -304,7 +298,6 @@ export async function PATCH(
     }
 
     if (body.clientName !== undefined) patch.clientName = normalizeText(body.clientName) || null;
-
     if (body.siteType !== undefined) patch.siteType = normalizeText(body.siteType) || "bureaux";
 
     if (body.riskLevel !== undefined) {
@@ -317,7 +310,6 @@ export async function PATCH(
     if (body.postalCode !== undefined) patch.postalCode = normalizeText(body.postalCode) || null;
     if (body.instructions !== undefined) patch.instructions = normalizeText(body.instructions) || null;
 
-    // search (recalc si champs concernés)
     if (
       patch.name !== undefined ||
       patch.clientName !== undefined ||
@@ -342,8 +334,6 @@ export async function PATCH(
 
     await loaded.ref.set(patch, { merge: true });
 
-    // ✅ Ajustement usage si active -> inactive
-    // (inactive->active déjà réservé dans assertWithinLimitsTx)
     if (body.isActive !== undefined && prevIsActive !== nextIsActive) {
       if (prevIsActive && !nextIsActive) {
         await adjustUsage(auth.tenantId, "sites", -1);
@@ -352,6 +342,32 @@ export async function PATCH(
 
     const updated = await loaded.ref.get();
     const d = updated.data() as any;
+
+    // ✅ activity log
+    const nextNameForMsg = String(d?.name ?? prev?.name ?? "—");
+    const action =
+      prevIsActive && !nextIsActive ? "site.archived" : "site.updated";
+
+    await logActivity({
+      tenantId: auth.tenantId,
+      actorUid: auth.uid,
+      actorEmail: (auth as any).email ?? null,
+      actorRole: auth.role ?? null,
+      action,
+      entityType: "site",
+      entityId: updated.id,
+      message:
+        action === "site.archived"
+          ? `Site archivé : ${nextNameForMsg}`
+          : `Site mis à jour : ${nextNameForMsg}`,
+      meta: {
+        siteId: updated.id,
+        name: nextNameForMsg,
+        isActive: typeof d?.isActive === "boolean" ? d.isActive : true,
+        warnings,
+      },
+      severity: action === "site.archived" ? "warning" : "info",
+    });
 
     return json(200, {
       ok: true,
@@ -365,10 +381,7 @@ export async function PATCH(
 }
 
 /* ================= DELETE ================= */
-/**
- * DELETE /api/sites/:id
- * => soft delete : isActive=false + décrémente usage si le site était actif
- */
+
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -389,7 +402,6 @@ export async function DELETE(
     const prev = loaded.data as any;
     const prevIsActive = typeof prev.isActive === "boolean" ? prev.isActive : true;
 
-    // idempotent
     if (!prevIsActive) {
       return json(200, { ok: true, id: siteId, updated: { isActive: false } });
     }
@@ -404,6 +416,20 @@ export async function DELETE(
     );
 
     await adjustUsage(auth.tenantId, "sites", -1);
+
+    // ✅ activity log
+    await logActivity({
+      tenantId: auth.tenantId,
+      actorUid: auth.uid,
+      actorEmail: (auth as any).email ?? null,
+      actorRole: auth.role ?? null,
+      action: "site.archived",
+      entityType: "site",
+      entityId: siteId,
+      message: `Site archivé : ${prev?.name ?? "—"}`,
+      meta: { siteId, name: prev?.name ?? null },
+      severity: "warning",
+    });
 
     return json(200, { ok: true, id: siteId, updated: { isActive: false } });
   } catch (e: any) {

@@ -6,16 +6,10 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
   collection,
-  addDoc,
   onSnapshot,
   orderBy,
   query,
   where,
-  serverTimestamp,
-  Timestamp,
-  FieldValue,
-  doc,
-  updateDoc,
   type QuerySnapshot,
   type DocumentData,
 } from "firebase/firestore";
@@ -71,13 +65,60 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
-type Severity = "Faible" | "Moyenne" | "Élevée";
-type Status = "Ouvert" | "Clos";
+import { apiFetch } from "@/lib/api/client-fetch";
+
+/* ================= UI types (FR) ================= */
+
+type SeverityFR = "Faible" | "Moyenne" | "Élevée";
+type StatusFR = "Ouvert" | "Clos";
 type TabKey = "all" | "open" | "closed";
 
-type CreatedBy = { uid: string; name?: string | null; email?: string | null };
+/* ================= API types ================= */
 
-// ---- Sites (pour Select) ----
+type IncidentStatusAPI = "open" | "investigating" | "resolved" | "closed";
+type IncidentSeverityAPI = "low" | "medium" | "high" | "critical";
+
+type IncidentApiItem = {
+  id: string;
+  tenantId: string;
+  title: string | null;
+  description: string | null;
+  status: IncidentStatusAPI;
+  severity: IncidentSeverityAPI;
+  siteId: string | null;
+  agentId: string | null;
+  vacationId: string | null;
+  tags: string[];
+  isDeleted: boolean;
+  createdAtIso: string | null;
+  updatedAtIso: string | null;
+};
+
+type IncidentsListResponse = {
+  ok: boolean;
+  tenantId?: string;
+  count?: number;
+  incidents?: IncidentApiItem[];
+  error?: string;
+};
+
+type IncidentCreateResponse = {
+  ok: boolean;
+  tenantId?: string;
+  id?: string;
+  incident?: IncidentApiItem;
+  error?: string;
+};
+
+type IncidentPatchResponse = {
+  ok: boolean;
+  tenantId?: string;
+  incident?: IncidentApiItem;
+  error?: string;
+};
+
+/* ================= Sites (pour Select) ================= */
+
 type SiteSnapshot = {
   id: string;
   name: string;
@@ -88,48 +129,17 @@ type SiteSnapshot = {
 
 type SiteRow = SiteSnapshot;
 
-// ---- Incidents ----
-type IncidentDoc = {
-  tenantId: string;
+/* ================= helpers ================= */
 
-  siteId: string;
-  siteName: string;
-  siteSnapshot: SiteSnapshot;
-
-  severity: Severity;
-  status: Status;
-  description: string;
-
-  createdAt?: Timestamp;
-  createdBy: CreatedBy;
-
-  updatedAt?: Timestamp;
-  closedAt?: Timestamp;
-  closedBy?: { uid: string; email?: string | null };
-
-  // optionnels (si tu les stockes)
-  severityKey?: string;
-  statusKey?: string;
-};
-
-type IncidentCreate = Omit<
-  IncidentDoc,
-  "createdAt" | "updatedAt" | "closedAt"
-> & {
-  createdAt: FieldValue;
-  updatedAt?: FieldValue;
-  closedAt?: FieldValue;
-};
-
-type IncidentRow = IncidentDoc & { id: string };
-
-function severityToVariant(sev: Severity) {
-  if (sev === "Élevée") return "destructive";
-  return "outline";
+function isoToDate(iso?: string | null) {
+  if (!iso) return new Date(0);
+  const d = new Date(iso);
+  return Number.isFinite(d.getTime()) ? d : new Date(0);
 }
 
-function tsToDate(ts?: Timestamp) {
-  return ts?.toDate?.() ?? new Date(0);
+function severityToVariant(sev: SeverityFR) {
+  if (sev === "Élevée") return "destructive";
+  return "outline";
 }
 
 function toKey(v: string) {
@@ -140,15 +150,34 @@ function toKey(v: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function mapSeverityToApi(sev: SeverityFR): IncidentSeverityAPI {
+  if (sev === "Faible") return "low";
+  if (sev === "Moyenne") return "medium";
+  return "high";
+}
+
+function mapSeverityToFr(sev: IncidentSeverityAPI): SeverityFR {
+  if (sev === "low") return "Faible";
+  if (sev === "medium") return "Moyenne";
+  // high|critical => "Élevée" (tu peux affiner si tu veux)
+  return "Élevée";
+}
+
+function mapStatusToFr(st: IncidentStatusAPI): StatusFR {
+  return st === "closed" ? "Clos" : "Ouvert";
+}
+
+/* ================= page ================= */
+
 export default function IncidentsPage() {
   const { toast } = useToast();
   const { user, loading } = useAuth();
 
-  // incidents list
-  const [rows, setRows] = useState<IncidentRow[]>([]);
+  // incidents list (API)
+  const [rows, setRows] = useState<IncidentApiItem[]>([]);
   const [loadingList, setLoadingList] = useState(true);
 
-  // sites list (pour le select)
+  // sites list (Firestore realtime, OK)
   const [sites, setSites] = useState<SiteRow[]>([]);
   const [loadingSites, setLoadingSites] = useState(true);
 
@@ -159,7 +188,7 @@ export default function IncidentsPage() {
 
   // form
   const [siteId, setSiteId] = useState<string>("");
-  const [severity, setSeverity] = useState<Severity | "">("");
+  const [severity, setSeverity] = useState<SeverityFR | "">("");
   const [description, setDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -168,17 +197,11 @@ export default function IncidentsPage() {
     return sites.find((s) => s.id === siteId) ?? null;
   }, [siteId, sites]);
 
-  // 0) LISTEN Sites (pour Select)
+  // 0) LISTEN Sites (Select)
   useEffect(() => {
     if (loading) return;
 
-    if (!db) {
-      setLoadingSites(false);
-      setSites([]);
-      return;
-    }
-
-    if (!user?.tenantId) {
+    if (!db || !user?.tenantId) {
       setLoadingSites(false);
       setSites([]);
       return;
@@ -186,7 +209,6 @@ export default function IncidentsPage() {
 
     setLoadingSites(true);
 
-    // On ne récupère que les sites du tenant + tri
     const qy = query(
       collection(db, "sites"),
       where("tenantId", "==", user.tenantId),
@@ -228,85 +250,68 @@ export default function IncidentsPage() {
     return () => unsub();
   }, [loading, toast, user?.tenantId]);
 
-  // 1) LISTEN Incidents (Inbox)
-  useEffect(() => {
-    if (loading) return;
-
-    if (!db) {
-      setLoadingList(false);
-      toast({
-        variant: "destructive",
-        title: "Firestore indisponible",
-        description: "Vérifie la config Firebase (.env).",
-      });
-      return;
-    }
-
+  async function loadIncidents() {
     if (!user?.tenantId) {
-      setLoadingList(false);
       setRows([]);
+      setLoadingList(false);
       return;
     }
 
     setLoadingList(true);
-
-    const qy = query(
-      collection(db, "incidents"),
-      where("tenantId", "==", user.tenantId),
-      orderBy("createdAt", "desc")
-    );
-
-    const unsub = onSnapshot(
-      qy,
-      (snap) => {
-        const next: IncidentRow[] = snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as IncidentDoc),
-        }));
-        setRows(next);
-        setLoadingList(false);
-      },
-      (err) => {
-        console.error("Incidents onSnapshot error:", err);
-        setLoadingList(false);
+    try {
+      const res = await apiFetch<IncidentsListResponse>("/api/incidents?max=200");
+      if (!res?.ok) {
+        setRows([]);
         toast({
           variant: "destructive",
-          title: "Erreur de lecture",
-          description:
-            err?.message?.includes("requires an index")
-              ? "Index Firestore manquant pour cette requête."
-              : err?.message?.includes("Missing or insufficient permissions")
-              ? "Permissions Firestore insuffisantes (règles incidents)."
-              : "Impossible de charger les incidents.",
+          title: "Impossible de charger les incidents",
+          description: res?.error ?? "Erreur API",
         });
+        return;
       }
-    );
+      setRows(res.incidents ?? []);
+    } catch (e: any) {
+      setRows([]);
+      toast({
+        variant: "destructive",
+        title: "Impossible de charger les incidents",
+        description: e?.message ?? "Erreur inconnue",
+      });
+    } finally {
+      setLoadingList(false);
+    }
+  }
 
-    return () => unsub();
-  }, [loading, toast, user?.tenantId]);
+  // 1) LOAD Incidents (API)
+  useEffect(() => {
+    if (loading) return;
+    loadIncidents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user?.tenantId]);
 
   const counts = useMemo(() => {
-    const openCount = rows.filter((r) => r.status === "Ouvert").length;
-    const closedCount = rows.filter((r) => r.status === "Clos").length;
+    const openCount = rows.filter((r) => r.status !== "closed").length;
+    const closedCount = rows.filter((r) => r.status === "closed").length;
     return { all: rows.length, open: openCount, closed: closedCount };
   }, [rows]);
 
   const filtered = useMemo(() => {
     const base =
       tab === "open"
-        ? rows.filter((r) => r.status === "Ouvert")
+        ? rows.filter((r) => r.status !== "closed")
         : tab === "closed"
-        ? rows.filter((r) => r.status === "Clos")
+        ? rows.filter((r) => r.status === "closed")
         : rows;
 
     const q = queryText.trim().toLowerCase();
     if (!q) return base;
 
     return base.filter((r) => {
-      const hay = `${r.siteName} ${r.severity} ${r.status} ${r.createdBy?.email ?? ""} ${r.description ?? ""}`.toLowerCase();
+      const siteName = sites.find((s) => s.id === r.siteId)?.name ?? "";
+      const hay = `${siteName} ${r.severity} ${r.status} ${r.title ?? ""} ${r.description ?? ""}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [queryText, rows, tab]);
+  }, [queryText, rows, tab, sites]);
 
   const resetForm = () => {
     setSiteId("");
@@ -314,13 +319,12 @@ export default function IncidentsPage() {
     setDescription("");
   };
 
-  // 2) CREATE
+  // 2) CREATE via API (=> activity feed OK)
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!db) return;
+  
     if (!user?.tenantId || !user?.uid) return;
-
+  
     if (!siteId || !selectedSite) {
       toast({
         variant: "destructive",
@@ -329,90 +333,66 @@ export default function IncidentsPage() {
       });
       return;
     }
-
+  
     const cleanDesc = description.trim();
     if (!severity || !cleanDesc) return;
-
+  
+    // mapping UI -> API
+    const severityApi =
+      severity === "Faible" ? "low" : severity === "Moyenne" ? "medium" : "high";
+  
     setIsSaving(true);
     try {
-      const payload: IncidentCreate = {
-        tenantId: user.tenantId,
-
-        siteId: selectedSite.id,
-        siteName: selectedSite.name,
-        siteSnapshot: {
-          id: selectedSite.id,
-          name: selectedSite.name,
-          address: selectedSite.address ?? null,
-          city: selectedSite.city ?? null,
-          riskLevel: typeof selectedSite.riskLevel === "number" ? selectedSite.riskLevel : null,
+      await apiFetch("/api/incidents", {
+        method: "POST",
+        body: {
+          title: `Incident — ${selectedSite.name}`, // ou un vrai champ title si tu veux
+          description: cleanDesc,
+          severity: severityApi,
+          status: "open",
+          siteId: selectedSite.id,
+          tags: [],
         },
-
-        severity: severity as Severity,
-        severityKey: toKey(severity as string),
-        status: "Ouvert",
-        statusKey: "ouvert",
-        description: cleanDesc,
-
-        createdAt: serverTimestamp(),
-        createdBy: {
-          uid: user.uid,
-          name: null,
-          email: user.email ?? null,
-        },
-      };
-
-      await addDoc(collection(db, "incidents"), payload);
-
+      });
+  
       toast({
         title: "Incident créé",
         description: "Il apparaît dans la boîte de réception.",
       });
-
+  
       setOpen(false);
       resetForm();
       setTab("open");
     } catch (err: any) {
-      console.error("Create incident error:", err);
+      console.error("Create incident API error:", err);
       toast({
         variant: "destructive",
         title: "Création impossible",
-        description:
-          err?.message?.includes("Missing or insufficient permissions")
-            ? "Permissions Firestore insuffisantes (règles incidents)."
-            : err?.message ?? "Erreur Firestore.",
+        description: err?.message ?? "Erreur API.",
       });
     } finally {
       setIsSaving(false);
     }
-  };
+  };  
 
-  // 3) Close
+  // 3) Close via API (=> activity feed OK)
   const markClosed = async (id: string) => {
-    if (!db) return;
-
     try {
-      await updateDoc(doc(db, "incidents", id), {
-        status: "Clos",
-        statusKey: "clos",
-        updatedAt: serverTimestamp(),
-        closedAt: serverTimestamp(),
-        closedBy: { uid: user?.uid ?? "unknown", email: user?.email ?? null },
+      await apiFetch(`/api/incidents/${id}`, {
+        method: "PATCH",
+        body: { status: "closed" },
       });
-
+  
       toast({ title: "Incident clos", description: "Statut mis à jour." });
     } catch (err: any) {
-      console.error("Close incident error:", err);
+      console.error("Close incident API error:", err);
       toast({
         variant: "destructive",
         title: "Action impossible",
-        description:
-          err?.message?.includes("Missing or insufficient permissions")
-            ? "Permissions Firestore insuffisantes (règles incidents)."
-            : err?.message ?? "Erreur Firestore.",
+        description: err?.message ?? "Erreur API.",
       });
     }
-  };
+  };  
 
   const canCreate = !!user?.tenantId && !loadingSites && sites.length > 0;
 
@@ -430,7 +410,7 @@ export default function IncidentsPage() {
               <Input
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
-                placeholder="Rechercher (site, statut, email...)"
+                placeholder="Rechercher (site, statut, texte...)"
               />
             </div>
 
@@ -448,7 +428,7 @@ export default function IncidentsPage() {
                 <DialogHeader>
                   <DialogTitle>Créer un rapport</DialogTitle>
                   <DialogDescription>
-                    Il sera ajouté à la boîte de réception (incident lié à un site existant).
+                    Création via API (log automatique dans l’activité).
                   </DialogDescription>
                 </DialogHeader>
 
@@ -489,7 +469,7 @@ export default function IncidentsPage() {
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label className="text-right">Sévérité</Label>
                       <div className="col-span-3">
-                        <Select value={severity} onValueChange={(v) => setSeverity(v as Severity)} disabled={isSaving}>
+                        <Select value={severity} onValueChange={(v) => setSeverity(v as SeverityFR)} disabled={isSaving}>
                           <SelectTrigger>
                             <SelectValue placeholder="Sélectionnez la sévérité" />
                           </SelectTrigger>
@@ -598,61 +578,70 @@ export default function IncidentsPage() {
               {filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                    Aucun incident {tab === "open" ? "ouvert" : tab === "closed" ? "clos" : ""} dans la boîte de réception.
+                    Aucun incident {tab === "open" ? "ouvert" : tab === "closed" ? "clos" : ""}.
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((incident) => (
-                  <TableRow key={incident.id}>
-                    <TableCell>
-                      <div className="font-medium">{incident.siteName}</div>
-                      <div className="text-sm text-muted-foreground">{incident.createdBy?.email ?? "—"}</div>
-                    </TableCell>
+                filtered.map((incident) => {
+                  const siteName = sites.find((s) => s.id === incident.siteId)?.name ?? "—";
+                  const sevFR = mapSeverityToFr(incident.severity);
+                  const stFR = mapStatusToFr(incident.status);
 
-                    <TableCell>
-                      <Badge
-                        variant={severityToVariant(incident.severity)}
-                        className={cn(
-                          incident.severity === "Moyenne" && "bg-accent text-accent-foreground border-accent"
-                        )}
-                      >
-                        {incident.severity}
-                      </Badge>
-                    </TableCell>
+                  return (
+                    <TableRow key={incident.id}>
+                      <TableCell>
+                        <div className="font-medium">{siteName}</div>
+                        <div className="text-sm text-muted-foreground">{incident.title ?? "—"}</div>
+                      </TableCell>
 
-                    <TableCell>
-                      <Badge
-                        variant={incident.status === "Ouvert" ? "default" : "outline"}
-                        className={cn(incident.status === "Ouvert" && "bg-red-500 hover:bg-red-500/80")}
-                      >
-                        {incident.status}
-                      </Badge>
-                    </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={severityToVariant(sevFR)}
+                          className={cn(sevFR === "Moyenne" && "bg-accent text-accent-foreground border-accent")}
+                        >
+                          {sevFR}
+                        </Badge>
+                      </TableCell>
 
-                    <TableCell>{format(tsToDate(incident.createdAt), "PPPP 'à' p", { locale: fr })}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={stFR === "Ouvert" ? "default" : "outline"}
+                          className={cn(stFR === "Ouvert" && "bg-red-500 hover:bg-red-500/80")}
+                        >
+                          {stFR}
+                        </Badge>
+                      </TableCell>
 
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button aria-haspopup="true" size="icon" variant="ghost">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Toggle menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
+                      <TableCell>
+                        {format(isoToDate(incident.createdAtIso), "PPPP 'à' p", { locale: fr })}
+                      </TableCell>
 
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/dashboard/incidents/${incident.id}`}>Voir les détails</Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => markClosed(incident.id)} disabled={incident.status === "Clos"}>
-                            Marquer comme clos
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Toggle menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem asChild>
+                              <Link href={`/dashboard/incidents/${incident.id}`}>Voir les détails</Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => markClosed(incident.id)}
+                              disabled={incident.status === "closed"}
+                            >
+                              Marquer comme clos
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

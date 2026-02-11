@@ -7,6 +7,7 @@ import { PlusCircle, Siren } from "lucide-react";
 
 import { DashboardStats } from "@/components/dashboard/stats-cards";
 import { RecentIncidentsCard } from "@/components/dashboard/recent-incidents";
+import { RecentActivityCard } from "@/components/dashboard/recent-activity";
 import { Button } from "@/components/ui/button";
 
 import { apiFetch } from "@/lib/api/client-fetch";
@@ -78,14 +79,16 @@ export default function DashboardPage() {
 
       try {
         const res = await apiFetch<BillingUsageResponse>("/api/billing/usage");
-
         if (!mounted) return;
 
+        // debug utile
         console.log("BILLING USAGE", res);
 
         if (!res?.ok) {
           setBilling(null);
-          setBillingError(res?.error ?? "Impossible de charger les informations d’abonnement.");
+          setBillingError(
+            res?.error ?? "Impossible de charger les informations d’abonnement."
+          );
           return;
         }
 
@@ -93,7 +96,9 @@ export default function DashboardPage() {
       } catch (e: any) {
         if (!mounted) return;
         setBilling(null);
-        setBillingError(e?.message ?? "Erreur inconnue lors du chargement billing.");
+        setBillingError(
+          e?.message ?? "Erreur inconnue lors du chargement billing."
+        );
       } finally {
         if (!mounted) return;
         setBillingLoading(false);
@@ -108,7 +113,8 @@ export default function DashboardPage() {
   }, []);
 
   // ✅ normalisations UI
-  const usedTenants = billing?.usage?.activeTenants ?? billing?.usage?.tenants ?? 0;
+  const usedTenants =
+    billing?.usage?.activeTenants ?? billing?.usage?.tenants ?? 0;
   const atLimitList = useMemo(() => toAtLimitList(billing), [billing]);
 
   return (
@@ -140,76 +146,88 @@ export default function DashboardPage() {
 
       <DashboardStats />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <RecentIncidentsCard />
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Incidents */}
+        <div className="lg:col-span-1">
+          <RecentIncidentsCard />
+        </div>
 
-        {/* Bloc billing temporaire (à remplacer par une vraie carte premium) */}
-        <div className="rounded-3xl border bg-card p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-sm font-medium">Abonnement & quotas</div>
-              <div className="text-xs text-muted-foreground">
-                Plan, limites et usage en temps réel.
+        {/* Activité */}
+        <div className="lg:col-span-1">
+          <RecentActivityCard />
+        </div>
+
+        {/* Billing */}
+        <div className="lg:col-span-1">
+          <div className="rounded-3xl border bg-card p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm font-medium">Abonnement & quotas</div>
+                <div className="text-xs text-muted-foreground">
+                  Plan, limites et usage en temps réel.
+                </div>
               </div>
+
+              <Button asChild variant="outline" size="sm">
+                <Link href="/dashboard/billing">Gérer</Link>
+              </Button>
             </div>
 
-            <Button asChild variant="outline" size="sm">
-              <Link href="/dashboard/billing">Gérer</Link>
-            </Button>
-          </div>
-
-          <div className="mt-4 text-sm">
-            {billingLoading ? (
-              <div className="text-muted-foreground">Chargement…</div>
-            ) : billingError ? (
-              <div className="text-destructive">
-                {billingError}
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Ouvre la console (F12) pour voir le log si besoin.
+            <div className="mt-4 text-sm">
+              {billingLoading ? (
+                <div className="text-muted-foreground">Chargement…</div>
+              ) : billingError ? (
+                <div className="text-destructive">
+                  {billingError}
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Ouvre la console (F12) pour voir le log si besoin.
+                  </div>
                 </div>
-              </div>
-            ) : billing?.ok ? (
-              <div className="space-y-3">
-                <div className="text-muted-foreground">
-                  <span className="font-medium text-foreground">Plan :</span>{" "}
-                  {billing.plan?.name ?? billing.subscription?.planId ?? "—"}
-                </div>
+              ) : billing?.ok ? (
+                <div className="space-y-3">
+                  <div className="text-muted-foreground">
+                    <span className="font-medium text-foreground">Plan :</span>{" "}
+                    {billing.plan?.name ?? billing.subscription?.planId ?? "—"}
+                  </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-xl border p-3">
-                    <div className="text-xs text-muted-foreground">Agents</div>
-                    <div className="text-sm font-semibold">
-                      {billing.usage?.agents ?? 0} / {billing.limits?.agents ?? "—"}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-xl border p-3">
+                      <div className="text-xs text-muted-foreground">Agents</div>
+                      <div className="text-sm font-semibold">
+                        {billing.usage?.agents ?? 0} /{" "}
+                        {billing.limits?.agents ?? "—"}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border p-3">
+                      <div className="text-xs text-muted-foreground">Sites</div>
+                      <div className="text-sm font-semibold">
+                        {billing.usage?.sites ?? 0} /{" "}
+                        {billing.limits?.sites ?? "—"}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border p-3">
+                      <div className="text-xs text-muted-foreground">Tenants</div>
+                      <div className="text-sm font-semibold">
+                        {usedTenants} / {billing.limits?.tenants ?? "—"}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="rounded-xl border p-3">
-                    <div className="text-xs text-muted-foreground">Sites</div>
-                    <div className="text-sm font-semibold">
-                      {billing.usage?.sites ?? 0} / {billing.limits?.sites ?? "—"}
+                  {atLimitList.length > 0 ? (
+                    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs">
+                      Quota atteint sur :{" "}
+                      <span className="font-medium text-destructive">
+                        {atLimitList.join(", ")}
+                      </span>
                     </div>
-                  </div>
-
-                  <div className="rounded-xl border p-3">
-                    <div className="text-xs text-muted-foreground">Tenants</div>
-                    <div className="text-sm font-semibold">
-                      {usedTenants} / {billing.limits?.tenants ?? "—"}
-                    </div>
-                  </div>
+                  ) : null}
                 </div>
-
-                {atLimitList.length > 0 ? (
-                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs">
-                    Quota atteint sur :{" "}
-                    <span className="font-medium text-destructive">
-                      {atLimitList.join(", ")}
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="text-muted-foreground">Aucune donnée.</div>
-            )}
+              ) : (
+                <div className="text-muted-foreground">Aucune donnée.</div>
+              )}
+            </div>
           </div>
         </div>
       </div>

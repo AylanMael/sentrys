@@ -2,33 +2,22 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 
-import Logo from "@/components/logo";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 
 import {
   ArrowRight,
   ShieldCheck,
-  Menu,
   Sparkles,
   CalendarClock,
   Siren,
   Users,
   Building2,
   BarChart,
-  CheckCircle2,
-  ChevronRight,
 } from "lucide-react";
 
 import { PlaceHolderImages } from "@/lib/placeholder-images";
+import PublicLayout from "@/components/layouts/public-layout";
 
 const heroImage = PlaceHolderImages.find((p) => p.id === "hero-landing");
 
@@ -53,12 +42,6 @@ export const metadata: Metadata = {
       "Plateforme de gestion pour sociétés de sécurité privée : agents, sites, planning, incidents.",
   },
 };
-
-const nav = [
-  { label: "Fonctionnalités", href: "#fonctionnalites" },
-  { label: "Tarifs", href: "/tarifs" },
-  { label: "Contact", href: "/contact" },
-];
 
 const featureCards = [
   {
@@ -93,104 +76,10 @@ const featureCards = [
   },
 ];
 
-const bullets = [
-  "Moins d’erreurs, plus de contrôle",
-  "Traçabilité terrain claire",
-  "Multi-sites & multi-agents",
-  "Accès par rôles sécurisés",
-];
-
-function MobileMenu() {
-  return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="md:hidden"
-          aria-label="Ouvrir le menu"
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
-      </SheetTrigger>
-
-      <SheetContent side="right" className="w-[320px] sm:w-[380px]">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Logo />
-            <span className="text-sm font-semibold">Sentrys</span>
-          </SheetTitle>
-        </SheetHeader>
-
-        <div className="mt-8 flex flex-col gap-2">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center justify-between rounded-lg px-3 py-2.5 text-base hover:bg-muted"
-            >
-              {item.label}
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </Link>
-          ))}
-
-          <Separator className="my-4" />
-
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/login">Connexion</Link>
-          </Button>
-          <Button asChild className="w-full">
-            <Link href="/signup">Démarrer</Link>
-          </Button>
-
-          <p className="mt-4 text-xs text-muted-foreground">
-            Plateforme opérationnelle pour entreprises de sécurité privée.
-          </p>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
 
 export default function Home() {
   return (
-    <div className="flex min-h-dvh flex-col bg-background text-foreground">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2" aria-label="Sentrys">
-            <Logo />
-          </Link>
-
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Navigation principale">
-            {nav.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground transition"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-2">
-              <Button variant="ghost" asChild>
-                <Link href="/login">Connexion</Link>
-              </Button>
-              <Button asChild className="gap-2">
-                <Link href="/signup">
-                  Démarrer <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-            <MobileMenu />
-          </div>
-        </div>
-      </header>
-
-      <main id="main" className="flex-1">
+    <PublicLayout>
         {/* HERO */}
         <section className="relative py-12 md:py-20 lg:py-28">
           <div
@@ -224,7 +113,7 @@ export default function Home() {
                   </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="h-11 rounded-full">
-                  <Link href="/demo">Demander une démo</Link>
+                  <Link href="/contact">Demander une démo</Link>
                 </Button>
               </div>
             </div>
@@ -299,7 +188,7 @@ export default function Home() {
                 </Link>
               </Button>
               <Button asChild variant="outline" className="rounded-full">
-                <Link href="/demo">Demander une démo</Link>
+                <Link href="/contact">Demander une démo</Link>
               </Button>
             </div>
           </div>
@@ -323,69 +212,13 @@ export default function Home() {
                     <Link href="/signup">Essayer Sentrys gratuitement</Link>
                   </Button>
                   <Button asChild size="lg" variant="outline" className="h-11 rounded-full">
-                    <Link href="/demo">Demander une démo</Link>
+                    <Link href="/contact">Demander une démo</Link>
                   </Button>
                 </div>
               </div>
             </div>
           </div>
         </section>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t">
-        <div className="container py-12">
-          <div className="grid gap-8 md:grid-cols-3">
-            <div className="flex flex-col gap-2">
-              <Logo />
-              <p className="text-sm text-muted-foreground">
-                La plateforme opérationnelle pour les entreprises de sécurité privée.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-8 text-sm md:col-span-2 md:grid-cols-3">
-              <div className="grid gap-2">
-                <h3 className="font-semibold">Produit</h3>
-                <Link href="#fonctionnalites" className="text-muted-foreground hover:text-foreground">
-                  Fonctionnalités
-                </Link>
-                <Link href="/tarifs" className="text-muted-foreground hover:text-foreground">
-                  Tarifs
-                </Link>
-                <Link href="/demo" className="text-muted-foreground hover:text-foreground">
-                  Démo
-                </Link>
-              </div>
-
-              <div className="grid gap-2">
-                <h3 className="font-semibold">Entreprise</h3>
-                <Link href="/blog" className="text-muted-foreground hover:text-foreground">
-                  Blog
-                </Link>
-                <Link href="/contact" className="text-muted-foreground hover:text-foreground">
-                  Contact
-                </Link>
-              </div>
-
-              <div className="grid gap-2">
-                <h3 className="font-semibold">Légal</h3>
-                <Link href="/conditions" className="text-muted-foreground hover:text-foreground">
-                  Conditions
-                </Link>
-                <Link href="/confidentialite" className="text-muted-foreground hover:text-foreground">
-                  Confidentialité
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          <Separator className="my-8" />
-
-          <p className="text-center text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Sentrys. Tous droits réservés.
-          </p>
-        </div>
-      </footer>
-    </div>
+    </PublicLayout>
   );
 }

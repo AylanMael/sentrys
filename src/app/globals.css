@@ -4,71 +4,112 @@
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 215 91% 52%;
+    /* Surfaces */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Brand (pro SaaS) */
+    --primary: 221 83% 53%; /* #2563EB */
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 347 89% 61%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 215 91% 52%;
+
+    /* Secondary / Muted surfaces */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Accent (premium highlight) */
+    --accent: 188 86% 53%; /* #06B6D4 */
+    --accent-foreground: 222 47% 11%;
+
+    /* States */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders / inputs / focus */
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+
+    /* Radius */
     --radius: 0.9rem;
-    --sidebar-background: 222 47% 10%;
+
+    /* Sidebar (cohérent + premium) */
+    --sidebar-background: 222 47% 10%; /* proche #0F1B2D */
     --sidebar-foreground: 210 40% 98%;
+
     --sidebar-primary: 221 83% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
+
     --sidebar-accent: 222 28% 14%;
     --sidebar-accent-foreground: 210 40% 98%;
+
     --sidebar-border: 222 25% 18%;
     --sidebar-ring: 221 83% 53%;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 215 91% 52%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 347 89% 61%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 215 91% 52%;
-    --radius: 0.9rem;
+    /* Surfaces */
+    --background: 222 47% 7%; /* #0B1220 */
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 10%; /* #0F1B2D */
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Brand */
+    --primary: 221 83% 62%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 222 28% 14%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 222 28% 14%;
+    --muted-foreground: 215 20% 70%;
+
+    --accent: 188 86% 53%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 25% 18%;
+    --input: 222 25% 18%;
+    --ring: 221 83% 62%;
+
+    /* Sidebar */
     --sidebar-background: 222 47% 7%;
     --sidebar-foreground: 210 40% 98%;
+
     --sidebar-primary: 221 83% 62%;
     --sidebar-primary-foreground: 222 47% 11%;
+
     --sidebar-accent: 222 28% 14%;
     --sidebar-accent-foreground: 210 40% 98%;
+
     --sidebar-border: 222 25% 18%;
     --sidebar-ring: 221 83% 62%;
   }
 
+  /* ✅ Pas de @apply (Firebase Studio n’aime pas) */
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
+
   body {
-    @apply bg-background text-foreground antialiased;
+    min-height: 100dvh;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }

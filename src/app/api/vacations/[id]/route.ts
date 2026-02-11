@@ -40,9 +40,7 @@ function serverError(e: any, tag: string, extra?: any) {
 }
 
 function toIso(ts: any) {
-  return ts && typeof ts.toDate === "function"
-    ? ts.toDate().toISOString()
-    : null;
+  return ts && typeof ts.toDate === "function" ? ts.toDate().toISOString() : null;
 }
 
 function normalizeText(v: any) {
@@ -57,9 +55,7 @@ function parseDateTimeIso(v: any): Date | null {
 }
 
 function safeArr(v: unknown): string[] {
-  return Array.isArray(v)
-    ? (v.filter((x) => typeof x === "string") as string[])
-    : [];
+  return Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : [];
 }
 
 function uniq(arr: string[]) {
@@ -78,21 +74,23 @@ function displayNameFromVacation(v: any) {
 
 function tsToDate(ts: any): Date | null {
   const d = ts?.toDate?.();
-  return d && typeof d.getTime === "function" && Number.isFinite(d.getTime())
-    ? d
-    : null;
+  return d && typeof d.getTime === "function" && Number.isFinite(d.getTime()) ? d : null;
 }
 
 /* ================= domain ================= */
-
-type VacationStatus =
+/**
+ * ⚠️ IMPORTANT: on utilise un nom distinct (VacationStatusAll)
+ * pour éviter un conflit avec un autre type VacationStatus ailleurs dans le code,
+ * qui pourrait ne PAS contenir "cancelled" => TS2367.
+ */
+type VacationStatusAll =
   | "planned"
   | "partially_filled"
   | "filled"
   | "closed"
   | "cancelled";
 
-function asVacationStatus(v: any): VacationStatus {
+function asVacationStatus(v: any): VacationStatusAll {
   const s = String(v ?? "").toLowerCase().trim();
   if (
     s === "planned" ||
@@ -106,27 +104,19 @@ function asVacationStatus(v: any): VacationStatus {
   return "planned";
 }
 
-function computeStatus(
-  requiredAgents: number,
-  assignedCount: number
-): VacationStatus {
+function computeStatus(requiredAgents: number, assignedCount: number): VacationStatusAll {
   if (requiredAgents <= 0 || assignedCount <= 0) return "planned";
   if (assignedCount >= requiredAgents) return "filled";
   return "partially_filled";
 }
 
-function isFinalStatus(s: VacationStatus): s is "closed" | "cancelled" {
+function isFinalStatus(s: VacationStatusAll): s is "closed" | "cancelled" {
   return s === "closed" || s === "cancelled";
 }
 
 /* ================= assignments ================= */
 
-type AssignmentStatus =
-  | "assigned"
-  | "cancelled"
-  | "present"
-  | "absent"
-  | "replaced";
+type AssignmentStatus = "assigned" | "cancelled" | "present" | "absent" | "replaced";
 
 function assignmentDocId(vacationId: string, agentId: string) {
   return `${vacationId}_${agentId}`;
@@ -156,9 +146,7 @@ async function syncAssignmentsForVacation(input: {
   const batch = adminDb.batch();
 
   toAdd.forEach((agentId) => {
-    const ref = adminDb
-      .collection("assignments")
-      .doc(assignmentDocId(vacationId, agentId));
+    const ref = adminDb.collection("assignments").doc(assignmentDocId(vacationId, agentId));
     batch.set(
       ref,
       {
@@ -177,9 +165,7 @@ async function syncAssignmentsForVacation(input: {
   });
 
   toCancel.forEach((agentId) => {
-    const ref = adminDb
-      .collection("assignments")
-      .doc(assignmentDocId(vacationId, agentId));
+    const ref = adminDb.collection("assignments").doc(assignmentDocId(vacationId, agentId));
     batch.set(
       ref,
       {
@@ -221,10 +207,7 @@ function pickVacationForApi(d: any, id: string) {
 
 /* ================= GET ================= */
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
 
@@ -247,10 +230,7 @@ export async function GET(
 
 /* ================= PATCH ================= */
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
   if (!canWriteRole(auth.role)) return forbidden();
@@ -271,8 +251,8 @@ export async function PATCH(
 
     const prev = loaded.data as any;
 
-    // ✅ force type => évite le TS2367 sur "cancelled"
-    const prevStatus: VacationStatus = asVacationStatus(prev?.status);
+    // ✅ typed with VacationStatusAll (includes cancelled)
+    const prevStatus: VacationStatusAll = asVacationStatus(prev?.status);
 
     if (prevStatus === "cancelled") {
       return bad("Cannot update cancelled vacation");
@@ -299,10 +279,7 @@ export async function PATCH(
 
     // requiredAgents
     if (body.requiredAgents !== undefined) {
-      patch.requiredAgents = Math.max(
-        1,
-        parseIntSafe(body.requiredAgents, prev?.requiredAgents ?? 1)
-      );
+      patch.requiredAgents = Math.max(1, parseIntSafe(body.requiredAgents, prev?.requiredAgents ?? 1));
     }
 
     // notes
@@ -311,7 +288,7 @@ export async function PATCH(
     }
 
     // status: only closed/cancelled allowed here
-    let explicitFinalStatus: VacationStatus | null = null;
+    let explicitFinalStatus: VacationStatusAll | null = null;
     if (body.status !== undefined) {
       const s = asVacationStatus(body.status);
       if (s !== "closed" && s !== "cancelled") {
@@ -336,10 +313,7 @@ export async function PATCH(
 
     // if status not explicitly set and not final => recompute
     if (!patch.status && !isFinalStatus(prevStatus)) {
-      patch.status = computeStatus(
-        patch.requiredAgents ?? prev?.requiredAgents ?? 1,
-        nextAssigned.length
-      );
+      patch.status = computeStatus(patch.requiredAgents ?? prev?.requiredAgents ?? 1, nextAssigned.length);
     }
 
     patch.updatedAt = FieldValue.serverTimestamp();
@@ -365,9 +339,7 @@ export async function PATCH(
     const nextData = updatedSnap.data() as any;
 
     const name = displayNameFromVacation(nextData ?? prev);
-    const nextStatus: VacationStatus = asVacationStatus(
-      nextData?.status ?? patch.status ?? prevStatus
-    );
+    const nextStatus: VacationStatusAll = asVacationStatus(nextData?.status ?? patch.status ?? prevStatus);
     const assignedDelta = nextAssigned.length - prevAssigned.length;
 
     const isCancelledNow =
@@ -382,9 +354,7 @@ export async function PATCH(
       action: isCancelledNow ? "vacation.cancelled" : "vacation.updated",
       entityType: "vacation",
       entityId: id,
-      message: isCancelledNow
-        ? `Vacation annulée : ${name}`
-        : `Vacation mise à jour : ${name}`,
+      message: isCancelledNow ? `Vacation annulée : ${name}` : `Vacation mise à jour : ${name}`,
       severity: isCancelledNow ? "warning" : assignedDelta !== 0 ? "warning" : "info",
       meta: {
         vacationId: id,
@@ -433,10 +403,7 @@ export async function PATCH(
 
 /* ================= DELETE ================= */
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
   if (!canWriteRole(auth.role)) return forbidden();
@@ -451,8 +418,8 @@ export async function DELETE(
     const prev = loaded.data as any;
     const name = displayNameFromVacation(prev);
 
-    // ✅ force type => évite TS2367
-    const prevStatus: VacationStatus = asVacationStatus(prev?.status);
+    // ✅ typed with VacationStatusAll (includes cancelled)
+    const prevStatus: VacationStatusAll = asVacationStatus(prev?.status);
 
     // idempotent
     if (prevStatus === "cancelled") {
@@ -461,7 +428,7 @@ export async function DELETE(
 
     await loaded.ref.set(
       {
-        status: "cancelled" as VacationStatus,
+        status: "cancelled" as VacationStatusAll,
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: auth.uid,
       },

@@ -7,6 +7,7 @@ import { PanelLeft } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
+import { Badge, type BadgeProps } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
@@ -610,19 +611,24 @@ const SidebarMenuAction = React.forwardRef<
 SidebarMenuAction.displayName = "SidebarMenuAction"
 
 const SidebarMenuBadge = React.forwardRef<
-  HTMLDivElement,
-  React.ComponentProps<"div">
+  React.ElementRef<typeof Badge>,
+  BadgeProps
 >(({ className, ...props }, ref) => (
-  <div
+  <Badge
     ref={ref}
     data-sidebar="menu-badge"
     className={cn(
-      "absolute right-1 flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-xs font-medium tabular-nums text-sidebar-foreground select-none pointer-events-none",
-      "peer-hover/menu-button:text-sidebar-accent-foreground peer-data-[active=true]/menu-button:text-sidebar-accent-foreground",
+      "absolute right-1 justify-center tabular-nums select-none pointer-events-none",
+      "h-5 min-w-5 px-1.5", // Sizing
+      // Positioning
       "peer-data-[size=sm]/menu-button:top-1",
       "peer-data-[size=default]/menu-button:top-1.5",
       "peer-data-[size=lg]/menu-button:top-2.5",
+      // Hide when collapsed
       "group-data-[collapsible=icon]:hidden",
+      // The outline variant from shadcn uses `text-foreground`, which is dark on light theme.
+      // The sidebar is always dark, so we need to ensure the text is light.
+      props.variant === "outline" && "border-sidebar-border text-sidebar-foreground",
       className
     )}
     {...props}

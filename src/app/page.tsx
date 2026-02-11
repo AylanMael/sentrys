@@ -111,11 +111,11 @@ export default function Home() {
   return (
     <PublicLayout>
       {/* HERO */}
-      <section className="relative overflow-hidden py-20 sm:py-24 lg:py-32">
+      <section className="relative overflow-hidden py-24 sm:py-32 lg:py-40">
         {/* background */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/10" />
-          <div className="absolute -top-24 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-primary/12 blur-3xl" />
+          <div className="absolute -top-24 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
           <div className="absolute -bottom-28 right-[-120px] h-[420px] w-[520px] rounded-full bg-accent/10 blur-3xl" />
         </div>
 
@@ -147,7 +147,7 @@ export default function Home() {
             </p>
 
             <div className="mt-10 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:gap-4">
-              <Button asChild size="lg" className="h-12 rounded-full text-base gap-2">
+              <Button asChild size="lg" className="h-12 rounded-full text-base gap-2 bg-accent text-accent-foreground hover:bg-accent/80">
                 <Link href="/signup">
                   Démarrer gratuitement <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -211,7 +211,7 @@ export default function Home() {
             {steps.map((s) => (
               <div
                 key={s.k}
-                className="group relative rounded-2xl border bg-card p-6 shadow-md transition-shadow hover:shadow-xl"
+                className="group relative rounded-2xl border bg-card p-6 shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-primary">{s.k}</span>
@@ -289,7 +289,7 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row md:justify-end">
-                <Button asChild size="lg" className="h-12 rounded-full text-base">
+                <Button asChild size="lg" className="h-12 rounded-full text-base bg-accent text-accent-foreground hover:bg-accent/80">
                   <Link href="/signup">Essayer Sentrys gratuitement</Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="h-12 rounded-full text-base">

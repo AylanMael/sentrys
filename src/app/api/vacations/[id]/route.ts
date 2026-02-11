@@ -78,11 +78,7 @@ function tsToDate(ts: any): Date | null {
 }
 
 /* ================= domain ================= */
-/**
- * ⚠️ IMPORTANT: on utilise un nom distinct (VacationStatusAll)
- * pour éviter un conflit avec un autre type VacationStatus ailleurs dans le code,
- * qui pourrait ne PAS contenir "cancelled" => TS2367.
- */
+
 type VacationStatusAll =
   | "planned"
   | "partially_filled"
@@ -110,7 +106,7 @@ function computeStatus(requiredAgents: number, assignedCount: number): VacationS
   return "partially_filled";
 }
 
-function isFinalStatus(s: VacationStatusAll): s is "closed" | "cancelled" {
+function isFinalStatusStr(s: string) {
   return s === "closed" || s === "cancelled";
 }
 
@@ -251,10 +247,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const prev = loaded.data as any;
 
-    // ✅ typed with VacationStatusAll (includes cancelled)
-    const prevStatus: VacationStatusAll = asVacationStatus(prev?.status);
+    const prevStatusUnion: VacationStatusAll = asVacationStatus(prev?.status);
+    const prevStatusStr = String(prevStatusUnion); // ✅ compare en string => plus de TS2367
 
-    if (prevStatus === "cancelled") {
+    if (prevStatusStr === "cancelled") {
       return bad("Cannot update cancelled vacation");
     }
 
@@ -264,7 +260,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const patch: any = {};
     let didSync = false;
 
-    // dates
     if (body.startAt !== undefined) {
       const d = parseDateTimeIso(body.startAt);
       if (!d) return bad("Invalid startAt");
@@ -277,42 +272,35 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       patch.endAt = Timestamp.fromDate(d);
     }
 
-    // requiredAgents
     if (body.requiredAgents !== undefined) {
       patch.requiredAgents = Math.max(1, parseIntSafe(body.requiredAgents, prev?.requiredAgents ?? 1));
     }
 
-    // notes
     if (body.notes !== undefined) {
       patch.notes = normalizeText(body.notes) || null;
     }
 
-    // status: only closed/cancelled allowed here
-    let explicitFinalStatus: VacationStatusAll | null = null;
+    let explicitFinalStatusStr: string | null = null;
     if (body.status !== undefined) {
-      const s = asVacationStatus(body.status);
-      if (s !== "closed" && s !== "cancelled") {
-        return bad("Only closed/cancelled allowed");
-      }
+      const s = String(asVacationStatus(body.status)); // ✅ string
+      if (s !== "closed" && s !== "cancelled") return bad("Only closed/cancelled allowed");
       patch.status = s;
-      explicitFinalStatus = s;
+      explicitFinalStatusStr = s;
     }
 
-    // assignedAgentIds => sync assignments
     if (body.assignedAgentIds !== undefined) {
       nextAssigned = uniq(safeArr(body.assignedAgentIds));
       patch.assignedAgentIds = nextAssigned;
       didSync = true;
     }
 
-    // validate end > start (robuste même si champ absent)
     const startDate = tsToDate(patch.startAt ?? prev?.startAt);
     const endDate = tsToDate(patch.endAt ?? prev?.endAt);
     if (!startDate || !endDate) return bad("Missing startAt/endAt");
     if (endDate.getTime() <= startDate.getTime()) return bad("endAt must be > startAt");
 
-    // if status not explicitly set and not final => recompute
-    if (!patch.status && !isFinalStatus(prevStatus)) {
+    // si pas de statut explicite et pas final => recompute
+    if (!patch.status && !isFinalStatusStr(prevStatusStr)) {
       patch.status = computeStatus(patch.requiredAgents ?? prev?.requiredAgents ?? 1, nextAssigned.length);
     }
 
@@ -321,7 +309,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     await loaded.ref.set(patch, { merge: true });
 
-    // sync assignments (only if siteId exists)
     let syncResult: { toAdd: number; toCancel: number } | undefined;
     if (didSync && prev?.siteId) {
       syncResult = await syncAssignmentsForVacation({
@@ -334,17 +321,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       });
     }
 
-    // reload
     const updatedSnap = await loaded.ref.get();
     const nextData = updatedSnap.data() as any;
 
     const name = displayNameFromVacation(nextData ?? prev);
-    const nextStatus: VacationStatusAll = asVacationStatus(nextData?.status ?? patch.status ?? prevStatus);
+    const nextStatusStr = String(asVacationStatus(nextData?.status ?? patch.status ?? prevStatusUnion));
     const assignedDelta = nextAssigned.length - prevAssigned.length;
 
     const isCancelledNow =
-      explicitFinalStatus === "cancelled" ||
-      (prevStatus !== "cancelled" && nextStatus === "cancelled");
+      explicitFinalStatusStr === "cancelled" ||
+      (prevStatusStr !== "cancelled" && nextStatusStr === "cancelled");
 
     await logActivity({
       tenantId: auth.tenantId,
@@ -360,8 +346,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         vacationId: id,
         siteId: nextData?.siteId ?? prev?.siteId ?? null,
         siteName: nextData?.siteName ?? prev?.siteName ?? null,
-        prevStatus,
-        nextStatus,
+        prevStatus: prevStatusStr,
+        nextStatus: nextStatusStr,
         assignedPrevCount: prevAssigned.length,
         assignedNextCount: nextAssigned.length,
         assignedDelta,
@@ -418,17 +404,15 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const prev = loaded.data as any;
     const name = displayNameFromVacation(prev);
 
-    // ✅ typed with VacationStatusAll (includes cancelled)
-    const prevStatus: VacationStatusAll = asVacationStatus(prev?.status);
+    const prevStatusStr = String(asVacationStatus(prev?.status)); // ✅ string
 
-    // idempotent
-    if (prevStatus === "cancelled") {
+    if (prevStatusStr === "cancelled") {
       return json(200, { ok: true, id, updated: { status: "cancelled" } });
     }
 
     await loaded.ref.set(
       {
-        status: "cancelled" as VacationStatusAll,
+        status: "cancelled",
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: auth.uid,
       },
@@ -447,7 +431,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       severity: "warning",
       meta: {
         vacationId: id,
-        prevStatus,
+        prevStatus: prevStatusStr,
         nextStatus: "cancelled",
         siteId: prev?.siteId ?? null,
       },

@@ -41,17 +41,21 @@
     /* Radius */
     --radius: 0.9rem;
 
-    /* Sidebar (cohérent + premium) */
-    --sidebar-background: 222 47% 10%; /* proche #0F1B2D */
-    --sidebar-foreground: 210 40% 98%;
+    /* ✅ APP/SIDEBAR (mode clair) : gris bleuté léger PRO */
+    --app-surface: 210 40% 96%; /* #F1F5F9 */
+
+    --sidebar-background: 210 40% 96%; /* #F1F5F9 */
+    --sidebar-foreground: 222 47% 11%;
 
     --sidebar-primary: 221 83% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
 
-    --sidebar-accent: 222 28% 14%;
-    --sidebar-accent-foreground: 210 40% 98%;
+    /* Hover/selected discret */
+    --sidebar-accent: 210 40% 92%;
+    --sidebar-accent-foreground: 222 47% 11%;
 
-    --sidebar-border: 222 25% 18%;
+    /* Bordures sidebar discrètes */
+    --sidebar-border: 214 22% 90%;
     --sidebar-ring: 221 83% 53%;
   }
 
@@ -86,7 +90,9 @@
     --input: 222 25% 18%;
     --ring: 221 83% 62%;
 
-    /* Sidebar */
+    /* Sidebar (dark) */
+    --app-surface: 222 47% 7%;
+
     --sidebar-background: 222 47% 7%;
     --sidebar-foreground: 210 40% 98%;
 

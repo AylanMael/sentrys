@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminKey } from "@/lib/api/admin-auth";
+import { requireAdmin } from "@/lib/api/admin-auth";
 import admin from "firebase-admin";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const denied = requireAdminKey(req);
-  if (denied) return denied;
+  const { error } = await requireAdmin(req, { allowedRoles: ["global_admin"] });
+  if (error) return error;
 
   const max = Math.min(Number(req.nextUrl.searchParams.get("max") ?? "10"), 100);
 

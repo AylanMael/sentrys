@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminKey } from "@/lib/api/admin-auth";
+import { requireAdmin } from "@/lib/api/admin-auth";
 import { adminDb } from "@/lib/firebase/admin";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue } from "firebase-admin/firestore";
@@ -13,13 +13,13 @@ type Body = {
   adminEmail?: string;
 };
 
-function bad(msg: string, extra?: any) {
+function bad(msg: string, extra?: Record<string, unknown>) {
   return NextResponse.json({ ok: false, error: msg, ...extra }, { status: 400 });
 }
 
 export async function POST(req: NextRequest) {
-  const denied = requireAdminKey(req);
-  if (denied) return denied;
+  const { error } = await requireAdmin(req, { allowedRoles: ["global_admin"] });
+  if (error) return error;
 
   try {
     let body: Body;
@@ -38,11 +38,11 @@ export async function POST(req: NextRequest) {
     if (!tenantName) return bad("tenantName is required");
     if (!adminUid) return bad("adminUid is required");
 
-    // Vérifie que l’utilisateur existe côté Firebase Auth
+    // Verifie que l'utilisateur existe cote Firebase Auth
     try {
       await getAuth().getUser(adminUid);
-    } catch (e: any) {
-      return bad("adminUid not found in Firebase Auth", { details: e?.message });
+    } catch (e: unknown) {
+      return bad("adminUid not found in Firebase Auth", { details: e instanceof Error ? e.message : String(e) });
     }
 
     const tenantRef = adminDb.collection("tenants").doc(tenantId);
@@ -94,10 +94,10 @@ export async function POST(req: NextRequest) {
       adminUid,
       note: "Tenant + tenantUser admin ensured",
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("[bootstrap] fatal", e);
     return NextResponse.json(
-      { ok: false, error: "Internal error", details: e?.message ?? String(e) },
+      { ok: false, error: "Internal error", details: e instanceof Error ? e.message : String(e) },
       { status: 500 }
     );
   }

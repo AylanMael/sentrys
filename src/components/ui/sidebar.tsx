@@ -1,3 +1,4 @@
+// src/components/ui/sidebar.tsx
 "use client"
 
 import * as React from "react"
@@ -196,7 +197,6 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
-            {/* ✅ Accessibilité Radix: SheetContent (DialogContent) exige un titre */}
             <SheetHeader className="sr-only">
               <SheetTitle>Navigation</SheetTitle>
             </SheetHeader>
@@ -610,30 +610,23 @@ const SidebarMenuAction = React.forwardRef<
 })
 SidebarMenuAction.displayName = "SidebarMenuAction"
 
-const SidebarMenuBadge = React.forwardRef<
-  React.ElementRef<typeof Badge>,
-  BadgeProps
->(({ className, ...props }, ref) => (
+// ✅ MODIFIÉ: Suppression de forwardRef pour corriger l'erreur de Badge originel
+const SidebarMenuBadge = ({ className, ...props }: BadgeProps) => (
   <Badge
-    ref={ref}
     data-sidebar="menu-badge"
     className={cn(
       "absolute right-1 justify-center tabular-nums select-none pointer-events-none",
-      "h-5 min-w-5 px-1.5", // Sizing
-      // Positioning
+      "h-5 min-w-5 px-1.5",
       "peer-data-[size=sm]/menu-button:top-1",
       "peer-data-[size=default]/menu-button:top-1.5",
       "peer-data-[size=lg]/menu-button:top-2.5",
-      // Hide when collapsed
       "group-data-[collapsible=icon]:hidden",
-      // The outline variant from shadcn uses `text-foreground`, which is dark on light theme.
-      // The sidebar is always dark, so we need to ensure the text is light.
       props.variant === "outline" && "border-sidebar-border text-sidebar-foreground",
       className
     )}
     {...props}
   />
-))
+)
 SidebarMenuBadge.displayName = "SidebarMenuBadge"
 
 const SidebarMenuSkeleton = React.forwardRef<

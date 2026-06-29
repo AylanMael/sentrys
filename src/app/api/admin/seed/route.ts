@@ -1,25 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminKey } from "@/lib/api/admin-auth";
+import { requireAdmin } from "@/lib/api/admin-auth";
 import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 
 export const runtime = "nodejs";
 
-function bad(msg: string, extra?: any) {
+function bad(msg: string, extra?: Record<string, unknown>) {
   return NextResponse.json({ ok: false, error: msg, ...extra }, { status: 400 });
 }
 
 export async function POST(req: NextRequest) {
-  const denied = requireAdminKey(req);
-  if (denied) return denied;
-
   let body: { tenantId?: string } = {};
   try {
-    body = (await req.json()) as any;
+    body = (await req.json()) as { tenantId?: string };
   } catch {}
 
   const tenantId = (body.tenantId ?? req.nextUrl.searchParams.get("tenantId") ?? "").trim();
   if (!tenantId) return bad("tenantId is required");
+
+  const { error } = await requireAdmin(req, { targetTenantId: tenantId });
+  if (error) return error;
 
   try {
     const now = FieldValue.serverTimestamp();
@@ -119,10 +119,10 @@ export async function POST(req: NextRequest) {
       },
       note: "Seed OK (docs upsert via merge:true)",
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("[seed] error", e);
     return NextResponse.json(
-      { ok: false, error: "Internal error", details: e?.message ?? String(e) },
+      { ok: false, error: "Internal error", details: e instanceof Error ? e.message : String(e) },
       { status: 500 }
     );
   }

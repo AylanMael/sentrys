@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getCountFromServer, Timestamp } from "firebase/firestore";
+import { getCountFromServer, Timestamp, Query, DocumentData } from "firebase/firestore";
 
 import { db } from "@/lib/firebase/client";
 import {
@@ -25,13 +25,13 @@ function StatCard({
   hint?: string;
 }) {
   return (
-    <Card className="rounded-3xl">
-      <CardContent className="p-6">
-        <div className="text-sm text-muted-foreground">{title}</div>
-        <div className="mt-2 text-3xl font-semibold">
-          {value === null ? <Skeleton className="h-8 w-24" /> : value}
+    <Card className="rounded-[2rem] glass-card border-none transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl hover:shadow-primary/10 group">
+      <CardContent className="p-8">
+        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50 group-hover:text-primary/60 transition-colors">{title}</div>
+        <div className="mt-3 text-4xl font-black tracking-tighter text-foreground group-hover:premium-gradient-text transition-all duration-500">
+          {value === null ? <Skeleton className="h-10 w-24 rounded-lg" /> : value}
         </div>
-        {hint ? <div className="mt-2 text-xs text-muted-foreground">{hint}</div> : null}
+        {hint ? <div className="mt-3 text-[10px] font-bold text-muted-foreground/40 uppercase tracking-wider">{hint}</div> : null}
       </CardContent>
     </Card>
   );
@@ -44,12 +44,13 @@ function startOfMonthDate() {
   return d;
 }
 
-function isPermError(e: any) {
-  const msg = String(e?.message ?? "");
-  return msg.includes("Missing or insufficient permissions") || e?.code === "permission-denied";
+function isPermError(e: unknown) {
+  const message = e instanceof Error ? e.message : String(e);
+  const code = (e as { code?: string })?.code;
+  return message.includes("Missing or insufficient permissions") || code === "permission-denied";
 }
 
-async function safeCount(label: string, q: any): Promise<number | null> {
+async function safeCount(label: string, q: Query<DocumentData, DocumentData>): Promise<number | null> {
   try {
     const snap = await getCountFromServer(q);
     return snap.data().count;
@@ -71,7 +72,7 @@ export function DashboardStats() {
   const canQuery = useMemo(() => !!db && !!tenantId && !loading, [tenantId, loading]);
 
   useEffect(() => {
-    if (!canQuery) return;
+    if (!canQuery || !db || !tenantId) return;
 
     let cancelled = false;
 
@@ -79,10 +80,10 @@ export function DashboardStats() {
       const since = Timestamp.fromDate(startOfMonthDate());
 
       const [a, b, c, d] = await Promise.all([
-        safeCount("openIncidents", qOpenIncidents(db!, tenantId!)),
-        safeCount("activeAgents", qActiveAgents(db!, tenantId!)),
-        safeCount("activeSites", qActiveSites(db!, tenantId!)),
-        safeCount("incidentsThisMonth", qIncidentsSince(db!, tenantId!, since)),
+        safeCount("openIncidents", qOpenIncidents(db, tenantId)),
+        safeCount("activeAgents", qActiveAgents(db, tenantId)),
+        safeCount("activeSites", qActiveSites(db, tenantId)),
+        safeCount("incidentsThisMonth", qIncidentsSince(db, tenantId, since)),
       ]);
 
       if (cancelled) return;

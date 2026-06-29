@@ -31,14 +31,15 @@ export default function NavLink({
       asChild
       data-active={isActive}
       className={cn(
+        "transition-all duration-300",
         isActive &&
-          "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground"
+          "glass-card border-l-4 border-l-primary/50 text-foreground font-bold shadow-lg shadow-primary/5"
       )}
       tooltip={label}
     >
-      <Link href={href}>
-        <Icon />
-        <span>{label}</span>
+      <Link href={href} className="flex items-center gap-3">
+        <Icon className={cn("size-4 transition-transform group-hover:scale-110", isActive ? "text-primary" : "text-muted-foreground")} />
+        <span className={cn("transition-colors", isActive ? "text-foreground" : "text-muted-foreground/80")}>{label}</span>
       </Link>
     </SidebarMenuButton>
   );

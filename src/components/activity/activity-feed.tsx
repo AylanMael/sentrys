@@ -122,12 +122,13 @@ export function ActivityFeed({ limit = 6 }: { limit?: number }) {
 
         // ✅ si on a reçu moins que limit, il n’y a probablement pas de suite
         setCanPaginate(list.length >= limit);
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!mounted) return;
         setItems([]);
         setCursor(null);
         setCanPaginate(false);
-        setError(e?.message ?? "Erreur lors du chargement.");
+        const message = e instanceof Error ? e.message : "Erreur lors du chargement.";
+        setError(message);
       } finally {
         if (!mounted) return;
         setLoading(false);
@@ -166,8 +167,9 @@ export function ActivityFeed({ limit = 6 }: { limit?: number }) {
 
       // ✅ on continue à proposer “Charger plus” seulement si on a une page pleine
       setCanPaginate(next.length >= limit && !!nextCursor);
-    } catch (e: any) {
-      setError(e?.message ?? "Erreur lors du chargement.");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Erreur lors du chargement.";
+      setError(message);
     } finally {
       setLoadingMore(false);
     }

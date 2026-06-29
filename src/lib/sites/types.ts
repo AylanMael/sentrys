@@ -1,3 +1,11 @@
+export type SiteEmergencyContact = {
+  name: string;
+  role?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  priority?: number;
+};
+
 export type SiteType =
   | "bureaux"
   | "chantier"
@@ -11,7 +19,8 @@ export type Site = {
   tenantId: string;
 
   name: string;
-  clientName?: string;
+  clientId?: string | null;
+  clientName?: string | null;
 
   siteType: SiteType;
   riskLevel: 1 | 2 | 3 | 4 | 5;
@@ -21,14 +30,17 @@ export type Site = {
   postalCode?: string;
 
   instructions?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   isActive: boolean;
+  emergencyContacts?: SiteEmergencyContact[];
 
   // ✅ RBAC par site
   managerIds?: string[]; // admin/manager
   agentIds?: string[];   // agents
 
-  createdAt?: any;
-  updatedAt?: any;
+  createdAt?: unknown;
+  updatedAt?: unknown;
 
   createdBy?: string;
   updatedBy?: string;

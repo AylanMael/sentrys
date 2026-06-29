@@ -1,23 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminKey } from "@/lib/api/admin-auth";
+import { requireAdmin } from "@/lib/api/admin-auth";
 import { adminDb } from "@/lib/firebase/admin";
 
 export const runtime = "nodejs";
 
-function bad(msg: string, extra?: any) {
+function bad(msg: string, extra?: Record<string, unknown>) {
   return NextResponse.json({ ok: false, error: msg, ...extra }, { status: 400 });
 }
 
-function toIso(v: any) {
-  return v && typeof v.toDate === "function" ? v.toDate().toISOString() : null;
+function toIso(v: unknown) {
+  const t = v as { toDate?: () => Date } | null | undefined;
+  return t && typeof t.toDate === "function" ? t.toDate().toISOString() : null;
 }
 
 export async function GET(req: NextRequest) {
-  const denied = requireAdminKey(req);
-  if (denied) return denied;
-
   const tenantId = req.nextUrl.searchParams.get("tenantId")?.trim();
   if (!tenantId) return bad("tenantId is required");
+
+  const { error } = await requireAdmin(req, { targetTenantId: tenantId });
+  if (error) return error;
 
   const status = req.nextUrl.searchParams.get("status")?.trim() || "active";
   const maxRaw = req.nextUrl.searchParams.get("max");
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
     const snap = await q.orderBy("createdAt", "desc").limit(max).get();
 
     const users = snap.docs.map((d) => {
-      const data = d.data() as any;
+      const data = d.data() as Record<string, unknown>;
       return {
         id: d.id,
         ...data,
@@ -53,10 +54,10 @@ export async function GET(req: NextRequest) {
       count: users.length,
       users,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("[list-tenant-users] error", e);
     return NextResponse.json(
-      { ok: false, error: "Internal error", details: e?.message ?? String(e) },
+      { ok: false, error: "Internal error", details: e instanceof Error ? e.message : String(e) },
       { status: 500 }
     );
   }

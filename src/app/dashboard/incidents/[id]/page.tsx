@@ -1,747 +1,541 @@
+// src/app/dashboard/incidents/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
-  doc,
-  onSnapshot,
-  updateDoc,
-  serverTimestamp,
-  Timestamp,
-} from "firebase/firestore";
-import type { Unsubscribe } from "firebase/firestore";
-import {
-  ArrowLeft,
-  Loader2,
-  RefreshCcw,
   AlertTriangle,
-  Users,
-  Save,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Clock3,
+  FileText,
+  Loader2,
+  MapPin,
+  MessageSquarePlus,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  Siren,
 } from "lucide-react";
 
-import { db } from "@/lib/firebase/client";
-import { useAuth } from "@/lib/auth-provider";
-import { useToast } from "@/hooks/use-toast";
-import { apiFetch } from "@/lib/api/client-fetch";
-
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { IncidentComments } from "@/components/incidents/incident-comments";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAppFeedback } from "@/hooks/use-app-feedback";
+import { useAuth } from "@/lib/auth-provider";
+import { apiFetch, getApiErrorMessage } from "@/lib/api/client-fetch";
+import { canManageIncidents, normalizeRole } from "@/lib/auth/role";
+import { cn } from "@/lib/utils";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
+type IncidentStatus = "open" | "investigating" | "resolved" | "closed";
+type IncidentSeverity = "low" | "medium" | "high" | "critical";
 
-// ✅ REBRANCH COMMENTAIRES
-import { IncidentComments } from "@/components/incidents/incident-comments";
-
-// -------------------------------------
-// Types (alignés sur ton modèle)
-// -------------------------------------
-type Severity = "Faible" | "Moyenne" | "Élevée";
-type Status = "Ouvert" | "Clos";
-
-type AssignedAgentSnapshot = {
+type IncidentRow = {
   id: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  email?: string | null;
-  phone?: string | null;
-};
-
-type IncidentDoc = {
   tenantId: string;
-
-  siteId: string;
-  siteName: string;
-
-  severity: Severity;
-  status: Status;
-  description: string;
-
-  createdAt?: Timestamp;
-  updatedAt?: Timestamp;
-  closedAt?: Timestamp | null;
-
-  createdBy: { uid: string; name?: string | null; email?: string | null };
-  closedBy?: { uid: string; email?: string | null } | null;
-
-  // ✅ Assignation agent (nouveaux champs)
-  assignedAgentId?: string | null; // id doc agents/{id}
-  assignedAgentSnapshot?: AssignedAgentSnapshot | null;
-  assignedAt?: Timestamp | null;
-  assignedBy?: { uid: string; email?: string | null } | null;
-
-  statusKey?: "ouvert" | "clos";
-  severityKey?: "faible" | "moyenne" | "elevee";
+  title: string | null;
+  description: string | null;
+  status: IncidentStatus;
+  severity: IncidentSeverity;
+  siteId: string | null;
+  vacationId: string | null;
+  agentId: string | null;
+  tags: string[];
+  createdBy: string | null;
+  updatedBy: string | null;
+  createdAtIso: string | null;
+  updatedAtIso: string | null;
 };
 
-type SiteDoc = {
-  tenantId: string;
-  name?: string;
-  // ⚠️ agentIds = ids des docs "agents"
-  agentIds?: string[];
-  // managers (uids) pour RBAC
-  managerIds?: string[];
-  accessUids?: string[];
+type IncidentResponse = {
+  ok: boolean;
+  incident: IncidentRow;
 };
 
-type AgentApi = {
+type SiteRow = {
   id: string;
-  firstName?: string;
-  lastName?: string;
-  email?: string | null;
-  phone?: string | null;
-  status?: "active" | "inactive";
+  name?: string | null;
+  address?: string | null;
+  city?: string | null;
 };
 
-function formatFR(ts?: Timestamp | null) {
-  const d = ts?.toDate?.();
-  if (!d) return "—";
-  return d.toLocaleString("fr-FR", {
-    weekday: "short",
+type SitesResponse = {
+  ok: boolean;
+  sites?: SiteRow[];
+};
+
+const STATUS_FLOW: Array<{
+  status: IncidentStatus;
+  label: string;
+  detail: string;
+}> = [
+  {
+    status: "open",
+    label: "Ouvert",
+    detail: "Le signal est connu, mais pas encore pris en charge.",
+  },
+  {
+    status: "investigating",
+    label: "En cours",
+    detail: "Un responsable traite le dossier et suit les actions terrain.",
+  },
+  {
+    status: "resolved",
+    label: "Resolu",
+    detail: "La situation est reglee, il reste a cloturer proprement.",
+  },
+  {
+    status: "closed",
+    label: "Clos",
+    detail: "Le dossier est termine et conserve pour historique.",
+  },
+];
+
+function statusLabel(status: IncidentStatus) {
+  return STATUS_FLOW.find((item) => item.status === status)?.label ?? "Ouvert";
+}
+
+function statusClass(status: IncidentStatus) {
+  if (status === "closed") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  if (status === "resolved") return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  if (status === "investigating") return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300";
+}
+
+function severityLabel(severity: IncidentSeverity) {
+  if (severity === "critical") return "Critique";
+  if (severity === "high") return "Elevee";
+  if (severity === "medium") return "Moyenne";
+  return "Faible";
+}
+
+function severityClass(severity: IncidentSeverity) {
+  if (severity === "critical") return "border-red-600/40 bg-red-600/15 text-red-700 dark:text-red-200";
+  if (severity === "high") return "border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-300";
+  if (severity === "medium") return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+}
+
+function formatMoment(value: string | null) {
+  if (!value) return "Non renseigne";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Non renseigne";
+
+  return new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }).format(date);
 }
 
-function SeverityBadge({ v }: { v?: Severity }) {
-  if (!v) return <Badge variant="outline">—</Badge>;
-  const variant =
-    v === "Élevée" ? "destructive" : v === "Moyenne" ? "secondary" : "outline";
-  return <Badge variant={variant}>{v}</Badge>;
+function isTerminalStatus(status: IncidentStatus) {
+  return status === "closed";
 }
 
-function StatusBadge({ v }: { v?: Status }) {
-  if (!v) return <Badge variant="outline">—</Badge>;
-  const variant = v === "Ouvert" ? "destructive" : "outline";
-  return <Badge variant={variant}>{v}</Badge>;
+function nextRecommendedStatus(status: IncidentStatus): IncidentStatus {
+  if (status === "open") return "investigating";
+  if (status === "investigating") return "resolved";
+  if (status === "resolved") return "closed";
+  return "investigating";
 }
 
-function safeArr(v: unknown): string[] {
-  return Array.isArray(v)
-    ? (v.filter((x) => typeof x === "string") as string[])
-    : [];
+function siteDisplay(site: SiteRow | null, incident: IncidentRow | null) {
+  if (site?.name) return site.name;
+  if (incident?.siteId) return `Site ${incident.siteId.slice(0, 8)}`;
+  return "Site non renseigne";
 }
 
-function uniq(arr: string[]) {
-  return Array.from(new Set(arr.filter(Boolean)));
-}
-
-function agentLabel(a?: AgentApi | AssignedAgentSnapshot | null) {
-  if (!a) return "—";
-  const n = `${(a as any).firstName ?? ""} ${(a as any).lastName ?? ""}`.trim();
-  return n || (a as any).email || (a as any).id || "—";
+function IncidentSkeleton() {
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-6 pb-10">
+      <Skeleton className="h-52 rounded-[2rem]" />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <Skeleton className="h-96 rounded-[2rem]" />
+        <Skeleton className="h-96 rounded-[2rem]" />
+      </div>
+    </div>
+  );
 }
 
 export default function IncidentDetailPage() {
-  const router = useRouter();
   const params = useParams();
+  const router = useRouter();
+  const feedback = useAppFeedback();
+  const { user, loading: authLoading } = useAuth();
 
-  const rawId = (params as any)?.id as string | string[] | undefined;
-  const incidentId = Array.isArray(rawId) ? rawId[0] : rawId;
+  const incidentId = Array.isArray(params?.id) ? params.id[0] : params?.id;
+  const currentRole = normalizeRole(user?.role);
+  const canWrite = canManageIncidents(currentRole);
+  const tenantId = user?.tenantId ?? null;
 
-  const { toast } = useToast();
-  const { user, loading } = useAuth();
+  const [incident, setIncident] = useState<IncidentRow | null>(null);
+  const [sites, setSites] = useState<SiteRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState<IncidentStatus | null>(null);
 
-  const tenantId = (user as any)?.tenantId ?? null;
-  const role = String((user as any)?.role ?? "");
-  const canWrite = role === "admin" || role === "manager";
-  const canClose = canWrite;
+  const site = useMemo(() => {
+    return sites.find((item) => item.id === incident?.siteId) ?? null;
+  }, [incident?.siteId, sites]);
 
-  const canRead = useMemo(() => {
-    return !!db && !!incidentId && !loading && !!tenantId;
-  }, [incidentId, loading, tenantId]);
+  const recommendedStatus = useMemo(() => {
+    return incident ? nextRecommendedStatus(incident.status) : "investigating";
+  }, [incident]);
 
-  const [incident, setIncident] = useState<(IncidentDoc & { id: string }) | null>(
-    null
-  );
-  const [loadingIncident, setLoadingIncident] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const loadIncident = useCallback(
+    async (quiet = false) => {
+      if (!incidentId) return;
+      if (quiet) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
 
-  // ✅ Site doc (pour connaître agentIds affectés)
-  const [siteDoc, setSiteDoc] = useState<(SiteDoc & { id: string }) | null>(null);
-  const [siteLoading, setSiteLoading] = useState(false);
-
-  // ✅ Assignation UI
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [assignSaving, setAssignSaving] = useState(false);
-
-  const [agentsApi, setAgentsApi] = useState<AgentApi[]>([]);
-  const [agentsApiLoading, setAgentsApiLoading] = useState(false);
-
-  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
-
-  // Listen Incident
-  useEffect(() => {
-    let unsub: Unsubscribe | null = null;
-
-    if (!canRead) {
-      setIncident(null);
-      setLoadingIncident(false);
-      return;
-    }
-
-    setLoadingIncident(true);
-
-    unsub = onSnapshot(
-      doc(db!, "incidents", incidentId!),
-      (snap) => {
-        if (!snap.exists()) {
-          setIncident(null);
-          setLoadingIncident(false);
-          return;
-        }
-
-        const data = snap.data() as any;
-
-        // garde-fou tenant
-        if (data?.tenantId && data.tenantId !== tenantId) {
-          setIncident(null);
-          setLoadingIncident(false);
-          toast({
-            variant: "destructive",
-            title: "Accès refusé",
-            description: "Cet incident n’appartient pas à votre organisation.",
-          });
-          return;
-        }
-
-        const next = { ...(data as IncidentDoc), id: snap.id };
-        setIncident(next);
-        setLoadingIncident(false);
-
-        // ✅ si incident déjà assigné, on sync le state
-        const currentAssigned = String(next.assignedAgentId ?? "").trim();
-        setSelectedAgentIds(currentAssigned ? [currentAssigned] : []);
-      },
-      (err) => {
-        console.error("Incident onSnapshot error:", err);
-        setIncident(null);
-        setLoadingIncident(false);
-        toast({
-          variant: "destructive",
-          title: "Erreur",
-          description: err?.message ?? "Impossible de charger l’incident.",
-        });
-      }
-    );
-
-    return () => unsub?.();
-  }, [canRead, incidentId, tenantId, toast]);
-
-  // ✅ Listen Site doc (dépend de incident.siteId)
-  useEffect(() => {
-    let unsub: Unsubscribe | null = null;
-
-    if (!db || !incident?.siteId || !tenantId) {
-      setSiteDoc(null);
-      return;
-    }
-
-    setSiteLoading(true);
-
-    unsub = onSnapshot(
-      doc(db, "sites", incident.siteId),
-      (snap) => {
-        setSiteLoading(false);
-        if (!snap.exists()) {
-          setSiteDoc(null);
-          return;
-        }
-
-        const data = snap.data() as any;
-
-        // garde-fou tenant (si le site ne matche pas)
-        if (data?.tenantId && data.tenantId !== tenantId) {
-          setSiteDoc(null);
-          return;
-        }
-
-        setSiteDoc({
-          id: snap.id,
-          ...(data as SiteDoc),
-          agentIds: safeArr(data?.agentIds),
-          managerIds: safeArr(data?.managerIds),
-          accessUids: safeArr(data?.accessUids),
-        });
-      },
-      (err) => {
-        console.error("Site onSnapshot error:", err);
-        setSiteLoading(false);
-        setSiteDoc(null);
-      }
-    );
-
-    return () => unsub?.();
-  }, [incident?.siteId, tenantId]);
-
-  // ---- Load agents (API) when dialog opens ----
-  useEffect(() => {
-    if (!assignOpen) return;
-
-    setAgentsApiLoading(true);
-
-    (async () => {
       try {
-        // On charge "active" + "inactive" si tu veux. Ici active suffit.
-        const data = await apiFetch<{
-          ok: boolean;
-          agents?: AgentApi[];
-          error?: string;
-        }>(`/api/agents?status=active&max=200`);
+        const [incidentRes, sitesRes] = await Promise.all([
+          apiFetch<IncidentResponse>(`/api/incidents/${incidentId}`),
+          apiFetch<SitesResponse>("/api/sites?max=300"),
+        ]);
 
-        if (!data.ok) {
-          toast({
-            title: "Erreur",
-            description: data.error ?? "Impossible de charger les agents.",
-            variant: "destructive",
-          });
-          setAgentsApi([]);
-          return;
-        }
-
-        const rows = (data.agents ?? []).slice().sort((a, b) => {
-          const ak = `${(a.firstName ?? "").toLowerCase()} ${(a.lastName ?? "")
-            .toLowerCase()
-            .trim()}`.trim();
-          const bk = `${(b.firstName ?? "").toLowerCase()} ${(b.lastName ?? "")
-            .toLowerCase()
-            .trim()}`.trim();
-          return ak.localeCompare(bk);
+        setIncident(incidentRes.incident);
+        setSites(sitesRes.sites ?? []);
+      } catch (err) {
+        const message = getApiErrorMessage(
+          err,
+          "Impossible de charger la fiche incident."
+        );
+        setError(message);
+        feedback.error(err, {
+          title: "Incident indisponible",
+          fallback: message,
         });
-
-        setAgentsApi(rows);
-      } catch (e: any) {
-        toast({
-          title: "Erreur",
-          description: e?.message ?? "Impossible de charger les agents.",
-          variant: "destructive",
-        });
-        setAgentsApi([]);
       } finally {
-        setAgentsApiLoading(false);
+        setLoading(false);
+        setRefreshing(false);
       }
-    })();
-  }, [assignOpen, toast]);
+    },
+    [feedback, incidentId]
+  );
 
-  const siteAgentIds = useMemo(() => {
-    return uniq(safeArr(siteDoc?.agentIds));
-  }, [siteDoc?.agentIds]);
+  useEffect(() => {
+    if (authLoading) return;
+    void loadIncident(false);
+  }, [authLoading, loadIncident]);
 
-  const agentsForThisSite = useMemo(() => {
-    if (!siteAgentIds.length) return [];
-    const set = new Set(siteAgentIds);
-    return agentsApi.filter((a) => set.has(a.id));
-  }, [agentsApi, siteAgentIds]);
-
-  const assignedAgent = useMemo(() => {
-    // priorité au snapshot (très rapide)
-    const snap = incident?.assignedAgentSnapshot;
-    if (snap?.id) return snap;
-
-    // fallback : retrouver via agentsApi
-    const id = String(incident?.assignedAgentId ?? "").trim();
-    if (!id) return null;
-
-    return agentsApi.find((a) => a.id === id) ?? null;
-  }, [incident?.assignedAgentId, incident?.assignedAgentSnapshot, agentsApi]);
-
-  function toggleSingle(list: string[], value: string) {
-    // ici on veut 1 seul agent : si clique sur le même => désassigne
-    return list.includes(value) ? [] : [value];
-  }
-
-  async function toggleClose() {
-    if (!db || !incidentId || !incident) return;
-    if (!user) return;
-
-    if (!canClose) {
-      toast({
-        variant: "destructive",
-        title: "Accès refusé",
-        description: "Droits insuffisants pour changer le statut.",
-      });
+  async function updateStatus(nextStatus: IncidentStatus) {
+    if (!incident || !canWrite) {
+      feedback.warning(
+        "Action protegee",
+        "Votre role ne permet pas de modifier ce dossier incident."
+      );
       return;
     }
 
-    setBusy(true);
+    setUpdatingStatus(nextStatus);
+    setError(null);
+
     try {
-      const nextStatus: Status = incident.status === "Ouvert" ? "Clos" : "Ouvert";
-
-      await updateDoc(doc(db, "incidents", incidentId), {
-        status: nextStatus,
-        statusKey: nextStatus === "Ouvert" ? "ouvert" : "clos",
-        closedAt: nextStatus === "Clos" ? serverTimestamp() : null,
-        closedBy:
-          nextStatus === "Clos"
-            ? { uid: (user as any).uid, email: (user as any).email ?? null }
-            : null,
-        updatedAt: serverTimestamp(),
-      });
-
-      toast({
-        title: nextStatus === "Clos" ? "Incident clôturé" : "Incident ré-ouvert",
-        description: "Statut mis à jour.",
-      });
-    } catch (e: any) {
-      console.error(e);
-      toast({
-        variant: "destructive",
-        title: "Erreur",
-        description: e?.message ?? "Mise à jour impossible.",
+      const response = await apiFetch<IncidentResponse>(
+        `/api/incidents/${incident.id}`,
+        {
+          method: "PATCH",
+          body: { status: nextStatus },
+        }
+      );
+      setIncident(response.incident);
+      feedback.success(
+        "Statut incident mis a jour",
+        `Le dossier est maintenant ${statusLabel(nextStatus).toLowerCase()}.`
+      );
+    } catch (err) {
+      const message = getApiErrorMessage(
+        err,
+        "Impossible de modifier le statut incident."
+      );
+      setError(message);
+      feedback.error(err, {
+        title: "Mise a jour refusee",
+        fallback: message,
       });
     } finally {
-      setBusy(false);
+      setUpdatingStatus(null);
     }
   }
 
-  async function saveAssignment() {
-    if (!db || !incidentId || !incident) return;
-    if (!user) return;
+  if (authLoading || loading) return <IncidentSkeleton />;
 
-    if (!canWrite) {
-      toast({
-        variant: "destructive",
-        title: "Accès refusé",
-        description: "Droits insuffisants pour affecter un agent.",
-      });
-      return;
-    }
-
-    // 1 seul agent (ou null)
-    const nextId = selectedAgentIds[0] ? String(selectedAgentIds[0]).trim() : "";
-    const selected = nextId
-      ? (agentsApi.find((a) => a.id === nextId) ?? null)
-      : null;
-
-    // sécurité : imposer que l’agent appartienne au site
-    if (selected && !siteAgentIds.includes(selected.id)) {
-      toast({
-        variant: "destructive",
-        title: "Affectation invalide",
-        description: "Cet agent n’est pas affecté à ce site.",
-      });
-      return;
-    }
-
-    setAssignSaving(true);
-    try {
-      await updateDoc(doc(db, "incidents", incidentId), {
-        assignedAgentId: selected ? selected.id : null,
-        assignedAgentSnapshot: selected
-          ? {
-              id: selected.id,
-              firstName: selected.firstName ?? null,
-              lastName: selected.lastName ?? null,
-              email: selected.email ?? null,
-              phone: selected.phone ?? null,
-            }
-          : null,
-        assignedAt: selected ? serverTimestamp() : null,
-        assignedBy: selected
-          ? { uid: (user as any).uid, email: (user as any).email ?? null }
-          : null,
-        updatedAt: serverTimestamp(),
-      });
-
-      toast({
-        title: "Agent assigné",
-        description: selected ? `Assigné à ${agentLabel(selected)}` : "Assignation retirée.",
-      });
-      setAssignOpen(false);
-    } catch (e: any) {
-      console.error(e);
-      toast({
-        variant: "destructive",
-        title: "Erreur",
-        description: e?.message ?? "Impossible d’enregistrer l’assignation.",
-      });
-    } finally {
-      setAssignSaving(false);
-    }
+  if (error && !incident) {
+    return (
+      <EmptyState
+        icon={ShieldAlert}
+        tone="danger"
+        title="Incident indisponible"
+        description={error}
+        action={
+          <Button onClick={() => void loadIncident(false)} className="rounded-2xl font-black">
+            Reessayer
+          </Button>
+        }
+      />
+    );
   }
+
+  if (!incident) {
+    return (
+      <EmptyState
+        icon={ShieldAlert}
+        tone="warning"
+        title="Incident introuvable"
+        description="Le dossier a peut-etre ete supprime ou deplace."
+        action={
+          <Button asChild variant="outline" className="rounded-2xl font-black">
+            <Link href="/dashboard/incidents">Retour incidents</Link>
+          </Button>
+        }
+      />
+    );
+  }
+
+  const terminal = isTerminalStatus(incident.status);
+  const critical = incident.severity === "critical" || incident.severity === "high";
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-1">
-          <Button
-            variant="ghost"
-            className="gap-2 w-fit"
-            onClick={() => router.push("/dashboard/incidents")}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Retour aux incidents
-          </Button>
+    <div className="mx-auto max-w-[1500px] space-y-6 pb-10">
+      <section className="relative overflow-hidden rounded-[2.5rem] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-red-950 p-6 text-white shadow-2xl dark:border-white/10">
+        <div className="pointer-events-none absolute right-[-6rem] top-[-7rem] h-72 w-72 rounded-full bg-red-400/20 blur-3xl" />
+        <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => router.push("/dashboard/incidents")}
+              className="mb-4 rounded-2xl px-0 font-black text-slate-300 hover:bg-transparent hover:text-white"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Retour incidents
+            </Button>
 
-          <h1 className="text-2xl font-semibold">
-            {loadingIncident
-              ? "Chargement…"
-              : incident
-              ? "Détail incident"
-              : "Incident introuvable"}
-          </h1>
-
-          {incident ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <Badge variant="outline">{incident.siteName ?? "—"}</Badge>
-              <SeverityBadge v={incident.severity} />
-              <StatusBadge v={incident.status} />
-              <Badge variant="outline">Créé : {formatFR(incident.createdAt)}</Badge>
-
-              {/* ✅ Agent assigné */}
-              <Badge variant="outline">
-                Agent : {agentLabel(assignedAgent)}
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className={cn("rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em]", severityClass(incident.severity))}>
+                {severityLabel(incident.severity)}
               </Badge>
+              <Badge className={cn("rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em]", statusClass(incident.status))}>
+                {statusLabel(incident.status)}
+              </Badge>
+              {critical && !terminal ? (
+                <Badge className="rounded-full border border-red-300/25 bg-red-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-red-50">
+                  Priorite exploitation
+                </Badge>
+              ) : null}
             </div>
+
+            <h1 className="mt-4 text-3xl font-black tracking-tight md:text-5xl">
+              {incident.title || "Incident terrain"}
+            </h1>
+            <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-slate-300">
+              {siteDisplay(site, incident)} - signale le {formatMoment(incident.createdAtIso)}.
+              Cette fiche sert a piloter le traitement, tracer les commentaires
+              et cloturer proprement le dossier.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:w-[430px]">
+            <Button
+              type="button"
+              onClick={() => void loadIncident(true)}
+              disabled={refreshing}
+              variant="outline"
+              className="h-12 rounded-2xl border-white/15 bg-white/10 font-black text-white hover:bg-white/20"
+            >
+              <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
+              Actualiser
+            </Button>
+            <Button
+              type="button"
+              disabled={!canWrite || updatingStatus !== null}
+              onClick={() => void updateStatus(recommendedStatus)}
+              className="h-12 rounded-2xl bg-white font-black text-slate-950 hover:bg-slate-100"
+            >
+              {updatingStatus === recommendedStatus ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowRight className="mr-2 h-4 w-4" />
+              )}
+              {terminal ? "Reprendre" : statusLabel(recommendedStatus)}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {error ? (
+        <div className="rounded-[2rem] border border-amber-500/25 bg-amber-500/10 p-4 text-sm font-semibold text-amber-800 dark:text-amber-200">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="space-y-6">
+          <Card className="rounded-[2rem] border-border/60 shadow-sm">
+            <CardHeader className="border-b bg-muted/20">
+              <CardTitle className="flex items-center gap-2 text-xl font-black">
+                <FileText className="h-5 w-5 text-primary" />
+                Faits et contexte
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5 p-5">
+              <div className="rounded-3xl border bg-muted/20 p-5">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
+                  Description terrain
+                </p>
+                <p className="mt-3 whitespace-pre-wrap text-base font-semibold leading-7 text-foreground">
+                  {incident.description || "Aucune description renseignee."}
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <InfoTile icon={MapPin} label="Site" value={siteDisplay(site, incident)} />
+                <InfoTile icon={Clock3} label="Cree le" value={formatMoment(incident.createdAtIso)} />
+                <InfoTile icon={RefreshCw} label="Mis a jour" value={formatMoment(incident.updatedAtIso)} />
+              </div>
+
+              {incident.tags.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {incident.tags.map((tag) => (
+                    <Badge key={tag} variant="outline" className="rounded-full font-black">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          {tenantId ? (
+            <Card className="rounded-[2rem] border-border/60 shadow-sm">
+              <CardHeader className="border-b bg-muted/20">
+                <CardTitle className="flex items-center gap-2 text-xl font-black">
+                  <MessageSquarePlus className="h-5 w-5 text-primary" />
+                  Commentaires et suivi terrain
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-5">
+                <IncidentComments incidentId={incident.id} tenantId={tenantId} />
+              </CardContent>
+            </Card>
           ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => router.refresh()} className="gap-2">
-            <RefreshCcw className="h-4 w-4" />
-            Actualiser
-          </Button>
+        <div className="space-y-6">
+          <Card className="rounded-[2rem] border-border/60 shadow-sm">
+            <CardHeader className="border-b bg-muted/20">
+              <CardTitle className="flex items-center gap-2 text-xl font-black">
+                <Siren className="h-5 w-5 text-primary" />
+                Traitement operationnel
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 p-5">
+              {STATUS_FLOW.map((step, index) => {
+                const currentIndex = STATUS_FLOW.findIndex(
+                  (item) => item.status === incident.status
+                );
+                const active = index <= currentIndex;
+                const current = step.status === incident.status;
+                const saving = updatingStatus === step.status;
 
-          {/* ✅ Assignation agent */}
-          {incident ? (
-            <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  disabled={!canWrite || siteLoading}
-                  title={!canWrite ? "Droits insuffisants" : undefined}
-                >
-                  <Users className="h-4 w-4" />
-                  {incident.assignedAgentId ? "Modifier agent" : "Assigner agent"}
-                </Button>
-              </DialogTrigger>
-
-              <DialogContent className="max-w-3xl">
-                <DialogHeader>
-                  <DialogTitle>Assignation d’un agent</DialogTitle>
-                </DialogHeader>
-
-                <div className="text-sm text-muted-foreground">
-                  Agents disponibles = agents <span className="font-medium">affectés au site</span>.
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Site : <span className="font-medium">{incident.siteName}</span>
-                    {siteLoading ? " • chargement…" : ""}
-                  </div>
-                </div>
-
-                <Separator />
-
-                {agentsApiLoading ? (
-                  <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Chargement des agents…
-                  </div>
-                ) : siteAgentIds.length === 0 ? (
-                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-                    Aucun agent n’est affecté à ce site pour le moment.
-                    <div className="text-xs mt-1">
-                      Va sur{" "}
-                      <Link className="underline" href={`/dashboard/sites/${incident.siteId}`}>
-                        la fiche du site
-                      </Link>{" "}
-                      pour affecter des agents.
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="text-xs text-muted-foreground">
-                      Clique sur un agent pour l’assigner (un seul agent possible). Clique à nouveau pour désassigner.
-                    </div>
-
-                    <div className="rounded-lg border p-3 space-y-2 max-h-[420px] overflow-auto">
-                      {agentsForThisSite.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">
-                          Aucun agent actif correspondant aux affectations du site.
-                          <div className="text-xs mt-1">
-                            (Vérifie le statut des agents ou l’affectation sur le site.)
-                          </div>
-                        </div>
-                      ) : (
-                        agentsForThisSite.map((a) => {
-                          const checked = selectedAgentIds.includes(a.id);
-                          const label = agentLabel(a);
-
-                          return (
-                            <label
-                              key={a.id}
-                              className="flex items-start gap-3 rounded-md p-2 hover:bg-muted/50 cursor-pointer"
-                            >
-                              <Checkbox
-                                checked={checked}
-                                onCheckedChange={() =>
-                                  setSelectedAgentIds((prev) => toggleSingle(prev, a.id))
-                                }
-                              />
-                              <div className="text-sm">
-                                <div className="font-medium">{label}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {a.email ?? "—"} • {a.phone ?? "—"}
-                                </div>
-                              </div>
-                            </label>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <Separator />
-
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-xs text-muted-foreground">
-                    Sélection :{" "}
-                    <span className="font-medium">
-                      {selectedAgentIds[0]
-                        ? agentLabel(agentsApi.find((x) => x.id === selectedAgentIds[0]) ?? { id: selectedAgentIds[0] })
-                        : "Aucun"}
-                    </span>
-                  </div>
-
-                  <Button
-                    onClick={saveAssignment}
-                    disabled={assignSaving || !canWrite}
-                    className="gap-2"
-                  >
-                    {assignSaving ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="h-4 w-4" />
+                return (
+                  <button
+                    key={step.status}
+                    type="button"
+                    disabled={!canWrite || saving || step.status === incident.status}
+                    onClick={() => void updateStatus(step.status)}
+                    className={cn(
+                      "w-full rounded-3xl border p-4 text-left transition",
+                      current
+                        ? statusClass(step.status)
+                        : active
+                          ? "border-emerald-500/20 bg-emerald-500/5"
+                          : "border-border bg-background hover:bg-muted/40",
+                      !canWrite && "cursor-not-allowed opacity-80"
                     )}
-                    Enregistrer
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          ) : null}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={cn(
+                          "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black",
+                          active ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"
+                        )}
+                      >
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : active ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
+                      </div>
+                      <div>
+                        <p className="font-black text-foreground">{step.label}</p>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-muted-foreground">
+                          {step.detail}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </CardContent>
+          </Card>
 
-          {incident ? (
-            <Button
-              onClick={toggleClose}
-              disabled={busy || !canClose}
-              variant={incident.status === "Ouvert" ? "destructive" : "outline"}
-              className="gap-2"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {incident.status === "Ouvert" ? "Clôturer" : "Ré-ouvrir"}
-            </Button>
+          <Card className="rounded-[2rem] border-cyan-500/20 bg-cyan-500/5 shadow-sm">
+            <CardContent className="space-y-4 p-5">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-cyan-500/15 p-3 text-cyan-700 dark:text-cyan-200">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-black text-foreground">Definition du fini</p>
+                  <p className="mt-1 text-sm font-medium leading-6 text-muted-foreground">
+                    Un incident est vraiment termine quand le statut est clos,
+                    la decision est visible dans les commentaires et le site ou
+                    le client concerne sait quoi retenir.
+                  </p>
+                </div>
+              </div>
+              <Button asChild variant="outline" className="w-full rounded-2xl font-black">
+                <Link href="/dashboard/conduite">
+                  Voir registre conduite <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          {!canWrite ? (
+            <div className="rounded-[2rem] border border-amber-500/25 bg-amber-500/10 p-4 text-sm font-semibold text-amber-800 dark:text-amber-200">
+              Votre role permet de consulter le dossier mais pas de modifier son statut.
+            </div>
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Not found */}
-      {!loadingIncident && !incident ? (
-        <Card className="rounded-3xl">
-          <CardHeader>
-            <CardTitle>Incident introuvable</CardTitle>
-            <CardDescription>Le document n’existe pas (ou accès refusé).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-start gap-3 rounded-2xl border p-4 text-sm text-muted-foreground">
-              <AlertTriangle className="h-4 w-4 mt-0.5" />
-              <div>
-                Vérifie l’URL, l’ID, ou les permissions Firestore (rules).<br />
-                {incidentId ? (
-                  <span className="text-xs">ID : {incidentId}</span>
-                ) : (
-                  <span className="text-xs">ID manquant</span>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* Body */}
-      {incident ? (
-        <Card className="rounded-3xl">
-          <CardHeader>
-            <CardTitle>Description</CardTitle>
-            <CardDescription>Détails déclarés lors de la création.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-3 text-sm">
-              <div className="rounded-2xl border p-3">
-                <div className="text-muted-foreground">Signalé par</div>
-                <div className="font-medium">{incident.createdBy?.email ?? "—"}</div>
-              </div>
-
-              <div className="rounded-2xl border p-3">
-                <div className="text-muted-foreground">Agent assigné</div>
-                <div className="font-medium">{agentLabel(assignedAgent)}</div>
-                <div className="text-xs text-muted-foreground">
-                  {incident.assignedAt ? `Assigné : ${formatFR(incident.assignedAt)}` : "Non assigné"}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border p-3">
-                <div className="text-muted-foreground">Statut</div>
-                <div className="font-medium">{incident.status ?? "—"}</div>
-                <div className="text-xs text-muted-foreground">
-                  {incident.closedAt ? `Clôturé : ${formatFR(incident.closedAt)}` : "—"}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border p-4">
-              <div className="text-sm text-muted-foreground mb-1">Texte</div>
-              <div className="whitespace-pre-wrap">{incident.description ?? "—"}</div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-3 text-sm">
-              <div className="rounded-2xl border p-3">
-                <div className="text-muted-foreground">Créé le</div>
-                <div className="font-medium">{formatFR(incident.createdAt)}</div>
-              </div>
-              <div className="rounded-2xl border p-3">
-                <div className="text-muted-foreground">Mis à jour</div>
-                <div className="font-medium">{formatFR(incident.updatedAt)}</div>
-              </div>
-              <div className="rounded-2xl border p-3">
-                <div className="text-muted-foreground">Clôturé le</div>
-                <div className="font-medium">{formatFR(incident.closedAt ?? null)}</div>
-              </div>
-            </div>
-
-            <div className="pt-2 text-sm">
-              <span className="text-muted-foreground">Site :</span>{" "}
-              <Link className="underline" href={`/dashboard/sites/${incident.siteId}`}>
-                {incident.siteName}
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* ✅ Commentaires incident */}
-      {incident && tenantId ? (
-        <IncidentComments incidentId={incident.id} tenantId={tenantId} />
-      ) : null}
+function InfoTile({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof MapPin;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-3xl border bg-background p-4">
+      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+        <Icon className="h-4 w-4 text-primary" />
+        {label}
+      </div>
+      <p className="mt-3 text-sm font-black leading-5 text-foreground">{value}</p>
     </div>
   );
 }

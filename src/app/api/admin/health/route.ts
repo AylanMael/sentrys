@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminKey } from "@/lib/api/admin-auth";
+import { requireAdmin } from "@/lib/api/admin-auth";
 import { adminDb } from "@/lib/firebase/admin";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const denied = requireAdminKey(req);
-  if (denied) return denied;
+  // Support administrators require access to health telemetry to ensure platform stability
+  const { error } = await requireAdmin(req, { allowedRoles: ["global_admin", "support"] });
+  if (error) return error;
 
   const [tenantsSnap, usersSnap] = await Promise.all([
     adminDb.collection("tenants").limit(50).get(),

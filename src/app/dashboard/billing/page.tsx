@@ -16,6 +16,13 @@ import {
   MapPin,
   Building2,
   RefreshCw,
+  Zap,
+  ShieldCheck,
+  Headset,
+  Download,
+  FileClock,
+  Lock,
+  PackagePlus,
 } from "lucide-react";
 
 import { apiFetch } from "@/lib/api/client-fetch";
@@ -32,118 +39,119 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+
+/* ================= types & helpers (Identiques) ================= */
 
 type BillingUsageResponse = {
   ok: boolean;
   tenantId?: string;
-
-  plan?: {
-    id?: string;
-    name?: string;
-    priceMonthlyCents?: number | null;
-    features?: Record<string, boolean>;
-  };
-
-  subscription?: {
-    planId?: string;
-    status?: string;
-    addons?: {
-      extraAgents?: number;
-      extraSites?: number;
-      extraTenants?: number;
-      multiTenant?: boolean;
-    };
-    periodStart?: any;
-    periodEnd?: any;
-  };
-
+  plan?: { id?: string; name?: string; priceMonthlyCents?: number | null; features?: Record<string, boolean>; };
+  subscription?: { planId?: string; status?: string; addons?: { extraAgents?: number; extraSites?: number; extraTenants?: number; multiTenant?: boolean; }; periodStart?: any; periodEnd?: any; };
   limits?: { agents?: number; sites?: number; tenants?: number };
-
-  usage?: {
-    agents?: number;
-    sites?: number;
-    // backend normalize: tenants
-    tenants?: number;
-    // legacy: activeTenants
-    activeTenants?: number;
-    updatedAt?: any;
-  };
-
+  usage?: { agents?: number; sites?: number; tenants?: number; activeTenants?: number; updatedAt?: any; };
   progress?: { agentsPct?: number; sitesPct?: number; tenantsPct?: number };
-
   atLimit?: { agents?: boolean; sites?: boolean; tenants?: boolean };
-
   error?: string;
 };
 
 function moneyEUR(cents?: number | null) {
-  if (!cents || cents <= 0) return "0€";
+  if (cents === null || cents === undefined) return "—";
+  if (cents <= 0) return "0€";
   const euros = cents / 100;
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: euros % 1 === 0 ? 0 : 2,
-  }).format(euros);
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(euros);
 }
 
 function safePct(v: any) {
   const n = Number(v);
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(100, Math.round(n)));
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0;
 }
 
 function atLimitList(atLimit?: BillingUsageResponse["atLimit"]) {
   if (!atLimit) return [];
   const out: string[] = [];
-  if (atLimit.agents) out.push("agents");
-  if (atLimit.sites) out.push("sites");
-  if (atLimit.tenants) out.push("tenants");
+  if (atLimit.agents) out.push("Agents");
+  if (atLimit.sites) out.push("Sites");
+  if (atLimit.tenants) out.push("Tenants");
   return out;
 }
 
-function featureLabel(key: string) {
-  // tu peux enrichir au fur et à mesure
-  const map: Record<string, string> = {
-    vacations: "Planning & vacations",
-    incidents: "Gestion des incidents",
-    reporting: "Reporting & exports",
-    multiTenant: "Multi-sociétés (multi-tenant)",
-  };
-  return map[key] ?? key;
+const CATALOG_PLANS = [
+  { id: "free", name: "Free", priceMonthlyCents: 0, blurb: "Idéal pour tester le flux opérationnel.", highlight: false, bullets: ["10 Vacations / mois", "Incidents illimités", "Support communauté"] },
+  { id: "starter", name: "Starter", priceMonthlyCents: 1900, blurb: "Pour les petites équipes en croissance.", highlight: false, bullets: ["Reporting PDF", "Quotas étendus", "Support par email"] },
+  { id: "pro", name: "Pro", priceMonthlyCents: 4900, blurb: "La puissance complète pour votre société.", highlight: true, bullets: ["Analytics avancés", "Export Excel / CSV", "Support prioritaire 24/7"] },
+  { id: "growth", name: "Growth", priceMonthlyCents: 9900, blurb: "Scalabilité maximale et multi-tenant.", highlight: false, bullets: ["Multi-sociétés", "API Access", "Accompagnement dédié"] },
+];
+
+type CatalogPlanId = "free" | "starter" | "pro" | "growth";
+
+const PLAN_RANK: Record<CatalogPlanId, number> = {
+  free: 0,
+  starter: 1,
+  pro: 2,
+  growth: 3,
+};
+
+function normalizeCatalogPlanId(planId?: string | null): CatalogPlanId {
+  const value = String(planId ?? "free").toLowerCase();
+  return value === "starter" || value === "pro" || value === "growth"
+    ? value
+    : "free";
 }
 
-const CATALOG_PLANS = [
+function planAllows(currentPlanId: CatalogPlanId, minPlanId: CatalogPlanId) {
+  return PLAN_RANK[currentPlanId] >= PLAN_RANK[minPlanId];
+}
+
+const ADDON_OFFERS = [
   {
-    id: "free",
-    name: "Free",
-    priceMonthlyCents: 0,
-    blurb: "Pour démarrer et valider le flux.",
-    highlight: false,
-    bullets: ["Vacations", "Incidents", "Quotas de base"],
+    id: "agents-pack",
+    title: "+5 agents",
+    price: "5 EUR / mois",
+    detail: "Renfort ponctuel pour evenement, remplacement ou saison haute.",
   },
   {
-    id: "starter",
-    name: "Starter",
-    priceMonthlyCents: 1900,
-    blurb: "Pour une petite équipe opérationnelle.",
-    highlight: false,
-    bullets: ["Plus d’agents & sites", "Reporting", "Support standard"],
+    id: "sites-pack",
+    title: "+2 sites",
+    price: "3 EUR / mois",
+    detail: "Ajouter quelques sites client sans changer immediatement de plan.",
   },
   {
-    id: "pro",
-    name: "Pro",
-    priceMonthlyCents: 4900,
-    blurb: "Le plan recommandé pour la majorité des sociétés.",
-    highlight: true,
-    bullets: ["Reporting avancé", "Plus de quotas", "Priorité support"],
+    id: "support-pack",
+    title: "Support prioritaire",
+    price: "Sur devis",
+    detail: "Accompagnement exploitation pour les agences en forte croissance.",
+  },
+];
+
+const FEATURE_GATES: Array<{
+  label: string;
+  detail: string;
+  minPlan: CatalogPlanId;
+  href?: string;
+}> = [
+  {
+    label: "Exports pre-paie CSV / Excel",
+    detail: "Fichiers exploitables par le cabinet de paie.",
+    minPlan: "pro",
+    href: "/dashboard/prepaie",
   },
   {
-    id: "growth",
-    name: "Growth",
-    priceMonthlyCents: 9900,
-    blurb: "Pour scaler avec multi-tenant & volume.",
-    highlight: false,
-    bullets: ["Multi-tenant", "Gros volumes", "Accompagnement"],
+    label: "Analytics avancees",
+    detail: "Pilotage des volumes, tendances et alertes d'exploitation.",
+    minPlan: "pro",
+    href: "/dashboard",
+  },
+  {
+    label: "Multi-societes / filiales",
+    detail: "Separations operationnelles pour agences regionales.",
+    minPlan: "growth",
+    href: "/platform",
+  },
+  {
+    label: "Support prioritaire",
+    detail: "Canal accelere pour incidents bloquants en production.",
+    minPlan: "pro",
   },
 ];
 
@@ -153,394 +161,421 @@ export default function BillingPage() {
   const [err, setErr] = useState<string | null>(null);
 
   async function load() {
-    setLoading(true);
-    setErr(null);
+    setLoading(true); setErr(null);
     try {
       const res = await apiFetch<BillingUsageResponse>("/api/billing/usage");
-      if (!res?.ok) {
-        setBilling(null);
-        setErr(res?.error ?? "Impossible de charger les informations d’abonnement.");
-        return;
-      }
+      if (!res?.ok) { setBilling(null); setErr(res?.error ?? "Erreur de chargement."); return; }
       setBilling(res);
-    } catch (e: any) {
-      setBilling(null);
-      setErr(e?.message ?? "Erreur inconnue.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { setBilling(null); setErr(e?.message ?? "Erreur inconnue."); } finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { load(); }, []);
 
-  const usedAgents = billing?.usage?.agents ?? 0;
-  const usedSites = billing?.usage?.sites ?? 0;
-  const usedTenants = billing?.usage?.activeTenants ?? billing?.usage?.tenants ?? 0;
+  const { usedAgents, usedSites, usedTenants, limitAgents, limitSites, limitTenants, pctAgents, pctSites, pctTenants } = useMemo(() => ({
+    usedAgents: billing?.usage?.agents ?? 0,
+    usedSites: billing?.usage?.sites ?? 0,
+    usedTenants: billing?.usage?.activeTenants ?? billing?.usage?.tenants ?? 0,
+    limitAgents: billing?.limits?.agents ?? 0,
+    limitSites: billing?.limits?.sites ?? 0,
+    limitTenants: billing?.limits?.tenants ?? 0,
+    pctAgents: safePct(billing?.progress?.agentsPct),
+    pctSites: safePct(billing?.progress?.sitesPct),
+    pctTenants: safePct(billing?.progress?.tenantsPct),
+  }), [billing]);
 
-  const limitAgents = billing?.limits?.agents ?? 0;
-  const limitSites = billing?.limits?.sites ?? 0;
-  const limitTenants = billing?.limits?.tenants ?? 0;
-
-  const pctAgents = safePct(billing?.progress?.agentsPct);
-  const pctSites = safePct(billing?.progress?.sitesPct);
-  const pctTenants = safePct(billing?.progress?.tenantsPct);
-
-  const planName = billing?.plan?.name ?? billing?.subscription?.planId ?? "—";
   const planId = billing?.plan?.id ?? billing?.subscription?.planId ?? "free";
-  const price = billing?.plan?.priceMonthlyCents ?? null;
-
+  const normalizedPlanId = normalizeCatalogPlanId(planId);
   const limitsReached = useMemo(() => atLimitList(billing?.atLimit), [billing?.atLimit]);
-  const hasLimitsReached = limitsReached.length > 0;
-
-  const features = useMemo(() => {
-    const f = billing?.plan?.features ?? {};
-    return Object.entries(f)
-      .filter(([, v]) => Boolean(v))
-      .map(([k]) => k);
-  }, [billing?.plan?.features]);
-
-  const multiTenantEnabled = Boolean(billing?.subscription?.addons?.multiTenant);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="inline-flex size-9 items-center justify-center rounded-2xl border bg-card">
-              <CreditCard className="h-4 w-4" />
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight">Abonnement</h1>
-            <Badge variant={planId === "free" ? "outline" : "default"} className="ml-1">
-              {planName}
-            </Badge>
-            {hasLimitsReached ? (
-              <Badge variant="destructive" className="ml-1">
-                Quota atteint
-              </Badge>
-            ) : null}
+    <div className="space-y-8 animate-in fade-in duration-700 pb-10 w-full max-w-[1400px] mx-auto">
+
+      {/* ===================== HEADER ===================== */}
+      <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between bg-card p-6 md:p-8 rounded-[2rem] border shadow-sm ring-1 ring-black/5 bg-gradient-to-br from-card to-muted/20 relative overflow-hidden">
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex items-center gap-5">
+          <div className="bg-primary shadow-xl shadow-primary/20 p-4 rounded-2xl">
+            <CreditCard className="h-7 w-7 text-primary-foreground" />
           </div>
-          <p className="text-sm text-muted-foreground">
-            Vue en temps réel : plan, quotas, usage, et options (multi-tenant, add-ons).
-          </p>
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <Badge variant="outline" className="bg-background text-[10px] font-black uppercase tracking-widest py-1 px-3 rounded-full border-muted-foreground/30">
+                Gestion financière
+              </Badge>
+              {limitsReached.length > 0 && <Badge variant="destructive" className="animate-pulse">Quota atteint</Badge>}
+            </div>
+            <h1 className="text-3xl font-black tracking-tighter text-foreground">Abonnement</h1>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={load} disabled={loading} className="gap-2">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+        <div className="flex flex-wrap items-center gap-3 relative z-10">
+          <Button variant="outline" onClick={load} disabled={loading} className="h-11 rounded-xl px-5 font-bold border-muted-foreground/20 hover:bg-muted transition-all">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Actualiser
           </Button>
-
-          <Button asChild className="gap-2">
-            <Link href="#plans">
-              Voir les plans
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+          <Button asChild className="h-11 rounded-xl px-6 font-black shadow-lg shadow-primary/20 hover:translate-y-[-2px] active:scale-95 transition-all">
+            <Link href="#plans">Upgrade <ArrowRight className="ml-2 h-4 w-4" /></Link>
           </Button>
         </div>
       </div>
 
-      {/* Error */}
-      {err ? (
-        <Card className="border-destructive/30 bg-destructive/5">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-destructive" />
-              Impossible de charger l’abonnement
-            </CardTitle>
-            <CardDescription className="text-destructive">{err}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-muted-foreground">
-              Astuce : vérifie que tu es bien connecté et que <code>/api/billing/usage</code> répond côté serveur.
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
+      {/* ERROR DISPLAY */}
+      {err && (
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 flex items-center gap-4 animate-in slide-in-from-top-4">
+          <ShieldAlert className="h-6 w-6 text-destructive shrink-0" />
+          <p className="text-sm font-bold text-destructive leading-tight">{err}</p>
+        </div>
+      )}
 
-      {/* Top grid */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Plan card */}
-        <Card className="rounded-3xl">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <BadgeCheck className="h-4 w-4" />
-              Plan actif
-            </CardTitle>
-            <CardDescription>
-              Statut :{" "}
-              <span className="font-medium text-foreground">
-                {billing?.subscription?.status ?? (loading ? "…" : "—")}
-              </span>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      {/* ===================== TOP GRID: PLAN & QUOTAS ===================== */}
+      <div className="grid gap-6 lg:grid-cols-3 items-start">
+
+        {/* PLAN ACTIF CARD */}
+        <Card className="rounded-[2rem] border-none shadow-xl shadow-black/[0.02] bg-background ring-1 ring-black/5 overflow-hidden lg:col-span-1">
+          <div className="p-6 md:p-8 bg-muted/20 border-b flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-background p-2 rounded-xl shadow-sm"><BadgeCheck className="h-5 w-5 text-primary" /></div>
+              <h2 className="text-lg font-black tracking-tight text-foreground">Plan Actif</h2>
+            </div>
+            <Badge className="bg-primary/10 text-primary border-transparent font-bold capitalize">{billing?.subscription?.status || "—"}</Badge>
+          </div>
+          <CardContent className="p-6 md:p-8 space-y-6">
             {loading && !billing ? (
-              <div className="space-y-2">
-                <Skeleton className="h-6 w-[65%]" />
-                <Skeleton className="h-4 w-[45%]" />
-                <Skeleton className="h-10 w-full rounded-xl" />
+              <div className="space-y-4">
+                <Skeleton className="h-12 w-full rounded-xl" />
+                <Skeleton className="h-8 w-2/3 rounded-xl" />
               </div>
             ) : (
               <>
-                <div className="flex items-baseline justify-between">
+                <div className="flex items-end justify-between">
                   <div>
-                    <div className="text-sm text-muted-foreground">Plan</div>
-                    <div className="text-lg font-semibold">{planName}</div>
+                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Offre</p>
+                    <p className="text-3xl font-black tracking-tighter text-foreground">{billing?.plan?.name || "Free"}</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm text-muted-foreground">Mensuel</div>
-                    <div className="text-lg font-semibold">{moneyEUR(price)}</div>
+                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Coût</p>
+                    <p className="text-2xl font-bold text-primary">{moneyEUR(billing?.plan?.priceMonthlyCents)}<span className="text-xs text-muted-foreground ml-1">/mo</span></p>
                   </div>
                 </div>
 
-                <Separator />
+                <Separator className="opacity-50" />
 
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Options</div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant={multiTenantEnabled ? "default" : "outline"} className="gap-2">
-                      <Building2 className="h-3.5 w-3.5" />
-                      Multi-tenant {multiTenantEnabled ? "activé" : "non activé"}
-                    </Badge>
-
-                    {Number(billing?.subscription?.addons?.extraAgents ?? 0) > 0 ? (
-                      <Badge variant="outline">+{billing?.subscription?.addons?.extraAgents} agents</Badge>
-                    ) : null}
-
-                    {Number(billing?.subscription?.addons?.extraSites ?? 0) > 0 ? (
-                      <Badge variant="outline">+{billing?.subscription?.addons?.extraSites} sites</Badge>
-                    ) : null}
-
-                    {Number(billing?.subscription?.addons?.extraTenants ?? 0) > 0 ? (
-                      <Badge variant="outline">+{billing?.subscription?.addons?.extraTenants} tenants</Badge>
-                    ) : null}
-                  </div>
-                </div>
-
-                {features.length ? (
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium">Fonctionnalités incluses</div>
-                    <div className="space-y-1">
-                      {features.slice(0, 6).map((k) => (
-                        <div key={k} className="flex items-center gap-2 text-sm">
-                          <Check className="h-4 w-4" />
-                          <span>{featureLabel(k)}</span>
+                <div className="space-y-4">
+                   <div className="flex items-center gap-3 text-sm font-bold">
+                      <Zap className="h-4 w-4 text-amber-500 fill-amber-500" />
+                      <span>Inclus dans votre plan :</span>
+                   </div>
+                   <div className="grid grid-cols-1 gap-2">
+                      {Object.entries(billing?.plan?.features || {}).filter(([, v]) => v).slice(0, 4).map(([k]) => (
+                        <div key={k} className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/30 p-2 rounded-lg border border-border/50">
+                          <Check className="h-3.5 w-3.5 text-primary" /> {k.replace(/([A-Z])/g, ' $1').trim()}
                         </div>
                       ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    Fonctionnalités : (chargement / non défini)
-                  </div>
-                )}
+                   </div>
+                </div>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Quotas card */}
-        <Card className="rounded-3xl lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="h-4 w-4" />
-              Quotas & usage
-            </CardTitle>
-            <CardDescription>
-              Lecture simple et exploitable (avec taux d’utilisation).
-            </CardDescription>
-          </CardHeader>
+        {/* USAGE & QUOTAS CARD */}
+        <Card className="rounded-[2.5rem] border-none shadow-xl shadow-black/[0.03] bg-background ring-1 ring-black/5 overflow-hidden lg:col-span-2 h-full">
+          <div className="p-6 md:p-8 bg-muted/20 border-b flex items-center gap-3">
+             <div className="bg-background p-2 rounded-xl shadow-sm"><Sparkles className="h-5 w-5 text-primary" /></div>
+             <h2 className="text-lg font-black tracking-tight text-foreground">Utilisation des ressources</h2>
+          </div>
+          <CardContent className="p-6 md:p-8 grid gap-8 md:grid-cols-2">
 
-          <CardContent className="space-y-5">
-            {/* Agents */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Users className="h-4 w-4" />
-                  Agents
-                </div>
-                <div className="text-sm">
-                  <span className="font-semibold">{usedAgents}</span>{" "}
-                  <span className="text-muted-foreground">/ {limitAgents}</span>
-                </div>
-              </div>
-              <Progress value={pctAgents} />
-              <div className="text-xs text-muted-foreground">{pctAgents}% utilisé</div>
-            </div>
-
-            {/* Sites */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <MapPin className="h-4 w-4" />
-                  Sites
-                </div>
-                <div className="text-sm">
-                  <span className="font-semibold">{usedSites}</span>{" "}
-                  <span className="text-muted-foreground">/ {limitSites}</span>
-                </div>
-              </div>
-              <Progress value={pctSites} />
-              <div className="text-xs text-muted-foreground">{pctSites}% utilisé</div>
-            </div>
-
-            {/* Tenants */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Building2 className="h-4 w-4" />
-                  Tenants (multi-sociétés)
-                </div>
-                <div className="text-sm">
-                  <span className="font-semibold">{usedTenants}</span>{" "}
-                  <span className="text-muted-foreground">/ {limitTenants}</span>
-                </div>
-              </div>
-              <Progress value={pctTenants} />
-              <div className="text-xs text-muted-foreground">{pctTenants}% utilisé</div>
-            </div>
-
-            {hasLimitsReached ? (
-              <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
-                <div className="flex items-start gap-3">
-                  <ShieldAlert className="h-4 w-4 text-destructive mt-0.5" />
-                  <div className="space-y-1">
-                    <div className="text-sm font-semibold text-destructive">
-                      Quota atteint : {limitsReached.join(", ")}
+            <div className="space-y-6">
+              {[
+                { label: "Agents", used: usedAgents, limit: limitAgents, pct: pctAgents, icon: Users },
+                { label: "Sites", used: usedSites, limit: limitSites, pct: pctSites, icon: MapPin },
+                { label: "Tenants", used: usedTenants, limit: limitTenants, pct: pctTenants, icon: Building2 },
+              ].map((q) => (
+                <div key={q.label} className="space-y-3 p-4 rounded-2xl bg-muted/10 border border-border/40 hover:border-primary/20 transition-all group">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <q.icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                      <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">{q.label}</span>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      Pour débloquer : passer sur un plan supérieur ou ajouter des options.
-                    </div>
-                    <div className="pt-2 flex flex-wrap gap-2">
-                      <Button asChild size="sm">
-                        <Link href="#plans">
-                          Voir les plans <ArrowRight className="ml-2 h-4 w-4" />
-                        </Link>
-                      </Button>
-                      <Button asChild size="sm" variant="outline">
-                        <Link href="/dashboard">
-                          Retour dashboard
-                        </Link>
-                      </Button>
-                    </div>
+                    <Badge variant="outline" className="font-mono text-[10px] bg-background">{q.pct}%</Badge>
+                  </div>
+                  <Progress value={q.pct} className="h-2 bg-muted ring-1 ring-black/5" />
+                  <div className="flex justify-between items-baseline">
+                    <p className="text-sm font-bold text-foreground">{q.used} <span className="text-muted-foreground font-medium text-xs">sur {q.limit}</span></p>
                   </div>
                 </div>
-              </div>
-            ) : null}
+              ))}
+            </div>
+
+            <div className="flex flex-col justify-center gap-4">
+              {limitsReached.length > 0 ? (
+                <div className="p-6 rounded-3xl bg-destructive/10 border border-destructive/20 relative overflow-hidden group">
+                  <ShieldAlert className="h-12 w-12 text-destructive absolute -bottom-2 -right-2 opacity-10 group-hover:scale-110 transition-transform" />
+                  <p className="text-sm font-black text-destructive uppercase tracking-widest mb-2">Attention</p>
+                  <p className="text-sm font-bold text-destructive/80 leading-relaxed italic">
+                    Limite atteinte sur : {limitsReached.join(", ")}. Vos collaborateurs ne pourront plus ajouter de nouvelles données.
+                  </p>
+                  <Button asChild size="sm" variant="destructive" className="mt-4 rounded-lg font-black uppercase text-[10px] tracking-widest h-8 px-4">
+                    <Link href="#plans">Débloquer</Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="p-6 rounded-3xl bg-green-500/5 border border-green-500/10 text-center">
+                   <ShieldCheck className="h-10 w-10 text-green-500 mx-auto mb-3 opacity-60" />
+                   <p className="text-sm font-bold text-green-700">Tous vos systèmes sont opérationnels</p>
+                   <p className="text-xs text-green-600/70 mt-1 font-medium">Vous disposez de suffisamment de marge sur vos quotas.</p>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Plans */}
-      <Card id="plans" className="rounded-3xl">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Crown className="h-4 w-4" />
-            Plans (upgrade)
-          </CardTitle>
-          <CardDescription>
-            UX prête : dès que Stripe est branché, on connecte les boutons.
-          </CardDescription>
-        </CardHeader>
+      {/* ===================== CATALOG PLANS ===================== */}
+      <div id="plans" className="pt-8 space-y-6">
+        <div className="text-center space-y-2">
+          <Badge variant="outline" className="rounded-full px-4 border-primary/30 text-primary font-black uppercase text-[10px] tracking-[0.2em]">Tarification</Badge>
+          <h2 className="text-4xl font-black tracking-tighter">Évoluez avec votre activité</h2>
+          <p className="text-muted-foreground font-medium max-w-lg mx-auto">Changez de plan à tout moment. Les fonctionnalités sont débloquées instantanément.</p>
+        </div>
 
-        <CardContent>
-          <div className="grid gap-4 lg:grid-cols-4">
-            {CATALOG_PLANS.map((p) => {
-              const isCurrent = String(planId).toLowerCase() === p.id;
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 pt-6">
+          {CATALOG_PLANS.map((p) => {
+            const isCurrent = normalizedPlanId === p.id;
+            return (
+              <div key={p.id} className={cn(
+                "relative group flex flex-col p-6 rounded-[2rem] border transition-all duration-300",
+                p.highlight ? "bg-primary text-primary-foreground shadow-2xl shadow-primary/20 border-primary scale-105 z-10" : "bg-card hover:border-primary/50 shadow-sm",
+                isCurrent && "ring-2 ring-primary ring-offset-4 ring-offset-background"
+              )}>
+                {p.highlight && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-foreground text-background px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Recommandé</div>}
+
+                <div className="mb-6 flex justify-between items-start">
+                   <div>
+                    <h3 className="text-lg font-black tracking-tight">{p.name}</h3>
+                    <div className="flex items-baseline mt-1">
+                      <span className="text-3xl font-black tracking-tighter">{moneyEUR(p.priceMonthlyCents)}</span>
+                      <span className={cn("text-xs font-bold ml-1", p.highlight ? "text-primary-foreground/70" : "text-muted-foreground")}>/mois</span>
+                    </div>
+                   </div>
+                   {isCurrent && <Badge className="bg-foreground text-background text-[9px] font-black border-transparent">ACTUEL</Badge>}
+                </div>
+
+                <p className={cn("text-sm font-medium leading-relaxed mb-6", p.highlight ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                  {p.blurb}
+                </p>
+
+                <div className="space-y-3 mb-8 flex-1">
+                  {p.bullets.map((b) => (
+                    <div key={b} className="flex items-center gap-3 text-xs font-bold uppercase tracking-tight">
+                      <Check className={cn("h-4 w-4 shrink-0", p.highlight ? "text-primary-foreground" : "text-primary")} />
+                      <span className="opacity-90">{b}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <Button
+                  className={cn("w-full h-12 rounded-xl font-black shadow-lg transition-all active:scale-95",
+                    p.highlight ? "bg-background text-primary hover:bg-background/90 shadow-black/10" : "bg-primary"
+                  )}
+                  disabled={isCurrent}
+                  onClick={() => alert("Connexion Stripe Checkout en cours...")}
+                >
+                  {isCurrent ? "Votre plan" : `Passer au plan ${p.name}`}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+
+      {/* ===================== MANAGEMENT LAYER ===================== */}
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <Card className="rounded-[2rem] border-none shadow-xl shadow-black/[0.02] bg-background ring-1 ring-black/5 overflow-hidden">
+          <CardHeader className="border-b bg-muted/20 p-6 md:p-8">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-background p-2 shadow-sm">
+                  <FileClock className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-black tracking-tight">
+                    Historique des factures
+                  </CardTitle>
+                  <CardDescription className="font-medium">
+                    Pret pour Stripe Billing: recus, statuts et PDF centralises.
+                  </CardDescription>
+                </div>
+              </div>
+              <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+                A brancher
+              </Badge>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-6 md:p-8">
+            <div className="overflow-hidden rounded-2xl border border-dashed bg-muted/10">
+              <div className="grid grid-cols-[1fr_0.8fr_0.8fr_auto] gap-3 border-b bg-muted/30 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                <span>Periode</span>
+                <span>Montant</span>
+                <span>Statut</span>
+                <span className="text-right">PDF</span>
+              </div>
+              <div className="grid grid-cols-[1fr_0.8fr_0.8fr_auto] items-center gap-3 px-4 py-5 text-sm">
+                <div>
+                  <p className="font-black text-foreground">Aucune facture synchronisee</p>
+                  <p className="mt-1 text-xs font-medium text-muted-foreground">
+                    Les factures apparaitront ici apres connexion du compte Stripe.
+                  </p>
+                </div>
+                <span className="font-bold text-muted-foreground">--</span>
+                <Badge variant="secondary" className="w-fit rounded-full text-[10px] font-black uppercase">
+                  En attente
+                </Badge>
+                <Button variant="outline" size="sm" disabled className="rounded-xl font-bold">
+                  <Download className="mr-2 h-4 w-4" />
+                  PDF
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-[2rem] border-none shadow-xl shadow-black/[0.02] bg-background ring-1 ring-black/5 overflow-hidden">
+          <CardHeader className="border-b bg-muted/20 p-6 md:p-8">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-background p-2 shadow-sm">
+                <Lock className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-black tracking-tight">
+                  Fonctions selon forfait
+                </CardTitle>
+                <CardDescription className="font-medium">
+                  Ce que l'agence peut utiliser aujourd'hui, sans surprise.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-3 p-6 md:p-8">
+            {FEATURE_GATES.map((feature) => {
+              const unlocked = planAllows(normalizedPlanId, feature.minPlan);
+
               return (
                 <div
-                  key={p.id}
-                  className={[
-                    "rounded-3xl border bg-card p-5",
-                    p.highlight ? "ring-1 ring-primary" : "",
-                  ].join(" ")}
+                  key={feature.label}
+                  className={cn(
+                    "flex flex-col gap-3 rounded-2xl border p-4 transition-all sm:flex-row sm:items-center sm:justify-between",
+                    unlocked
+                      ? "border-emerald-500/20 bg-emerald-500/5"
+                      : "border-muted-foreground/10 bg-muted/10"
+                  )}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm text-muted-foreground">{p.name}</div>
-                      <div className="text-2xl font-semibold">{moneyEUR(p.priceMonthlyCents)}</div>
-                      <div className="text-xs text-muted-foreground">/ mois</div>
-                    </div>
-                    {isCurrent ? <Badge>Actuel</Badge> : p.highlight ? <Badge variant="secondary">Recommandé</Badge> : null}
-                  </div>
-
-                  <div className="mt-3 text-sm text-muted-foreground">{p.blurb}</div>
-
-                  <div className="mt-4 space-y-2">
-                    {p.bullets.map((b) => (
-                      <div key={b} className="flex items-center gap-2 text-sm">
-                        <Check className="h-4 w-4" />
-                        <span>{b}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-5 flex flex-col gap-2">
-                    {isCurrent ? (
-                      <Button variant="outline" disabled>
-                        Plan actuel
-                      </Button>
-                    ) : (
-                      <Button
-                        className="gap-2"
-                        // ⚠️ prêt pour Stripe : brancher /api/billing/checkout
-                        onClick={() => {
-                          alert(
-                            "Prochaine étape : brancher Stripe Checkout. Je te prépare l’API /api/billing/checkout + webhook."
-                          );
-                        }}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-black text-foreground">{feature.label}</p>
+                      <Badge
+                        variant={unlocked ? "default" : "secondary"}
+                        className={cn(
+                          "rounded-full text-[9px] font-black uppercase tracking-widest",
+                          unlocked && "bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15"
+                        )}
                       >
-                        Choisir {p.name}
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                    )}
-
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        alert(
-                          "Prochaine étape : page d’info plan / comparatif détaillé."
-                        );
-                      }}
-                    >
-                      Détails
-                    </Button>
+                        {unlocked ? "Inclus" : `Plan ${feature.minPlan}`}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-xs font-medium leading-relaxed text-muted-foreground">
+                      {feature.detail}
+                    </p>
                   </div>
+
+                  {unlocked && feature.href ? (
+                    <Button asChild variant="outline" size="sm" className="rounded-xl font-bold shrink-0">
+                      <Link href={feature.href}>Ouvrir</Link>
+                    </Button>
+                  ) : unlocked ? (
+                    <Button variant="outline" size="sm" disabled className="rounded-xl font-bold shrink-0">
+                      Actif
+                    </Button>
+                  ) : (
+                    <Button asChild variant="outline" size="sm" className="rounded-xl font-bold shrink-0">
+                      <Link href="#plans">Debloquer</Link>
+                    </Button>
+                  )}
                 </div>
               );
             })}
-          </div>
+          </CardContent>
+        </Card>
+      </div>
 
-          <Separator className="my-6" />
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <div className="text-sm font-semibold">Besoin d’un plan sur-mesure ?</div>
-              <div className="text-sm text-muted-foreground">
-                Multi-sociétés, gros volumes, intégrations paie / reporting avancé, SLA…
+      <Card className="rounded-[2rem] border-none shadow-xl shadow-black/[0.02] bg-background ring-1 ring-black/5 overflow-hidden">
+        <CardHeader className="border-b bg-muted/20 p-6 md:p-8">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-background p-2 shadow-sm">
+                <PackagePlus className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-black tracking-tight">
+                  Add-ons a la carte
+                </CardTitle>
+                <CardDescription className="font-medium">
+                  Pour absorber un pic d'activite sans changer toute l'offre.
+                </CardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => alert("À brancher: lien mail/CRM/support.")}>
-                Contacter le support
-              </Button>
-              <Button onClick={() => alert("À brancher: prise de RDV / Calendly / formulaire.")}>
-                Demander une démo
+            <Badge variant="outline" className="w-fit rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+              Stripe requis
+            </Badge>
+          </div>
+        </CardHeader>
+
+        <CardContent className="grid gap-4 p-6 md:grid-cols-3 md:p-8">
+          {ADDON_OFFERS.map((addon) => (
+            <div key={addon.id} className="flex h-full flex-col rounded-2xl border bg-muted/10 p-5">
+              <div className="mb-5 flex-1">
+                <p className="text-lg font-black tracking-tight text-foreground">{addon.title}</p>
+                <p className="mt-1 text-sm font-black text-primary">{addon.price}</p>
+                <p className="mt-3 text-xs font-medium leading-relaxed text-muted-foreground">
+                  {addon.detail}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                className="rounded-xl font-bold"
+                onClick={() =>
+                  alert("Les add-ons seront actives via Stripe Billing apres configuration du paiement.")
+                }
+              >
+                Preparer l'option
               </Button>
             </div>
-          </div>
+          ))}
         </CardContent>
       </Card>
-
-      {/* Footer helper */}
-      <div className="text-xs text-muted-foreground">
-        Conseil : si tu veux un rendu encore plus “premium”, je te fais la version avec “cards animées”, comparatif en tableau,
-        et un vrai flux Checkout Stripe + webhooks + mise à jour Firestore <code>subscriptions</code>.
-      </div>
+      {/* ===================== FOOTER / CUSTOM ===================== */}
+      <Card className="rounded-[2rem] border-dashed bg-muted/10 p-8 border-2">
+         <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+            <div className="space-y-2 text-center md:text-left">
+               <div className="flex items-center justify-center md:justify-start gap-2">
+               <Headset className="h-5 w-5 text-primary" />
+                  <h3 className="text-xl font-black tracking-tight uppercase">Besoin d'un plan sur-mesure ?</h3>
+               </div>
+               <p className="text-sm font-medium text-muted-foreground max-w-md">
+                  Pour les organisations multi-sociétés avec des volumes importants ou des besoins SLA spécifiques.
+               </p>
+            </div>
+            <div className="flex items-center gap-3">
+               <Button variant="outline" className="rounded-xl h-12 px-6 font-bold">Contacter le support</Button>
+               <Button className="rounded-xl h-12 px-6 font-black shadow-lg shadow-primary/20">Demander une démo</Button>
+            </div>
+         </div>
+      </Card>
     </div>
   );
 }

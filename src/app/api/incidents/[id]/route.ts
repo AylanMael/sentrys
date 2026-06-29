@@ -1,7 +1,7 @@
-// src/app/api/incidents/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { z } from "zod";
 
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import { logActivity } from "@/lib/activity/logger";
@@ -10,15 +10,15 @@ export const runtime = "nodejs";
 
 /* ================= helpers ================= */
 
-function json(status: number, body: any) {
+function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
 }
 
-function bad(msg: string, extra?: any) {
+function bad(msg: string, extra?: Record<string, unknown>) {
   return json(400, { ok: false, error: msg, ...extra });
 }
 
-function forbidden(msg = "Forbidden", extra?: any) {
+function forbidden(msg = "Forbidden", extra?: Record<string, unknown>) {
   return json(403, { ok: false, error: msg, ...extra });
 }
 
@@ -26,16 +26,21 @@ function notFound(msg = "Not found") {
   return json(404, { ok: false, error: msg });
 }
 
-function serverError(e: any, tag: string) {
+function serverError(e: unknown, tag: string) {
   console.error(`[${tag}]`, e);
-  return json(500, { ok: false, error: "Internal error", details: e?.message ?? String(e) });
+  return json(500, {
+    ok: false,
+    error: "Internal error",
+    details: e instanceof Error ? e.message : String(e),
+  });
 }
 
-function toIso(ts: any) {
-  return ts && typeof ts.toDate === "function" ? ts.toDate().toISOString() : null;
+function toIso(ts: unknown) {
+  const t = ts as { toDate?: () => Date } | null | undefined;
+  return t && typeof t.toDate === "function" ? t.toDate().toISOString() : null;
 }
 
-function normalizeText(v: any) {
+function normalizeText(v: unknown) {
   return String(v ?? "").trim();
 }
 
@@ -50,13 +55,13 @@ function uniq(arr: string[]) {
 type IncidentStatus = "open" | "investigating" | "resolved" | "closed";
 type IncidentSeverity = "low" | "medium" | "high" | "critical";
 
-function asStatus(v: any): IncidentStatus {
+function asStatus(v: unknown): IncidentStatus {
   const s = String(v ?? "").toLowerCase().trim();
   if (s === "open" || s === "investigating" || s === "resolved" || s === "closed") return s;
   return "open";
 }
 
-function asSeverity(v: any): IncidentSeverity {
+function asSeverity(v: unknown): IncidentSeverity {
   const s = String(v ?? "").toLowerCase().trim();
   if (s === "low" || s === "medium" || s === "high" || s === "critical") return s;
   return "medium";
@@ -87,36 +92,36 @@ function buildSearch(input: {
   return parts.join(" ");
 }
 
-function pickIncident(d: any, id: string) {
+function pickIncident(d: Record<string, unknown>, id: string) {
   return {
     id,
-    tenantId: d.tenantId,
-    title: d.title ?? null,
-    description: d.description ?? null,
+    tenantId: d.tenantId as string,
+    title: d.title as string | null ?? null,
+    description: d.description as string | null ?? null,
     status: asStatus(d.status),
     severity: asSeverity(d.severity),
-    siteId: d.siteId ?? null,
-    vacationId: d.vacationId ?? null,
-    agentId: d.agentId ?? null,
-    tags: Array.isArray(d.tags) ? d.tags.filter((x: any) => typeof x === "string") : [],
+    siteId: d.siteId as string | null ?? null,
+    vacationId: d.vacationId as string | null ?? null,
+    agentId: d.agentId as string | null ?? null,
+    tags: Array.isArray(d.tags) ? (d.tags.filter((x) => typeof x === "string") as string[]) : [],
     isDeleted: typeof d.isDeleted === "boolean" ? d.isDeleted : false,
-    search: d.search ?? null,
-    createdBy: d.createdBy ?? null,
-    updatedBy: d.updatedBy ?? null,
+    search: d.search as string | null ?? null,
+    createdBy: d.createdBy as string | null ?? null,
+    updatedBy: d.updatedBy as string | null ?? null,
     createdAtIso: toIso(d.createdAt),
     updatedAtIso: toIso(d.updatedAt),
   };
 }
 
-function diffKeys(prev: any, patch: any): string[] {
-  const keys = Object.keys(patch ?? {});
+function diffKeys(prev: Record<string, unknown>, patch: Record<string, unknown>): string[] {
+  const keys = Object.keys(patch);
   const out: string[] = [];
   for (const k of keys) {
     // ignore metadata keys in "changes"
     if (k === "updatedAt" || k === "updatedBy" || k === "search") continue;
 
-    const a = (prev as any)?.[k];
-    const b = (patch as any)?.[k];
+    const a = prev[k];
+    const b = patch[k];
 
     // basic deep-ish comparison for arrays
     if (Array.isArray(a) || Array.isArray(b)) {
@@ -139,10 +144,10 @@ async function loadIncidentOr404(incidentId: string, tenantId: string) {
 
   if (!snap.exists) return { ok: false as const, res: notFound("Incident not found") };
 
-  const data = snap.data() as any;
+  const data = snap.data() as Record<string, unknown> | undefined;
   if (data?.tenantId !== tenantId) return { ok: false as const, res: notFound("Incident not found") };
 
-  return { ok: true as const, ref, snap, data };
+  return { ok: true as const, ref, snap, data: data! };
 }
 
 /* ================= GET ================= */
@@ -166,7 +171,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       tenantId: auth.tenantId,
       incident: pickIncident(loaded.data, loaded.snap.id),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return serverError(e, "incidents.[id].GET");
   }
 }
@@ -186,9 +191,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const incidentId = normalizeText(id);
   if (!incidentId) return bad("Missing incident id");
 
-  let body: any;
+  let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    const raw = await req.json();
+    body = raw as Record<string, unknown>;
   } catch {
     return bad("Invalid JSON body");
   }
@@ -197,10 +203,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const loaded = await loadIncidentOr404(incidentId, auth.tenantId);
     if (!loaded.ok) return loaded.res;
 
-    const prev = loaded.data as any;
+    const prev = loaded.data;
     if (prev?.isDeleted === true) return bad("Cannot update a deleted incident");
 
-    const patch: any = {};
+    const patch: Record<string, unknown> = {};
 
     if (body.title !== undefined) {
       const v = normalizeText(body.title);
@@ -224,9 +230,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (body.tags !== undefined) {
       if (!Array.isArray(body.tags)) return bad("tags must be an array");
       patch.tags = uniq(
-        body.tags
-          .filter((x: any) => typeof x === "string")
-          .map((x: string) => x.trim())
+        (body.tags as unknown[])
+          .filter((x): x is string => typeof x === "string")
+          .map((x) => x.trim())
           .filter(Boolean)
       ).slice(0, 20);
     }
@@ -243,11 +249,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     // ✅ recalcul search
-    const nextTitle = patch.title ?? prev.title ?? "";
-    const nextDesc = patch.description ?? prev.description ?? null;
-    const nextSiteId = patch.siteId ?? prev.siteId ?? null;
-    const nextAgentId = patch.agentId ?? prev.agentId ?? null;
-    const nextVacationId = patch.vacationId ?? prev.vacationId ?? null;
+    const nextTitle = (patch.title as string | undefined) ?? (prev.title as string | undefined) ?? "";
+    const nextDesc = (patch.description as string | null | undefined) ?? (prev.description as string | null | undefined) ?? null;
+    const nextSiteId = (patch.siteId as string | null | undefined) ?? (prev.siteId as string | null | undefined) ?? null;
+    const nextAgentId = (patch.agentId as string | null | undefined) ?? (prev.agentId as string | null | undefined) ?? null;
+    const nextVacationId = (patch.vacationId as string | null | undefined) ?? (prev.vacationId as string | null | undefined) ?? null;
+
     patch.search = buildSearch({
       title: nextTitle,
       description: nextDesc,
@@ -264,7 +271,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await loaded.ref.set(patch, { merge: true });
 
     const updatedSnap = await loaded.ref.get();
-    const data = updatedSnap.data() as any;
+    const data = updatedSnap.data() as Record<string, unknown>;
 
     // ✅ activity log (status-based message)
     const sev = asSeverity(data?.severity);
@@ -279,7 +286,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await logActivity({
       tenantId: auth.tenantId,
       actorUid: auth.uid,
-      actorEmail: (auth as any).email ?? null,
+      actorEmail: auth.email ?? null,
       actorRole: auth.role ?? null,
       action,
       entityType: "incident",
@@ -316,7 +323,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       tenantId: auth.tenantId,
       incident: pickIncident(data, updatedSnap.id),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return serverError(e, "incidents.[id].PATCH");
   }
 }
@@ -337,16 +344,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!incidentId) return bad("Missing incident id");
 
   try {
-    const loaded = await loadIncidentOr404(incidentId, auth.tenantId);
-    if (!loaded.ok) return loaded.res;
-
-    const prev = loaded.data as any;
+    const { ok, res, ref, data: prev } = await loadIncidentOr404(incidentId, auth.tenantId);
+    if (!ok) return res;
 
     if (prev?.isDeleted === true) {
       return json(200, { ok: true, id: incidentId, updated: { isDeleted: true }, noop: true });
     }
 
-    await loaded.ref.set(
+    await ref.set(
       {
         isDeleted: true,
         status: "closed",
@@ -362,7 +367,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await logActivity({
       tenantId: auth.tenantId,
       actorUid: auth.uid,
-      actorEmail: (auth as any).email ?? null,
+      actorEmail: auth.email ?? null,
       actorRole: auth.role ?? null,
       action: "incident.deleted",
       entityType: "incident",
@@ -380,7 +385,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     });
 
     return json(200, { ok: true, id: incidentId, updated: { isDeleted: true } });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return serverError(e, "incidents.[id].DELETE");
   }
 }

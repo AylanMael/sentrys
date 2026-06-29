@@ -7,21 +7,23 @@ export const runtime = "nodejs";
 
 /* ================= helpers ================= */
 
-function json(status: number, body: any) {
+function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
 }
 
-function serverError(e: any, tag: string) {
+function serverError(e: unknown, tag: string) {
   console.error(`[${tag}]`, e);
+  const message = e instanceof Error ? e.message : String(e);
   return json(500, {
     ok: false,
     error: "Internal error",
-    details: e?.message ?? String(e),
+    details: message,
   });
 }
 
-function toIso(ts: any) {
-  return ts && typeof ts.toDate === "function" ? ts.toDate().toISOString() : null;
+function toIso(ts: unknown): string | null {
+  const t = ts as { toDate?: () => Date } | null | undefined;
+  return t && typeof t.toDate === "function" ? t.toDate().toISOString() : null;
 }
 
 function parseLimit(v: string | null, def = 20) {
@@ -30,8 +32,8 @@ function parseLimit(v: string | null, def = 20) {
   return Math.min(100, Math.floor(n));
 }
 
-function normalize(v: any) {
-  return String(v ?? "").trim();
+function normalize(v: string | null): string {
+  return (v ?? "").trim();
 }
 
 /**
@@ -67,7 +69,7 @@ export async function GET(req: NextRequest) {
     if (cursor) {
       const cursorSnap = await adminDb.collection("activity").doc(cursor).get();
       if (cursorSnap.exists) {
-        const d = cursorSnap.data() as any;
+        const d = cursorSnap.data() as Record<string, unknown> | undefined;
         q = q.startAfter(d?.createdAt ?? null, cursorSnap.id);
       }
     }
@@ -75,16 +77,16 @@ export async function GET(req: NextRequest) {
     const snap = await q.limit(limit).get();
 
     const items = snap.docs.map((d) => {
-      const x = d.data() as any;
+      const x = d.data() as Record<string, unknown>;
       return {
         id: d.id,
-        action: x.action ?? null,
-        entityType: x.entityType ?? null,
-        entityId: x.entityId ?? null,
-        message: x.message ?? null,
-        severity: x.severity ?? "info",
-        actorEmail: x.actorEmail ?? null,
-        actorRole: x.actorRole ?? null,
+        action: (x.action as string) ?? null,
+        entityType: (x.entityType as string) ?? null,
+        entityId: (x.entityId as string) ?? null,
+        message: (x.message as string) ?? null,
+        severity: (x.severity as string) ?? "info",
+        actorEmail: (x.actorEmail as string) ?? null,
+        actorRole: (x.actorRole as string) ?? null,
         createdAtIso: toIso(x.createdAt),
       };
     });
@@ -98,7 +100,7 @@ export async function GET(req: NextRequest) {
       nextCursor,
       items,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return serverError(e, "activity.GET");
   }
 }

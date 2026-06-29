@@ -7,21 +7,23 @@ export const runtime = "nodejs";
 
 /* ================= helpers ================= */
 
-function json(status: number, body: any) {
+function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
 }
 
-function serverError(e: any, tag: string) {
+function serverError(e: unknown, tag: string) {
   console.error(`[${tag}]`, e);
+  const message = e instanceof Error ? e.message : String(e);
   return json(500, {
     ok: false,
     error: "Internal error",
-    details: e?.message ?? String(e),
+    details: message,
   });
 }
 
-function toIso(ts: any) {
-  return ts && typeof ts.toDate === "function" ? ts.toDate().toISOString() : null;
+function toIso(ts: unknown): string | null {
+  const t = ts as { toDate?: () => Date } | null | undefined;
+  return t && typeof t.toDate === "function" ? t.toDate().toISOString() : null;
 }
 
 function parseLimit(v: string | null, def = 10) {
@@ -50,23 +52,23 @@ export async function GET(req: NextRequest) {
       .get();
 
     const items = snap.docs.map((d) => {
-      const x = d.data() as any;
+      const x = d.data() as Record<string, unknown>;
       return {
         id: d.id,
-        tenantId: x.tenantId,
-        action: x.action ?? null,
-        entityType: x.entityType ?? null,
-        entityId: x.entityId ?? null,
-        message: x.message ?? null,
-        severity: x.severity ?? "info",
-        actorEmail: x.actorEmail ?? null,
-        actorRole: x.actorRole ?? null,
+        tenantId: x.tenantId as string,
+        action: (x.action as string) ?? null,
+        entityType: (x.entityType as string) ?? null,
+        entityId: (x.entityId as string) ?? null,
+        message: (x.message as string) ?? null,
+        severity: (x.severity as string) ?? "info",
+        actorEmail: (x.actorEmail as string) ?? null,
+        actorRole: (x.actorRole as string) ?? null,
         createdAtIso: toIso(x.createdAt),
       };
     });
 
     return json(200, { ok: true, tenantId: auth.tenantId, count: items.length, items });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return serverError(e, "activity.recent.GET");
   }
 }

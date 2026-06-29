@@ -1,6 +1,6 @@
+// src/app/fonctionnalites/page.tsx
 import type { Metadata } from "next";
 import Link from "next/link";
-
 import PublicLayout from "@/components/layouts/public-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,13 +25,15 @@ import {
   Layers,
   Lock,
   Target,
+  Zap,
+  Clock,
+  ShieldAlert
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Fonctionnalités Sentrys — Planning, incidents, sites, agents, reporting",
-  description:
-    "Découvrez comment Sentrys simplifie la gestion de vos opérations de sécurité : planning centralisé, gestion des incidents, dossiers agents, sites & consignes, reporting, rôles & sécurité.",
-  alternates: { canonical: "/fonctionnalites" },
+  description: "Découvrez comment Sentrys simplifie la gestion de vos opérations de sécurité : planning centralisé, gestion des incidents, dossiers agents, sites & consignes, reporting.",
 };
 
 type Feature = {
@@ -41,6 +43,8 @@ type Feature = {
   desc: string;
   solves: string;
   details: string[];
+  color: string;
+  bg: string;
 };
 
 const featureCards: Feature[] = [
@@ -49,260 +53,142 @@ const featureCards: Feature[] = [
     icon: CalendarClock,
     title: "Planning centralisé",
     desc: "Générez les besoins, créez les vacations et assignez rapidement les agents.",
-    solves:
-      "Fini les plannings éclatés et les oublis : vous visualisez et ajustez en temps réel.",
-    details: [
-      "Création de vacations par site",
-      "Définition des besoins en agents",
-      "Assignation simple des agents disponibles",
-      "Vue d’ensemble du planning",
-    ],
+    solves: "Éliminez les plannings papier et les conflits d'agenda. Gagnez 4h par semaine sur la planification.",
+    details: ["Calendrier interactif", "Gestion des vacations par site", "Alertes de sous-effectif", "Calcul automatique des heures"],
+    color: "text-blue-500",
+    bg: "bg-blue-500/10"
   },
   {
     id: "incidents",
     icon: Siren,
-    title: "Gestion des incidents",
-    desc: "Tracez chaque incident du début à la fin. Preuves, commentaires, actions, clôture.",
-    solves:
-      "Chaque incident devient exploitable : suivi, responsabilité, historique, traçabilité.",
-    details: [
-      "Rapports détaillés avec photos / pièces jointes",
-      "Fil de commentaires par incident",
-      "Statuts (Ouvert, En cours, Clos)",
-      "Historique complet par site",
-    ],
+    title: "Main Courante Digitale",
+    desc: "Tracez chaque incident du début à la fin. Preuves photos, commentaires et actions.",
+    solves: "Traçabilité juridique totale et réactivité immédiate en cas de sinistre sur site.",
+    details: ["Rapports photos temps réel", "Fil de discussion par incident", "Géolocalisation des rapports", "Statuts de résolution"],
+    color: "text-red-500",
+    bg: "bg-red-500/10"
   },
   {
     id: "agents",
     icon: Users,
-    title: "Dossiers agents",
-    desc: "Profils, documents, qualifications et historique : tout est centralisé et à jour.",
-    solves:
-      "Un référentiel unique pour éviter les documents perdus et mieux affecter.",
-    details: [
-      "Fiches agents complètes (contact, statut)",
-      "Documents & certifications",
-      "Historique missions / incidents par agent",
-      "Affectation rapide aux sites",
-    ],
+    title: "Dossiers RH Agents",
+    desc: "Profils, documents d'identité, cartes pro et historique : tout est au même endroit.",
+    solves: "Fini les dossiers incomplets lors des audits. Soyez alerté avant l'expiration d'une carte pro.",
+    details: ["Alertes expiration documents", "Historique complet des missions", "Suivi des formations (SST, etc.)", "Fiche de contact rapide"],
+    color: "text-emerald-500",
+    bg: "bg-emerald-500/10"
   },
   {
     id: "sites",
     icon: Building2,
-    title: "Suivi des sites",
-    desc: "Consignes, contacts, risques : toutes les informations clés au même endroit.",
-    solves:
-      "Moins d’erreurs terrain : les consignes et contacts sont accessibles immédiatement.",
-    details: [
-      "Fiches sites (adresse, contacts, niveau de risque)",
-      "Consignes opérationnelles par site",
-      "Historique événements liés au site",
-      "Gestion des agents autorisés par site",
-    ],
+    title: "Gestion des Sites",
+    desc: "Consignes, contacts, risques : toute l'information opérationnelle centralisée.",
+    solves: "Assurez-vous que vos agents ont toujours les bonnes consignes, même lors d'un remplacement.",
+    details: ["Base de connaissances par site", "Contacts d'urgence dédiés", "Niveaux de risques paramétrables", "Documents techniques partagés"],
+    color: "text-amber-500",
+    bg: "bg-amber-500/10"
   },
   {
     id: "reporting",
     icon: BarChart,
-    title: "Reporting & pilotage",
-    desc: "Des tableaux de bord lisibles pour piloter l’activité et décider plus vite.",
-    solves:
-      "Vous gagnez en visibilité : activité, tendances, incidents, charge, performance.",
-    details: [
-      "Indicateurs clés sur le dashboard",
-      "Suivi incidents / vacations / activité",
-      "Exports pour analyse externe",
-      "Rapports d’activité consolidés",
-    ],
+    title: "Pilotage & Data",
+    desc: "Des indicateurs de performance clairs pour piloter votre agence.",
+    solves: "Prouvez votre valeur à vos clients avec des rapports d'activité professionnels et factuels.",
+    details: ["KPIs de performance", "Top sites par incidents", "Exports PDF/Excel personnalisés", "Taux de remplissage des vacations"],
+    color: "text-indigo-500",
+    bg: "bg-indigo-500/10"
   },
   {
     id: "securite",
     icon: ShieldCheck,
-    title: "Sécurité & rôles",
-    desc: "Permissions granulaires (Admin, Manager, Agent) pour un accès sécurisé et adapté.",
-    solves:
-      "Chacun voit ce qu’il doit voir : accès contrôlés, traçabilité, sérénité.",
-    details: [
-      "Rôles prédéfinis & permissions",
-      "Authentification sécurisée",
-      "Journal d’audit des actions clés",
-      "Prêt pour le multi-tenant (Growth)",
-    ],
-  },
-];
-
-const quickLinks = [
-  { label: "Planning", href: "#planning" },
-  { label: "Incidents", href: "#incidents" },
-  { label: "Agents", href: "#agents" },
-  { label: "Sites", href: "#sites" },
-  { label: "Reporting", href: "#reporting" },
-  { label: "Sécurité", href: "#securite" },
-];
-
-const valueProps = [
-  {
-    icon: Target,
-    title: "Moins de friction, plus de contrôle",
-    desc: "Une structure claire pour éviter les erreurs de planning et les pertes d’information.",
-  },
-  {
-    icon: Layers,
-    title: "Traçabilité terrain",
-    desc: "Chaque incident est suivi : preuves, actions, commentaires, clôture, historique.",
-  },
-  {
-    icon: Lock,
-    title: "Lisible pour tout le monde",
-    desc: "Une UX simple pour les managers, et efficace pour les équipes terrain.",
-  },
-];
-
-const faqs = [
-  {
-    q: "Sentrys est-il adapté aux sociétés multi-sites ?",
-    a: "Oui. Chaque site dispose de ses consignes, contacts, risques et d’un historique d’activité (vacations & incidents).",
-  },
-  {
-    q: "Peut-on commencer gratuitement ?",
-    a: "Oui. Vous pouvez démarrer sur un plan gratuit puis évoluer quand vous le souhaitez, sans perdre l’historique.",
-  },
-  {
-    q: "Quels rôles utilisateurs sont disponibles ?",
-    a: "Admin, Manager et Agent, avec des permissions adaptées à chaque besoin.",
-  },
-  {
-    q: "Le multi-sociétés est-il prévu ?",
-    a: "Oui, via le plan Growth (multi-tenant). Idéal pour les groupes ou les structures multi-agences.",
+    title: "Sécurité & Multi-tenant",
+    desc: "Architecture sécurisée et gestion multi-sociétés pour les groupes en croissance.",
+    solves: "Isolez les données de vos différentes agences tout en gardant une vision globale.",
+    details: ["Rôles granulaires (RBAC)", "Logs d'audit des actions", "Isolation stricte des données", "Authentification sécurisée"],
+    color: "text-purple-500",
+    bg: "bg-purple-500/10"
   },
 ];
 
 export default function FonctionnalitesPage() {
   return (
     <PublicLayout>
-      {/* HERO (CTA principal unique) */}
-      <section className="relative overflow-hidden py-12 md:py-20">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/10" />
-          <div className="absolute -top-24 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute -bottom-28 right-[-120px] h-[420px] w-[520px] rounded-full bg-accent/10 blur-3xl" />
-        </div>
+      {/* ===================== HERO ===================== */}
+      <section className="relative pt-20 pb-16 md:pt-32 md:pb-24 overflow-hidden border-b">
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(45%_40%_at_50%_50%,rgba(var(--primary-rgb),0.08)_0%,transparent_100%)]" />
 
-        <div className="container">
-          <div className="mx-auto max-w-4xl text-center">
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <Badge variant="secondary" className="gap-2">
-                <ShieldCheck className="h-4 w-4" />
-                Sécurité privée • Opérationnel
-              </Badge>
-              <Badge
-                variant="outline"
-                className="gap-2 border-primary/20 bg-primary/10 text-primary"
-              >
-                <Sparkles className="h-4 w-4" />
-                Simple, clair, traçable
-              </Badge>
-            </div>
+        <div className="container px-4 mx-auto text-center">
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+            <Badge variant="outline" className="rounded-full px-4 border-primary/30 text-primary font-black uppercase text-[10px] tracking-widest bg-primary/5">
+              Catalogue Modules
+            </Badge>
+          </div>
 
-            <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
-              Des fonctionnalités conçues pour l’exploitation
-            </h1>
+          <h1 className="text-4xl md:text-6xl font-black tracking-tighter mb-8 leading-[1.1]">
+            Une suite complète pour <br /> <span className="text-primary">l'excellence opérationnelle.</span>
+          </h1>
 
-            <p className="mx-auto mt-4 max-w-2xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Planning, incidents, agents, sites et reporting : Sentrys structure votre activité
-              avec une lecture claire et une traçabilité solide.
-            </p>
+          <p className="max-w-2xl mx-auto text-lg text-muted-foreground font-medium mb-12">
+            Sentrys a été conçu avec des directeurs d'exploitation pour répondre aux réalités du terrain. Chaque clic compte, chaque information est sécurisée.
+          </p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
-              <Button asChild size="lg" className="h-11 rounded-full gap-2">
-                <Link href="/signup">
-                  Commencer gratuitement <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="h-11 rounded-full">
-                <Link href="/tarifs">Voir les tarifs</Link>
-              </Button>
-            </div>
-
-            <div className="mx-auto mt-10 flex max-w-4xl flex-wrap items-center justify-center gap-2">
-              {quickLinks.map((l) => (
-                <a
-                  key={l.href}
-                  href={l.href}
-                  className="rounded-full border bg-card px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/30 transition"
-                >
-                  {l.label}
+          <div className="flex flex-wrap items-center justify-center gap-3">
+             {featureCards.map((l) => (
+                <a key={l.id} href={`#${l.id}`} className="px-5 py-2.5 rounded-full border border-border/50 bg-background text-sm font-bold text-muted-foreground hover:text-primary hover:border-primary/30 hover:shadow-lg transition-all">
+                  {l.title}
                 </a>
-              ))}
-            </div>
+             ))}
           </div>
         </div>
       </section>
 
-      {/* VALUE PROPS */}
-      <section className="border-t bg-muted/30 py-10 md:py-14">
-        <div className="container">
-          <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-3">
-            {valueProps.map((v) => (
-              <div key={v.title} className="rounded-2xl border bg-card p-6">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border bg-muted/40">
-                  <v.icon className="h-5 w-5 text-primary" />
-                </div>
-                <p className="mt-4 text-sm font-semibold">{v.title}</p>
-                <p className="mt-2 text-sm text-muted-foreground">{v.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FEATURES (sans CTA par carte) */}
-      <section className="border-t py-12 md:py-20">
-        <div className="container">
-          <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
-              Un outil unique pour tout piloter
-            </h2>
-            <p className="mt-3 text-muted-foreground md:text-lg">
-              Chaque module est pensé pour accélérer votre exploitation, sans complexité inutile.
-            </p>
-          </div>
-
-          <div className="mx-auto mt-10 grid max-w-6xl gap-6 lg:grid-cols-2">
-            {featureCards.map((feature) => (
+      {/* ===================== GRID FEATURES ===================== */}
+      <section className="py-24 bg-muted/10">
+        <div className="container px-4 mx-auto">
+          <div className="grid gap-12 lg:grid-cols-2 max-w-6xl mx-auto">
+            {featureCards.map((f) => (
               <article
-                id={feature.id}
-                key={feature.id}
-                className="scroll-mt-24 rounded-3xl border bg-card p-6 shadow-sm"
+                id={f.id}
+                key={f.id}
+                className="group relative flex flex-col rounded-[2.5rem] border border-border/50 bg-card p-8 md:p-10 shadow-sm hover:shadow-2xl transition-all duration-500 scroll-mt-28 overflow-hidden"
               >
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border bg-muted/40">
-                    <feature.icon className="h-6 w-6 text-primary" />
-                  </div>
+                {/* Background Decor */}
+                <div className={cn("absolute -top-12 -right-12 w-48 h-48 rounded-full blur-[80px] opacity-20 transition-opacity group-hover:opacity-40", f.bg)} />
 
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold">{feature.title}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">{feature.desc}</p>
-
-                    <div className="mt-3 rounded-2xl border bg-muted/20 p-4">
-                      <p className="text-sm font-medium">Ce que ça résout</p>
-                      <p className="mt-1 text-sm text-muted-foreground">{feature.solves}</p>
-                    </div>
+                <div className="flex items-center gap-5 mb-8">
+                  <div className={cn("flex h-14 w-14 items-center justify-center rounded-2xl border border-border/50 shadow-sm transition-transform group-hover:scale-110", f.bg)}>
+                    <f.icon className={cn("h-7 w-7", f.color)} />
                   </div>
+                  <h3 className="text-2xl font-black tracking-tight">{f.title}</h3>
                 </div>
 
-                <div className="mt-5">
-                  <Separator />
-                  <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-                    {feature.details.map((detail) => (
-                      <li
-                        key={detail}
-                        className="flex items-start gap-2 text-sm text-muted-foreground"
-                      >
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
-                        <span>{detail}</span>
-                      </li>
-                    ))}
-                  </ul>
+                <p className="text-lg font-medium text-foreground mb-6 leading-relaxed">
+                  {f.desc}
+                </p>
+
+                <div className="flex-1 space-y-8">
+                  <div className="p-6 rounded-[1.5rem] bg-muted/40 border border-border/30 relative">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-2 flex items-center gap-2">
+                      <Zap className="h-3 w-3 fill-primary" /> Cas d'usage
+                    </p>
+                    <p className="text-sm font-bold text-muted-foreground leading-relaxed italic">
+                      "{f.solves}"
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground/60">Détails techniques</p>
+                    <ul className="grid gap-3 sm:grid-cols-2">
+                      {f.details.map((detail) => (
+                        <li key={detail} className="flex items-center gap-3 text-sm font-bold text-foreground/80">
+                          <div className={cn("h-5 w-5 rounded-full flex items-center justify-center shrink-0", f.bg)}>
+                            <CheckCircle2 className={cn("h-3 w-3", f.color)} />
+                          </div>
+                          <span>{detail}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </article>
             ))}
@@ -310,67 +196,75 @@ export default function FonctionnalitesPage() {
         </div>
       </section>
 
-      {/* FAQ (CTA discret unique) */}
-      <section className="border-t bg-muted/30 py-12 md:py-16">
-        <div className="container">
-          <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
-              Questions fréquentes
-            </h2>
-            <p className="mt-3 text-muted-foreground md:text-lg">
-              Réponses rapides aux questions les plus courantes.
-            </p>
+      {/* ===================== VALUE PROPS = [Diagramme possible ici] ===================== */}
+      <section className="py-24 border-y">
+        <div className="container px-4 mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-black tracking-tight mb-4 uppercase text-[10px] tracking-[0.3em] text-primary">Pourquoi choisir Sentrys ?</h2>
+            <h3 className="text-3xl md:text-5xl font-black tracking-tighter">Conçu pour les pros de la sécurité.</h3>
           </div>
 
-          <div className="mx-auto mt-10 max-w-3xl rounded-3xl border bg-card p-6 md:p-8">
-            <Accordion type="single" collapsible className="w-full">
-              {faqs.map((f, i) => (
-                <AccordionItem
-                  key={f.q}
-                  value={`item-${i}`}
-                  className={i === faqs.length - 1 ? "" : "border-b"}
-                >
-                  <AccordionTrigger className="text-left text-sm font-semibold">
-                    {f.q}
-                  </AccordionTrigger>
-                  <AccordionContent className="text-sm text-muted-foreground">
-                    {f.a}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+          {/* Logic flow diagram placeholder */}
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-muted-foreground">
-                Vous avez une question spécifique ? Parlons-en.
-              </p>
-              <Button asChild variant="outline" className="rounded-full">
-                <Link href="/contact">Nous contacter</Link>
-              </Button>
-            </div>
+
+          <div className="grid gap-8 md:grid-cols-3 max-w-6xl mx-auto mt-16">
+            {[
+              { icon: Target, t: "Moins de friction", d: "Une UX fluide qui réduit le temps administratif de 30%." },
+              { icon: Layers, t: "Traçabilité 360°", d: "Archives horodatées et inaltérables pour chaque événement." },
+              { icon: Lock, t: "Données Souveraines", d: "Hébergement sécurisé et conformité RGPD stricte." },
+            ].map((v) => (
+              <div key={v.t} className="text-center space-y-4 p-8 rounded-3xl bg-muted/20 border">
+                 <div className="h-16 w-16 mx-auto rounded-2xl bg-background border flex items-center justify-center">
+                    <v.icon className="h-8 w-8 text-primary" />
+                 </div>
+                 <h4 className="text-xl font-black tracking-tight">{v.t}</h4>
+                 <p className="text-sm font-medium text-muted-foreground leading-relaxed">{v.d}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* CTA FINAL unique */}
-      <section className="border-t py-12 md:py-16">
-        <div className="container">
-          <div className="mx-auto max-w-5xl rounded-3xl border bg-card p-8 md:p-12">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold">Prêt à structurer vos opérations ?</p>
-                <p className="text-sm text-muted-foreground">
-                  Créez un compte et testez votre workflow en conditions réelles.
-                </p>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button asChild size="lg" className="h-11 rounded-full gap-2">
-                  <Link href="/signup">
-                    Créer un compte <ArrowRight className="h-4 w-4" />
-                  </Link>
+      {/* ===================== FAQ ===================== */}
+      <section id="faq" className="py-24 bg-card">
+        <div className="container px-4 mx-auto max-w-4xl">
+          <div className="text-center mb-16 space-y-4">
+            <h2 className="text-4xl font-black tracking-tighter">Une question ?</h2>
+            <p className="text-muted-foreground font-medium italic">Nous répondons aux interrogations les plus fréquentes des agences de sécurité.</p>
+          </div>
+
+          <Accordion type="single" collapsible className="space-y-4">
+            {faqs.map((faq, i) => (
+              <AccordionItem key={i} value={`item-${i}`} className="border rounded-[2rem] px-8 bg-background data-[state=open]:border-primary/50 transition-all">
+                <AccordionTrigger className="text-lg font-bold hover:no-underline py-8 tracking-tight">{faq.q}</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground text-base pb-8 leading-relaxed">
+                  {faq.a}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      </section>
+
+      {/* ===================== CTA ===================== */}
+      <section className="py-24">
+        <div className="container px-4 mx-auto">
+          <div className="relative max-w-6xl mx-auto rounded-[3rem] bg-foreground p-8 md:p-20 overflow-hidden text-center">
+            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+
+            <div className="relative z-10 space-y-8">
+              <h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter">
+                Passez à la gestion connectée.
+              </h2>
+              <p className="text-white/60 max-w-xl mx-auto font-medium text-lg">
+                Aucun frais d'installation, aucune formation complexe nécessaire. Commencez dès aujourd'hui.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <Button asChild size="lg" className="h-14 rounded-2xl px-10 font-black text-base bg-white text-black hover:bg-white/90 shadow-2xl">
+                  <Link href="/signup">Créer un compte gratuitement</Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="h-11 rounded-full">
-                  <Link href="/tarifs">Comparer les plans</Link>
+                <Button asChild variant="outline" size="lg" className="h-14 rounded-2xl px-10 font-bold text-base border-white/20 text-white hover:bg-white/10 transition-all">
+                  <Link href="/contact">Démonstration privée</Link>
                 </Button>
               </div>
             </div>
@@ -380,3 +274,10 @@ export default function FonctionnalitesPage() {
     </PublicLayout>
   );
 }
+
+const faqs = [
+  { q: "Est-ce que Sentrys fonctionne hors-ligne ?", a: "Notre application est conçue pour être résiliente. Les agents peuvent saisir des rapports d'incidents même en zone blanche (sous-sols, parkings) ; les données sont synchronisées automatiquement dès que la connexion est rétablie." },
+  { q: "Puis-je gérer plusieurs sociétés de sécurité avec un seul compte ?", a: "Oui, via le plan Growth. Vous pouvez configurer des 'Tenants' (sociétés) isolés tout en gardant une interface de gestion unifiée. C'est la solution idéale pour les holdings ou les franchisés." },
+  { q: "Les données sont-elles exportables ?", a: "Absolument. Vous restez propriétaire de vos données. Tous les rapports d'incidents, plannings et fiches agents sont exportables aux formats PDF, Excel et CSV à tout moment." },
+  { q: "Comment se passe l'onboarding ?", a: "Dès votre inscription, un guide interactif vous aide à configurer votre premier site et votre premier agent. Pour les structures plus importantes, nous proposons des sessions d'accompagnement personnalisées." },
+];

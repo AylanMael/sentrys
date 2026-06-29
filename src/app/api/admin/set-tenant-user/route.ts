@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminKey } from "@/lib/api/admin-auth";
+import { requireAdmin } from "@/lib/api/admin-auth";
 import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 
 export const runtime = "nodejs";
 
-type Role = "admin" | "manager" | "agent" | "client";
+type Role = "owner" | "admin" | "manager" | "agent" | "client" | "viewer";
 type Status = "active" | "disabled";
 
 type Body = {
@@ -21,9 +21,6 @@ function bad(msg: string, extra?: any) {
 }
 
 export async function POST(req: NextRequest) {
-  const denied = requireAdminKey(req);
-  if (denied) return denied;
-
   let body: Body;
   try {
     body = (await req.json()) as Body;
@@ -41,13 +38,24 @@ export async function POST(req: NextRequest) {
   if (!tenantId) return bad("tenantId is required");
   if (!role && !status) return bad("role or status is required");
 
-  const allowedRoles = new Set<Role>(["admin", "manager", "agent", "client"]);
+  const { error, decodedToken } = await requireAdmin(req, { targetTenantId: tenantId });
+  if (error) return error;
+
+  const allowedRoles = new Set<Role>([
+    "owner",
+    "admin",
+    "manager",
+    "agent",
+    "client",
+    "viewer",
+  ]);
   const allowedStatus = new Set<Status>(["active", "disabled"]);
   if (role && !allowedRoles.has(role)) return bad("Invalid role");
   if (status && !allowedStatus.has(status)) return bad("Invalid status");
 
   const actor = {
-    type: "admin-key",
+    type: "admin-token",
+    adminUid: decodedToken?.uid ?? "unknown",
     ip:
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       req.headers.get("x-real-ip") ||

@@ -1,41 +1,67 @@
 // src/app/api/me/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
 import { getAuth } from "firebase-admin/auth";
+import { adminDb } from "@/lib/firebase/admin";
+import { normalizeRole } from "@/lib/auth/role";
 
 export const runtime = "nodejs";
 
-/* ================= helpers ================= */
-
-function json(status: number, body: any) {
+function json(status: number, body: unknown) {
   const res = NextResponse.json(body, { status });
-  // évite du cache browser/CDN sur une route "identity"
   res.headers.set("Cache-Control", "no-store");
   return res;
 }
 
-function unauthorized(msg = "Unauthorized", extra?: any) {
-  return json(401, { ok: false, error: msg, ...extra });
-}
-
-function serverError(e: any, tag: string) {
-  console.error(`[${tag}]`, e);
-  return json(500, {
+function unauthorized(message = "Unauthorized", details?: unknown) {
+  return json(401, {
     ok: false,
-    error: "Internal error",
-    details: e?.message ?? String(e),
+    error: message,
+    ...(typeof details !== "undefined" ? { details } : {}),
   });
 }
 
-function toIso(ts: any): string | null {
-  return ts && typeof ts.toDate === "function" ? ts.toDate().toISOString() : null;
+function forbidden(message = "Forbidden", details?: unknown) {
+  return json(403, {
+    ok: false,
+    error: message,
+    ...(typeof details !== "undefined" ? { details } : {}),
+  });
 }
 
-function normalizeText(v: any) {
-  return String(v ?? "").trim();
+function serverError(error: unknown, tag: string) {
+  console.error(`[${tag}]`, error);
+
+  return json(500, {
+    ok: false,
+    error: "Internal error",
+    details: error instanceof Error ? error.message : String(error),
+  });
 }
 
-function getToken(req: NextRequest) {
+function toIso(ts: unknown): string | null {
+  if (
+    ts &&
+    typeof ts === "object" &&
+    "toDate" in ts &&
+    typeof (ts as { toDate: () => Date }).toDate === "function"
+  ) {
+    return (ts as { toDate: () => Date }).toDate().toISOString();
+  }
+
+  return null;
+}
+
+function normalizeText(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  return text.length > 0 ? text : null;
+}
+
+function normalizeStatus(value: unknown): string | null {
+  const text = normalizeText(value);
+  return text ? text.toLowerCase() : null;
+}
+
+function getToken(req: NextRequest): string | null {
   const authHeader =
     req.headers.get("authorization") ||
     req.headers.get("Authorization") ||
@@ -44,45 +70,52 @@ function getToken(req: NextRequest) {
 
   if (!authHeader) return null;
 
-  const s = authHeader.trim();
-  if (s.toLowerCase().startsWith("bearer ")) return s.slice(7).trim();
-  return s; // fallback (rare), mais utile si tu envoies direct le token
+  const raw = authHeader.trim();
+  if (!raw) return null;
+
+  if (raw.toLowerCase().startsWith("bearer ")) {
+    return raw.slice(7).trim() || null;
+  }
+
+  return raw;
 }
 
-/* ================= GET ================= */
 /**
  * GET /api/me
  * Retourne l'utilisateur tenant (tenantUsers/:uid) si présent.
  */
 export async function GET(req: NextRequest) {
   const token = getToken(req);
-  if (!token) return unauthorized("Missing token");
-
-  // 1) Verify token Firebase
-  let decoded: { uid: string; email?: string; name?: string };
-  try {
-    const t = await getAuth().verifyIdToken(token);
-    decoded = {
-      uid: t.uid,
-      email: (t as any).email,
-      name: (t as any).name,
-    };
-  } catch (e: any) {
-    console.error("[me] verifyIdToken failed", e);
-    return unauthorized("Invalid token", { details: e?.message });
+  if (!token) {
+    console.warn("[me] GET /api/me: Missing token in headers");
+    return unauthorized("Missing token");
   }
 
-  const uid = decoded.uid;
+  let decoded: { uid: string; email?: string; name?: string };
 
   try {
-    // 2) tenantUsers/:uid
-    const tuSnap = await adminDb.collection("tenantUsers").doc(uid).get();
+    const verified = await getAuth().verifyIdToken(token);
 
-    if (!tuSnap.exists) {
-      // utilisateur auth OK mais pas provisionné tenant
+    decoded = {
+      uid: verified.uid,
+      email: (verified as { email?: string }).email,
+      name: (verified as { name?: string }).name,
+    };
+  } catch (error) {
+    console.error("[me] verifyIdToken failed for token:", token.slice(0, 10) + "...", error);
+    return unauthorized(
+      "Invalid token",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  try {
+    const tenantUserSnap = await adminDb.collection("tenantUsers").doc(decoded.uid).get();
+
+    if (!tenantUserSnap.exists) {
       return json(200, {
         ok: true,
-        uid,
+        uid: decoded.uid,
         email: decoded.email ?? null,
         name: decoded.name ?? null,
         tenantId: null,
@@ -95,47 +128,47 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const tu = tuSnap.data() as any;
+    const tenantUser = tenantUserSnap.data() as Record<string, unknown>;
 
-    // 2bis) sécurité/cohérence : status
-    const status = normalizeText(tu?.status) || null;
-    if (status && status !== "active") {
-      // cohérent avec tes autres endpoints (sites/vacations/agents)
-      return unauthorized("User disabled");
+    const tenantId = normalizeText(tenantUser?.tenantId);
+    const role = normalizeRole(tenantUser?.role);
+    const status = normalizeStatus(tenantUser?.status);
+
+    if (status === "disabled") {
+      return forbidden("User disabled");
     }
 
-    const tenantId = normalizeText(tu?.tenantId) || null;
-    const role = normalizeText(tu?.role) || null;
+    let tenant: Record<string, unknown> | null = null;
 
-    // 3) (optionnel) charger tenant
-    let tenant: any = null;
     if (tenantId) {
       const tenantSnap = await adminDb.collection("tenants").doc(tenantId).get();
+
       if (tenantSnap.exists) {
-        const td = tenantSnap.data() as any;
+        const tenantData = tenantSnap.data() as Record<string, unknown>;
+
         tenant = {
           id: tenantSnap.id,
-          ...td,
-          createdAtIso: toIso(td?.createdAt),
-          updatedAtIso: toIso(td?.updatedAt),
+          ...tenantData,
+          createdAtIso: toIso(tenantData?.createdAt),
+          updatedAtIso: toIso(tenantData?.updatedAt),
         };
       }
     }
 
     return json(200, {
       ok: true,
-      uid,
-      email: tu?.email ?? decoded.email ?? null,
-      name: tu?.name ?? decoded.name ?? null,
+      uid: decoded.uid,
+      email: normalizeText(tenantUser?.email) ?? decoded.email ?? null,
+      name: normalizeText(tenantUser?.name) ?? decoded.name ?? null,
       tenantId,
       role,
-      status: "active", // si on est ici, on force "active"
-      hasTenant: !!tenantId,
-      createdAtIso: toIso(tu?.createdAt),
-      updatedAtIso: toIso(tu?.updatedAt),
+      status,
+      hasTenant: Boolean(tenantId),
+      createdAtIso: toIso(tenantUser?.createdAt),
+      updatedAtIso: toIso(tenantUser?.updatedAt),
       tenant,
     });
-  } catch (e: any) {
-    return serverError(e, "me.GET");
+  } catch (error) {
+    return serverError(error, "me.GET");
   }
 }

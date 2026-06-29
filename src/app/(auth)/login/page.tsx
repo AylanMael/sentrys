@@ -1,3 +1,4 @@
+// src/app/login/page.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -5,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, ShieldCheck, ArrowRight, Lock, Mail } from "lucide-react";
 
 import { auth, db } from "@/lib/firebase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +16,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
+
+function getFirebaseErrorCode(error: unknown): string | null {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    return typeof code === "string" ? code : null;
+  }
+
+  return null;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,13 +41,11 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Guard: firebase init
     if (!auth || !db) {
       toast({
         variant: "destructive",
-        title: "Erreur de configuration",
-        description:
-          "Firebase n’est pas initialisé. Vérifie .env.local (NEXT_PUBLIC_FIREBASE_*) puis redémarre le serveur.",
+        title: "Configuration requise",
+        description: "L'instance de sécurité n'est pas initialisée.",
       });
       return;
     }
@@ -44,8 +53,8 @@ export default function LoginPage() {
     if (!cleanEmail || !password) {
       toast({
         variant: "destructive",
-        title: "Champs manquants",
-        description: "Merci de renseigner l’e-mail et le mot de passe.",
+        title: "Champs requis",
+        description: "Veuillez renseigner vos identifiants.",
       });
       return;
     }
@@ -53,71 +62,35 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      console.log("LOGIN STEP 1: signInWithEmailAndPassword...");
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        cleanEmail,
-        password
-      );
+      const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
       const firebaseUser = userCredential.user;
-      console.log("LOGIN STEP 1 OK ✅", { uid: firebaseUser.uid });
 
-      // Token debug (prouve auth client OK)
-      const token = await firebaseUser.getIdToken();
-      console.log("LOGIN TOKEN length:", token?.length);
-
-      console.log("LOGIN STEP 2: read tenantUsers/{uid}...");
       const tenantUserRef = doc(db, `tenantUsers/${firebaseUser.uid}`);
       const tenantUserSnap = await getDoc(tenantUserRef);
 
       if (!tenantUserSnap.exists()) {
-        console.warn("LOGIN: tenantUser doc missing for uid:", firebaseUser.uid);
         await auth.signOut();
-
         toast({
           variant: "destructive",
-          title: "Profil introuvable",
-          description:
-            "Votre compte est authentifié, mais aucun profil Sentrys n’a été trouvé. Utilisez l’inscription.",
+          title: "Accès restreint",
+          description: "Aucun profil opérationnel associé à ce compte.",
         });
         return;
       }
-      console.log("LOGIN STEP 2 OK ✅", tenantUserSnap.data());
 
-      toast({
-        title: "Connexion réussie",
-        description: "Redirection vers votre tableau de bord...",
-      });
-
-      console.log("LOGIN STEP 3: redirect -> /dashboard");
+      toast({ title: "Accès autorisé", description: "Chargement de votre environnement..." });
       router.push("/dashboard");
-      console.log("LOGIN STEP 3 OK ✅");
-    } catch (error: any) {
-      console.error("Login Error:", error);
+    } catch (error: unknown) {
+      let description = "Une erreur est survenue lors de l'authentification.";
+      const code = getFirebaseErrorCode(error);
 
-      let description = "Une erreur est survenue. Veuillez réessayer.";
-      if (
-        error?.code === "auth/wrong-password" ||
-        error?.code === "auth/invalid-credential"
-      ) {
-        description = "L'adresse e-mail ou le mot de passe est incorrect.";
-      } else if (error?.code === "auth/user-not-found") {
-        description = "Aucun compte trouvé avec cette adresse e-mail.";
-      } else if (
-        error?.code === "permission-denied" ||
-        error?.code === "firestore/permission-denied"
-      ) {
-        description =
-          "Permissions Firestore insuffisantes. Vérifie les règles sur tenantUsers.";
-      } else if (typeof error?.message === "string") {
-        description = error.message;
+      if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        description = "Identifiants incorrects.";
+      } else if (code === "auth/user-not-found") {
+        description = "Ce compte n'existe pas.";
       }
 
-      toast({
-        variant: "destructive",
-        title: "Échec de la connexion",
-        description,
-      });
+      toast({ variant: "destructive", title: "Échec de connexion", description });
     } finally {
       setIsLoading(false);
     }
@@ -125,110 +98,117 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      title="Connexion"
-      subtitle="Accédez à votre espace sécurisé Sentrys."
+      title="Content de vous revoir"
+      subtitle="Identifiez-vous pour accéder au terminal Sentrys."
       footer={
-        <p className="text-center text-sm text-muted-foreground">
-          Pas de compte ?{" "}
-          <Link
-            href="/signup"
-            className="underline underline-offset-4 hover:text-foreground"
-          >
-            Créer un espace
-          </Link>
-        </p>
+        <div className="space-y-4">
+          <p className="text-center text-sm text-muted-foreground">
+            Pas encore membre ?{" "}
+            <Link href="/signup" className="text-primary font-bold hover:underline underline-offset-4">
+              Créer un espace agence
+            </Link>
+          </p>
+        </div>
       }
     >
-      <Card className="rounded-3xl">
-        <CardContent className="p-6">
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="vous@exemple.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
-                autoComplete="email"
-                className="h-11 rounded-2xl"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Mot de passe</Label>
-                <Link
-                  href="/forgot-password"
-                  className="text-xs underline underline-offset-4 text-muted-foreground hover:text-foreground"
-                >
-                  Mot de passe oublié ?
-                </Link>
+      <Card className="rounded-[2rem] border-none shadow-2xl shadow-black/[0.03] bg-background ring-1 ring-black/5 overflow-hidden">
+        <CardContent className="p-8 md:p-10">
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+                  Email Professionnel
+                </Label>
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="nom@agence.fr"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isLoading}
+                    autoComplete="email"
+                    className="h-12 rounded-2xl pl-11 bg-muted/30 border-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
+                    required
+                  />
+                </div>
               </div>
 
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPwd ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
-                  autoComplete="current-password"
-                  className="h-11 rounded-2xl pr-11"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPwd((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={
-                    showPwd ? "Masquer le mot de passe" : "Afficher le mot de passe"
-                  }
-                >
-                  {showPwd ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
-                </button>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    Mot de passe
+                  </Label>
+                  <Link
+  href="/forgot-password"
+  className="text-[10px] font-bold text-primary hover:opacity-80 transition-opacity"
+>
+  Oublié ?
+</Link>
+                </div>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                  <Input
+                    id="password"
+                    type={showPwd ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLoading}
+                    autoComplete="current-password"
+                    className="h-12 rounded-2xl pl-11 pr-11 bg-muted/30 border-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={showPwd ? "Masquer" : "Afficher"}
+                  >
+                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 
             <Button
               type="submit"
-              className="h-11 w-full rounded-2xl"
+              className={cn(
+                "h-14 w-full rounded-2xl font-black text-base shadow-xl shadow-primary/20 transition-all active:scale-[0.98]",
+                isLoading ? "opacity-80" : "hover:translate-y-[-2px]"
+              )}
               disabled={isLoading}
             >
               {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Connexion...
-                </>
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>Validation...</span>
+                </div>
               ) : (
-                "Se connecter"
+                <div className="flex items-center gap-2">
+                  <span>Accéder au dashboard</span>
+                  <ArrowRight className="h-5 w-5" />
+                </div>
               )}
             </Button>
 
-            <div className="relative py-2">
+            <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
+                <span className="w-full border-t border-muted" />
               </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  Ou
-                </span>
+              <div className="relative flex justify-center text-[10px] font-black uppercase tracking-[0.2em]">
+                <span className="bg-background px-4 text-muted-foreground/50">Sécurité Sentrys</span>
               </div>
             </div>
 
             <Button
               type="button"
               variant="outline"
-              className="h-11 w-full rounded-2xl"
+              className="h-12 w-full rounded-2xl border-dashed border-2 hover:bg-primary/5 hover:text-primary transition-all font-bold"
               disabled
             >
-              Se connecter avec Google (à activer)
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              SSO Entreprise (Prochainement)
             </Button>
           </form>
         </CardContent>

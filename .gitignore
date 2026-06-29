@@ -66,3 +66,28 @@ next-env.d.ts
 # Optional: keep empty secrets folder
 # =========================
 !secrets/.gitkeep
+
+# =========================
+# Local scratch / generated reports
+# =========================
+.agents/
+tmp/
+public/uploads/
+*.log
+*_report.json
+eslint_*.txt
+eslint_*.json
+lint*.txt
+lint*.json
+typecheck*.txt
+typecheck*.log
+build_output.txt
+any_report.json
+bulk_fix.js
+fix_order.js
+magic_fill_fix.js
+refactor.js
+style_fix*.js
+ts_fix.js
+*.backup
+src/lib/planning/tsc_output.txt

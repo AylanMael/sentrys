@@ -42,14 +42,31 @@ interface UserData {
 
 interface AuthContextType {
   user: UserData | null;
+
+  /**
+   * Le FirebaseUser brut (utile pour getIdToken, emailVerified, etc.)
+   * Sans casser ton modèle UserData.
+   */
+  firebaseUser: FirebaseUser | null;
+
   loading: boolean;
+
+  /** Rafraîchit /api/me et met à jour user */
   refresh: () => Promise<UserData | null>;
+
+  /**
+   * Récupère un Bearer token Firebase pour appeler tes routes /api/*
+   * forceRefresh=true si tu viens de mettre à jour des custom claims.
+   */
+  getToken: (forceRefresh?: boolean) => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  firebaseUser: null,
   loading: true,
   refresh: async () => null,
+  getToken: async () => null,
 });
 
 async function fetchMe(firebaseUser: FirebaseUser): Promise<MeResponse> {
@@ -102,28 +119,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const [user, setUser] = useState<UserData | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Anti race-condition si onAuthStateChanged se déclenche plusieurs fois
   const requestIdRef = useRef(0);
 
+  const getToken = useCallback(async (forceRefresh = false) => {
+    const u = auth.currentUser;
+    if (!u) return null;
+    return u.getIdToken(forceRefresh);
+  }, []);
+
   const refresh = useCallback(async () => {
-    const firebaseUser = auth.currentUser;
-    if (!firebaseUser) {
+    const current = auth.currentUser;
+    if (!current) {
+      setFirebaseUser(null);
       setUser(null);
       return null;
     }
 
     try {
-      const me = await fetchMe(firebaseUser);
-      const next = toUserData(firebaseUser, me);
+      const me = await fetchMe(current);
+      const next = toUserData(current, me);
+      setFirebaseUser(current);
       setUser(next);
       return next;
     } catch {
       // si /api/me échoue, on garde un état minimal (auth ok)
       const next: UserData = {
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
+        uid: current.uid,
+        email: current.email,
         name: null,
         tenantId: null,
         role: null,
@@ -131,6 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         tenant: null,
         isProvisioned: false,
       };
+      setFirebaseUser(current);
       setUser(next);
       return next;
     }
@@ -139,31 +166,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(
       auth,
-      async (firebaseUser: FirebaseUser | null) => {
+      async (nextFirebaseUser: FirebaseUser | null) => {
         const requestId = ++requestIdRef.current;
 
         try {
           setLoading(true);
 
-          if (!firebaseUser) {
+          if (!nextFirebaseUser) {
             if (requestId !== requestIdRef.current) return;
+            setFirebaseUser(null);
             setUser(null);
             setLoading(false);
             return;
           }
 
+          setFirebaseUser(nextFirebaseUser);
+
           const isSignupRoute = (pathname ?? "").startsWith("/signup");
 
-          const me = await fetchMe(firebaseUser);
+          const me = await fetchMe(nextFirebaseUser);
           if (requestId !== requestIdRef.current) return;
 
-          const next = toUserData(firebaseUser, me);
+          const next = toUserData(nextFirebaseUser, me);
           setUser(next);
 
           if (!isSignupRoute && me.ok && me.hasTenant === false) {
             console.warn(
               "Authenticated user has no tenantUsers doc (provisioning incomplete). uid=",
-              firebaseUser.uid
+              nextFirebaseUser.uid
             );
           }
 
@@ -174,6 +204,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (requestId !== requestIdRef.current) return;
 
           const current = auth.currentUser;
+
+          setFirebaseUser(current ?? null);
+
           setUser(
             current
               ? {
@@ -198,7 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, refresh }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading, refresh, getToken }}>
       <FirebaseErrorListener />
       {children}
     </AuthContext.Provider>

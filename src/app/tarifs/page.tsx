@@ -1,3 +1,4 @@
+// src/app/tarifs/page.tsx
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -23,28 +24,15 @@ import {
   Users,
   Building2,
   BarChart,
+  Zap,
+  ShieldAlert,
+  Infinity
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: "Tarifs Sentrys — Abonnements sécurité privée (Free, Starter, Pro, Growth)",
-  description:
-    "Choisissez le plan Sentrys adapté à votre société de sécurité : Free, Starter, Pro (recommandé) ou Growth (multi-tenant). Comparez fonctionnalités, options et montée en gamme.",
-  alternates: { canonical: "/tarifs" },
-  openGraph: {
-    type: "website",
-    title: "Tarifs Sentrys — Plans et abonnements",
-    description:
-      "Free, Starter, Pro, Growth : comparez fonctionnalités et options (multi-tenant, add-ons).",
-    url: "/tarifs",
-    siteName: "Sentrys",
-    locale: "fr_FR",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Tarifs Sentrys",
-    description:
-      "Plans Sentrys : Free, Starter, Pro, Growth. Comparez fonctionnalités et options pour sociétés de sécurité privée.",
-  },
+  title: "Tarifs Sentrys — Plans pour la sécurité privée",
+  description: "Choisissez le plan adapté à votre agence : Free, Starter, Pro ou Growth. Comparez nos fonctionnalités et nos quotas en toute transparence.",
 };
 
 type PlanId = "free" | "starter" | "pro" | "growth";
@@ -67,8 +55,8 @@ const plans: Plan[] = [
     name: "Free",
     price: "0€",
     period: "/ mois",
-    tagline: "Pour démarrer et valider le flux.",
-    bullets: ["Vacations & incidents", "Structure de base", "Historique conservé"],
+    tagline: "Pour valider votre flux opérationnel.",
+    bullets: ["Jusqu'à 5 agents", "Planning de base", "Incidents & Rapports"],
     ctaLabel: "Commencer",
     ctaHref: "/signup?plan=free",
   },
@@ -77,8 +65,8 @@ const plans: Plan[] = [
     name: "Starter",
     price: "19€",
     period: "/ mois",
-    tagline: "Pour une petite équipe opérationnelle.",
-    bullets: ["Plus d’agents & sites", "Reporting", "Support standard"],
+    tagline: "Pour les petites agences locales.",
+    bullets: ["Agents illimités", "Exports PDF basiques", "Support standard"],
     ctaLabel: "Choisir Starter",
     ctaHref: "/signup?plan=starter",
   },
@@ -87,9 +75,9 @@ const plans: Plan[] = [
     name: "Pro",
     price: "49€",
     period: "/ mois",
-    tagline: "Recommandé pour la majorité des sociétés.",
+    tagline: "Le standard pour les agences en croissance.",
     highlight: true,
-    bullets: ["Reporting avancé", "Plus de quotas", "Support prioritaire"],
+    bullets: ["Reporting avancé", "Export Excel/CSV", "Support prioritaire"],
     ctaLabel: "Choisir Pro",
     ctaHref: "/signup?plan=pro",
   },
@@ -98,172 +86,100 @@ const plans: Plan[] = [
     name: "Growth",
     price: "99€",
     period: "/ mois",
-    tagline: "Pour scaler avec multi-sociétés & volume.",
-    bullets: ["Multi-tenant (multi-sociétés)", "Gros volumes", "Accompagnement"],
+    tagline: "Multi-sociétés et volumes importants.",
+    bullets: ["Multi-tenant (Holdings)", "API Access", "Accompagnement dédié"],
     ctaLabel: "Choisir Growth",
     ctaHref: "/signup?plan=growth",
   },
 ];
 
-type FeatureRow = {
-  label: string;
-  icon: any;
-  availability: Record<PlanId, boolean>;
-};
-
-const features: FeatureRow[] = [
-  {
-    label: "Vacations & planning",
-    icon: CalendarClock,
-    availability: { free: true, starter: true, pro: true, growth: true },
-  },
-  {
-    label: "Gestion des incidents",
-    icon: Siren,
-    availability: { free: true, starter: true, pro: true, growth: true },
-  },
-  {
-    label: "Dossiers agents",
-    icon: Users,
-    availability: { free: true, starter: true, pro: true, growth: true },
-  },
-  {
-    label: "Sites & consignes",
-    icon: Building2,
-    availability: { free: true, starter: true, pro: true, growth: true },
-  },
-  {
-    label: "Reporting",
-    icon: BarChart,
-    availability: { free: false, starter: true, pro: true, growth: true },
-  },
-  {
-    label: "Reporting avancé",
-    icon: BarChart,
-    availability: { free: false, starter: false, pro: true, growth: true },
-  },
-  {
-    label: "Multi-tenant (multi-sociétés)",
-    icon: Building2,
-    availability: { free: false, starter: false, pro: false, growth: true },
-  },
-  {
-    label: "Support prioritaire",
-    icon: ShieldCheck,
-    availability: { free: false, starter: false, pro: true, growth: true },
-  },
+const features = [
+  { label: "Planning & Vacations", icon: CalendarClock, availability: { free: true, starter: true, pro: true, growth: true } },
+  { label: "Main Courante (Incidents)", icon: Siren, availability: { free: true, starter: true, pro: true, growth: true } },
+  { label: "Dossiers RH Agents", icon: Users, availability: { free: true, starter: true, pro: true, growth: true } },
+  { label: "Gestion de Sites", icon: Building2, availability: { free: true, starter: true, pro: true, growth: true } },
+  { label: "Statistiques d'activité", icon: BarChart, availability: { free: false, starter: true, pro: true, growth: true } },
+  { label: "Exports Excel & Analytics", icon: Zap, availability: { free: false, starter: false, pro: true, growth: true } },
+  { label: "Multi-Sociétés (Tenants)", icon: Building2, availability: { free: false, starter: false, pro: false, growth: true } },
+  { label: "Assistance VIP", icon: ShieldCheck, availability: { free: false, starter: false, pro: true, growth: true } },
 ];
 
 function Cell({ ok }: { ok: boolean }) {
   return ok ? (
-    <span className="inline-flex items-center justify-center">
-      <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" />
-      <span className="sr-only">Inclus</span>
-    </span>
+    <div className="flex justify-center">
+      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 animate-in zoom-in duration-500">
+        <CheckCircle2 className="h-4 w-4 text-primary" />
+      </div>
+    </div>
   ) : (
-    <span className="text-sm text-muted-foreground" aria-hidden="true">
-      —
-      <span className="sr-only">Non inclus</span>
-    </span>
+    <span className="text-muted-foreground/30 font-light">—</span>
   );
 }
 
 export default function TarifsPage() {
   return (
     <PublicLayout>
-      {/* HERO (CTA limité) */}
-      <section className="relative overflow-hidden py-12 md:py-20">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/10" />
-          <div className="absolute -top-24 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute -bottom-28 right-[-120px] h-[420px] w-[520px] rounded-full bg-accent/10 blur-3xl" />
-        </div>
+      {/* ===================== HERO ===================== */}
+      <section className="relative pt-20 pb-16 md:pt-32 md:pb-24 overflow-hidden border-b border-border/50">
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,rgba(var(--primary-rgb),0.1)_0%,transparent_70%)]" />
 
-        <div className="container">
-          <div className="mx-auto max-w-3xl text-center">
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <Badge variant="secondary" className="gap-2">
-                <ShieldCheck className="h-4 w-4" />
-                Sécurité privée • Opérationnel
-              </Badge>
-              <Badge
-                variant="outline"
-                className="gap-2 border-primary/20 bg-primary/10 text-primary"
-              >
-                <Sparkles className="h-4 w-4" />
-                Plans clairs, évolutifs
-              </Badge>
-            </div>
+        <div className="container px-4 mx-auto text-center">
+          <Badge variant="outline" className="mb-6 border-primary/30 text-primary font-black uppercase text-[10px] tracking-[0.2em] px-4 py-1.5 bg-primary/5 rounded-full">
+            Tarification Transparente
+          </Badge>
+          <h1 className="text-4xl md:text-6xl font-black tracking-tighter mb-8 leading-[1.1]">
+            Une offre adaptée à <br /> <span className="text-primary">chaque étape de votre croissance.</span>
+          </h1>
+          <p className="max-w-2xl mx-auto text-lg text-muted-foreground font-medium mb-12">
+            Commencez gratuitement, testez le workflow et passez au niveau supérieur <br className="hidden md:block" /> dès que votre agence passe à l'échelle.
+          </p>
 
-            <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
-              Tarifs simples. Produit haut de gamme.
-            </h1>
-
-            <p className="mx-auto mt-4 max-w-2xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Free pour tester, Pro pour la majorité des sociétés, Growth pour le multi-tenant et les gros volumes.
-              Les quotas (agents, sites, tenants) sont visibles en temps réel dans l’app.
-            </p>
-
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
-              <Button asChild size="lg" className="h-11 rounded-full gap-2">
-                <Link href="/signup">
-                  Créer un compte <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="h-11 rounded-full">
-                <Link href="/contact">Demander une démo</Link>
-              </Button>
-            </div>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Button asChild size="lg" className="h-14 rounded-2xl px-10 font-black shadow-xl shadow-primary/20 transition-all active:scale-95">
+              <Link href="/signup">Démarrer maintenant</Link>
+            </Button>
+            <Button asChild variant="outline" size="lg" className="h-14 rounded-2xl px-10 font-bold border-border/50 bg-background/50 backdrop-blur-sm">
+              <Link href="/contact">Planifier une démo</Link>
+            </Button>
           </div>
         </div>
       </section>
 
-      {/* PLANS */}
-      <section className="border-t bg-muted/30 py-12 md:py-16">
-        <div className="container">
-          <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
-              Choisissez votre plan
-            </h2>
-            <p className="mt-3 text-muted-foreground md:text-lg">
-              Démarrez en Free, passez en Pro quand l’équipe grandit, activez Growth pour multi-sociétés & volume.
-            </p>
-          </div>
-
-          <div className="mx-auto mt-10 grid max-w-6xl gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* ===================== PRICING CARDS ===================== */}
+      <section className="py-24 bg-muted/20">
+        <div className="container px-4 mx-auto">
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto">
             {plans.map((p) => (
               <Card
                 key={p.id}
-                className={[
-                  "relative rounded-3xl overflow-hidden",
-                  p.highlight ? "border-primary/40 shadow-lg shadow-primary/10" : "",
-                ].join(" ")}
+                className={cn(
+                  "relative rounded-[2.5rem] border border-border/50 bg-card p-4 transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 overflow-hidden group",
+                  p.highlight ? "ring-2 ring-primary shadow-2xl shadow-primary/10" : ""
+                )}
               >
-                {p.highlight ? (
-                  <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-primary" />
-                ) : null}
-
-                <CardHeader className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{p.name}</CardTitle>
-                    {p.highlight ? (
-                      <Badge className="rounded-full">Recommandé</Badge>
-                    ) : null}
+                {p.highlight && (
+                  <div className="absolute top-6 right-6">
+                    <Badge className="bg-primary text-white border-none font-black uppercase text-[8px] tracking-widest px-2 py-1 rounded-lg">Best</Badge>
                   </div>
+                )}
 
-                  <div className="flex items-end gap-2">
-                    <span className="text-3xl font-semibold tracking-tight">{p.price}</span>
-                    <span className="pb-1 text-sm text-muted-foreground">{p.period}</span>
+                <CardHeader className="p-6">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground mb-2">{p.name}</p>
+                  <div className="flex items-baseline gap-1 mb-4">
+                    <span className="text-4xl font-black tracking-tighter text-foreground">{p.price}</span>
+                    <span className="text-xs font-bold text-muted-foreground">{p.period}</span>
                   </div>
-
-                  <p className="text-sm text-muted-foreground">{p.tagline}</p>
+                  <CardTitle className="text-sm font-medium text-muted-foreground leading-relaxed">
+                    {p.tagline}
+                  </CardTitle>
                 </CardHeader>
 
-                <CardContent className="space-y-5">
-                  <ul className="space-y-2">
+                <CardContent className="p-6 pt-0 space-y-8">
+                  <Separator className="opacity-50" />
+                  <ul className="space-y-4">
                     {p.bullets.map((b) => (
-                      <li key={b} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
+                      <li key={b} className="flex items-center gap-3 text-sm font-bold text-foreground/80">
+                        <CheckCircle2 className="h-5 w-5 text-primary shrink-0 opacity-70" />
                         <span>{b}</span>
                       </li>
                     ))}
@@ -271,181 +187,103 @@ export default function TarifsPage() {
 
                   <Button
                     asChild
-                    className="w-full rounded-full"
-                    variant={p.highlight ? "default" : "outline"}
+                    className={cn(
+                      "w-full h-12 rounded-xl font-black shadow-lg transition-all active:scale-95",
+                      p.highlight ? "bg-primary text-white" : "bg-muted text-foreground hover:bg-muted/80 shadow-none"
+                    )}
                   >
                     <Link href={p.ctaHref}>{p.ctaLabel}</Link>
                   </Button>
-
-                  <p className="text-xs text-muted-foreground">
-                    Facturation mensuelle. Annuel disponible sur demande.
-                  </p>
                 </CardContent>
               </Card>
             ))}
           </div>
-
-          {/* sur-mesure */}
-          <div className="mx-auto mt-10 max-w-6xl rounded-3xl border bg-card p-6 md:p-8">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold">Besoin d’un plan sur-mesure ?</p>
-                <p className="text-sm text-muted-foreground">
-                  Multi-sociétés, gros volumes, intégrations paie / reporting avancé, SLA…
-                </p>
-              </div>
-              <Button asChild variant="outline" className="rounded-full">
-                <Link href="/contact">Nous contacter</Link>
-              </Button>
-            </div>
-          </div>
         </div>
       </section>
 
-      {/* COMPARATIF (stable + responsive) */}
-      <section className="border-t py-12 md:py-16">
-        <div className="container">
-          <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
-              Comparatif des fonctionnalités
-            </h2>
-            <p className="mt-3 text-muted-foreground md:text-lg">
-              Une lecture claire : ce qui est inclus, et ce qui s’active en montée de gamme.
-            </p>
+      {/* ===================== COMPARISON TABLE ===================== */}
+      <section className="py-24 border-t border-border/50 overflow-hidden">
+        <div className="container px-4 mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-black tracking-tight mb-4">Comparez les fonctionnalités</h2>
+            <p className="text-muted-foreground font-medium italic max-w-xl mx-auto">Détail des outils inclus par abonnement pour piloter votre agence sans friction.</p>
           </div>
 
-          <div className="mx-auto mt-10 max-w-6xl">
-            <div className="overflow-x-auto rounded-3xl border bg-card">
-              {/* min-w pour forcer l’affichage des 4 colonnes + scroll horizontal sur mobile */}
-              <table className="w-full min-w-[980px] border-collapse">
-                <thead className="bg-muted/30">
-                  <tr className="border-b">
-                    <th className="sticky left-0 z-10 bg-muted/30 px-6 py-4 text-left text-sm font-semibold text-foreground">
-                      Fonctionnalités
-                    </th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-foreground">Free</th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-foreground">Starter</th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-foreground">Pro</th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-foreground">Growth</th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y">
-                  {features.map((r) => (
-                    <tr key={r.label} className="hover:bg-muted/20 transition">
-                      <td className="sticky left-0 z-10 bg-card px-6 py-5">
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border bg-muted/20">
-                            <r.icon className="h-4 w-4 text-primary" />
-                          </div>
-                          <p className="text-sm font-medium text-foreground">{r.label}</p>
-                        </div>
-                      </td>
-
-                      <td className="px-6 py-5 text-center align-middle">
-                        <Cell ok={r.availability.free} />
-                      </td>
-                      <td className="px-6 py-5 text-center align-middle">
-                        <Cell ok={r.availability.starter} />
-                      </td>
-                      <td className="px-6 py-5 text-center align-middle">
-                        <Cell ok={r.availability.pro} />
-                      </td>
-                      <td className="px-6 py-5 text-center align-middle">
-                        <Cell ok={r.availability.growth} />
-                      </td>
-                    </tr>
+          <div className="max-w-6xl mx-auto overflow-x-auto rounded-[2rem] border border-border/50 shadow-2xl bg-card">
+            <table className="w-full min-w-[800px] border-collapse">
+              <thead>
+                <tr className="bg-muted/30">
+                  <th className="sticky left-0 z-10 bg-muted/30 px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground">Modules</th>
+                  {plans.map(p => (
+                    <th key={p.id} className="px-8 py-6 text-center text-sm font-black text-foreground">{p.name}</th>
                   ))}
-                </tbody>
-              </table>
-            </div>
-
-            <p className="mt-4 text-xs text-muted-foreground">
-              * Les quotas exacts (agents, sites, tenants) sont affichés en temps réel dans votre écran Abonnement.
-              Les plans évoluent sans casser votre usage : vous gardez l’historique.
-            </p>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {features.map((f) => (
+                  <tr key={f.label} className="group hover:bg-muted/20 transition-colors">
+                    <td className="sticky left-0 z-10 bg-card px-8 py-5 group-hover:bg-muted/5 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="h-8 w-8 rounded-lg bg-primary/5 border border-primary/10 flex items-center justify-center shrink-0">
+                          <f.icon className="h-4 w-4 text-primary" />
+                        </div>
+                        <span className="text-sm font-bold text-foreground">{f.label}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5 text-center"><Cell ok={f.availability.free} /></td>
+                    <td className="px-8 py-5 text-center"><Cell ok={f.availability.starter} /></td>
+                    <td className="px-8 py-5 text-center"><Cell ok={f.availability.pro} /></td>
+                    <td className="px-8 py-5 text-center"><Cell ok={f.availability.growth} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
 
-      {/* FAQ + CTA final (propre) */}
-      <section className="border-t bg-muted/30 py-12 md:py-16">
-        <div className="container">
-          <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
-              Questions fréquentes
-            </h2>
-            <p className="mt-3 text-muted-foreground md:text-lg">
-              Tout ce qu’il faut pour décider vite.
-            </p>
+      {/* ===================== FAQ ===================== */}
+      <section className="py-24 bg-background border-t">
+        <div className="container px-4 mx-auto max-w-4xl">
+          <div className="text-center mb-16 space-y-4">
+            <h2 className="text-4xl font-black tracking-tighter italic">FAQ Abonnements</h2>
           </div>
-
-          <div className="mx-auto mt-10 max-w-3xl rounded-3xl border bg-card p-2">
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="q1">
-                <AccordionTrigger className="px-4">
-                  Puis-je commencer en Free et upgrader plus tard ?
-                </AccordionTrigger>
-                <AccordionContent className="px-4 text-muted-foreground">
-                  Oui. Vous pouvez démarrer en Free, puis passer en Starter/Pro/Growth sans perdre vos données.
+          <Accordion type="single" collapsible className="space-y-4">
+            {[
+              { q: "Puis-je changer de plan à tout moment ?", a: "Oui. Vous pouvez passer d'un plan à un autre instantanément depuis votre tableau de bord. La facturation sera proratisée automatiquement." },
+              { q: "Comment fonctionne le multi-sociétés (Growth) ?", a: "Le plan Growth débloque l'architecture multi-tenant. Vous pouvez créer des sous-comptes isolés pour vos différentes filiales tout en gardant une vision d'ensemble centralisée." },
+              { q: "Quelles sont les méthodes de paiement ?", a: "Nous acceptons toutes les cartes de crédit via Stripe. Pour les plans Growth, le paiement par virement SEPA est également disponible." },
+            ].map((faq, i) => (
+              <AccordionItem key={i} value={`item-${i}`} className="border rounded-2xl px-8 bg-card shadow-sm data-[state=open]:ring-1 ring-primary/20">
+                <AccordionTrigger className="text-base font-bold hover:no-underline py-6">{faq.q}</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground text-sm pb-6 leading-relaxed">
+                  {faq.a}
                 </AccordionContent>
               </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      </section>
 
-              <AccordionItem value="q2">
-                <AccordionTrigger className="px-4">
-                  Comment fonctionne le multi-tenant (multi-sociétés) ?
-                </AccordionTrigger>
-                <AccordionContent className="px-4 text-muted-foreground">
-                  Vous gérez plusieurs sociétés/tenants dans un seul compte (groupe, sous-traitance, multi-agences).
-                  Inclus dans Growth.
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem value="q3">
-                <AccordionTrigger className="px-4">
-                  Les quotas sont-ils visibles et compréhensibles ?
-                </AccordionTrigger>
-                <AccordionContent className="px-4 text-muted-foreground">
-                  Oui. L’écran Abonnement affiche en temps réel le plan, les quotas, l’usage et le taux d’utilisation.
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem value="q4">
-                <AccordionTrigger className="px-4">
-                  Puis-je demander un plan sur-mesure ?
-                </AccordionTrigger>
-                <AccordionContent className="px-4 text-muted-foreground">
-                  Oui : gros volumes, multi-sociétés avancé, intégrations, SLA… Contactez-nous pour une offre adaptée.
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </div>
-
-          <div className="mx-auto mt-10 max-w-5xl rounded-3xl border bg-card p-8 md:p-12">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold">Prêt à démarrer ?</p>
-                <p className="text-sm text-muted-foreground">
-                  Créez un compte en quelques minutes. Vous pourrez upgrader au bon moment.
-                </p>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button asChild size="lg" className="h-11 rounded-full gap-2">
-                  <Link href="/signup">
-                    Créer un compte <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-                <Button asChild size="lg" variant="outline" className="h-11 rounded-full">
-                  <Link href="/contact">Demander une démo</Link>
-                </Button>
-              </div>
-            </div>
-
-            <Separator className="my-8" />
-
-            <p className="text-xs text-muted-foreground">
-              Conseil : lorsque Stripe est branché, les boutons “Choisir” déclencheront le checkout et mettront à jour l’abonnement automatiquement.
-            </p>
+      {/* ===================== FINAL CTA ===================== */}
+      <section className="py-24">
+        <div className="container px-4 mx-auto">
+          <div className="relative max-w-6xl mx-auto rounded-[3rem] bg-foreground p-8 md:p-20 overflow-hidden">
+             <div className="absolute top-0 right-0 p-10 opacity-10"><Infinity className="w-64 h-64 text-white" /></div>
+             <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-12">
+                <div className="text-center md:text-left space-y-4">
+                   <h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter">Votre agence mérite <br /> le meilleur outil.</h2>
+                   <p className="text-white/50 font-medium text-lg">Rejoignez Sentrys aujourd'hui et libérez-vous de l'administratif.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-4">
+                   <Button asChild size="lg" className="h-14 rounded-2xl px-10 font-black bg-white text-black hover:bg-white/90">
+                     <Link href="/signup">Essai gratuit</Link>
+                   </Button>
+                   <Button asChild variant="outline" size="lg" className="h-14 rounded-2xl px-10 font-bold border-white/20 text-white hover:bg-white/10">
+                     <Link href="/contact">Support ventes</Link>
+                   </Button>
+                </div>
+             </div>
           </div>
         </div>
       </section>

@@ -81,6 +81,25 @@ function max0(n: number) {
   return n < 0 ? 0 : n;
 }
 
+function envLimit(name: string, fallback: number) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+function applyLocalDevelopmentLimits(input: {
+  agents: number;
+  sites: number;
+  tenants: number;
+}) {
+  if (process.env.NODE_ENV === "production") return input;
+
+  return {
+    agents: Math.max(input.agents, envLimit("SENTRYS_DEV_LIMIT_AGENTS", 100)),
+    sites: Math.max(input.sites, envLimit("SENTRYS_DEV_LIMIT_SITES", 50)),
+    tenants: Math.max(input.tenants, envLimit("SENTRYS_DEV_LIMIT_TENANTS", 3)),
+  };
+}
+
 /**
  * Charge un plan :
  * 1) tente Firestore `plans/{planId}`
@@ -156,11 +175,11 @@ export async function getSubscription(tenantId: string): Promise<Subscription> {
 export function computeEffectiveLimits(plan: Plan, sub: Subscription) {
   // si snapshot existe, on peut s'en servir (pratique)
   if (sub.effectiveLimits) {
-    return {
+    return applyLocalDevelopmentLimits({
       agents: max0(clampInt(sub.effectiveLimits.agents, plan.baseLimits.agents)),
       sites: max0(clampInt(sub.effectiveLimits.sites, plan.baseLimits.sites)),
       tenants: max0(clampInt(sub.effectiveLimits.tenants, plan.baseLimits.tenants)),
-    };
+    });
   }
 
   const extraAgents = max0(clampInt(sub.addons?.extraAgents, 0));
@@ -170,11 +189,11 @@ export function computeEffectiveLimits(plan: Plan, sub: Subscription) {
   // multi-tenant : vendu en option. Si non activé, on force tenants = 1.
   const multiTenantEnabled = Boolean(sub.addons?.multiTenant);
 
-  return {
+  return applyLocalDevelopmentLimits({
     agents: max0(plan.baseLimits.agents + extraAgents),
     sites: max0(plan.baseLimits.sites + extraSites),
     tenants: max0((multiTenantEnabled ? plan.baseLimits.tenants + extraTenants : 1)),
-  };
+  });
 }
 
 /**

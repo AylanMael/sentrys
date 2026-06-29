@@ -67,7 +67,7 @@ export function RecentIncidentsCard() {
   useEffect(() => {
     let unsub: Unsubscribe | null = null;
 
-    if (!canQuery) {
+    if (!canQuery || !tenantId) {
       setItems([]);
       setIsLoading(false);
       return;
@@ -76,11 +76,18 @@ export function RecentIncidentsCard() {
     setIsLoading(true);
 
     unsub = onSnapshot(
-      qRecentIncidents(db!, tenantId!, 6),
+      qRecentIncidents(db, tenantId, 6),
       (snap) => {
         const rows: RecentIncident[] = snap.docs.map((d) => {
-          const data = d.data() as Omit<RecentIncident, "id">;
-          return { id: d.id, ...data };
+          const data = d.data() as Record<string, unknown>;
+          return {
+            id: d.id,
+            siteName: data.siteName as string | undefined | null,
+            severity: data.severity as string | undefined | null,
+            status: data.status as string | undefined | null,
+            createdAt: data.createdAt as Timestamp | undefined | null,
+            createdBy: data.createdBy as RecentIncident["createdBy"],
+          };
         });
         setItems(rows);
         setIsLoading(false);
@@ -96,67 +103,73 @@ export function RecentIncidentsCard() {
   }, [canQuery, tenantId]);
 
   return (
-    <Card className="rounded-3xl">
-      <CardContent className="p-6">
-        <div className="mb-4">
-          <h3 className="text-xl font-semibold">Incidents récents</h3>
-          <p className="text-sm text-muted-foreground">Un aperçu des derniers incidents signalés.</p>
+    <div className="p-10 flex flex-col h-full">
+      <div className="mb-8 relative z-10">
+        <div className="flex items-center gap-4 mb-2">
+          <h3 className="text-2xl font-black tracking-tighter text-foreground">Incidents Récents</h3>
+          <Badge className="bg-primary/10 text-primary border-none text-[10px] font-black uppercase tracking-widest px-3 py-1">Direct</Badge>
         </div>
+        <p className="text-sm font-bold text-muted-foreground/60 leading-relaxed">État des lieux des 6 derniers signalements prioritaires.</p>
+      </div>
 
-        {isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-6 w-full" />
-            <Skeleton className="h-6 w-full" />
-            <Skeleton className="h-6 w-full" />
-          </div>
-        ) : items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Aucun incident récent.</p>
-        ) : (
-          <div className="overflow-hidden rounded-2xl border">
-            <div className="grid grid-cols-12 gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground">
-              <div className="col-span-5">Site</div>
-              <div className="col-span-3">Sévérité</div>
-              <div className="col-span-2">Statut</div>
-              <div className="col-span-2 text-right">Date/heure</div>
-            </div>
+      {isLoading ? (
+        <div className="space-y-4 py-4">
+          <Skeleton className="h-16 w-full rounded-2xl opacity-10" />
+          <Skeleton className="h-16 w-full rounded-2xl opacity-10" />
+          <Skeleton className="h-16 w-full rounded-2xl opacity-10" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center flex-1 py-10 text-center opacity-30 grayscale underline-offset-4 decoration-dotted">
+           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">Calme Plat Opérationnel</p>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-hidden">
+          <div className="divide-y divide-white/5">
+            {items.map((it) => {
+              const reporter = it.createdBy?.name || it.createdBy?.email || "—";
+              const severity = String(it.severity ?? "").toLowerCase();
 
-            <div className="divide-y">
-              {items.map((it) => {
-                const reporter = it.createdBy?.name || it.createdBy?.email || "—";
-
-                return (
-                  <button
-                    key={it.id}
-                    type="button"
-                    onClick={() => router.push(`/dashboard/incidents/${it.id}`)}
-                    className={cn(
-                      "grid w-full grid-cols-12 gap-3 px-4 py-3 text-left text-sm",
-                      "hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    )}
-                  >
-                    <div className="col-span-5">
-                      <div className="font-medium">{it.siteName ?? "—"}</div>
-                      <div className="text-xs text-muted-foreground">Signalé par {reporter}</div>
+              return (
+                <button
+                  key={it.id}
+                  type="button"
+                  onClick={() => router.push(`/dashboard/incidents/${it.id}`)}
+                  className="group flex flex-col w-full py-6 text-left hover:px-2 transition-all duration-500 ease-out border-b last:border-none border-white/5"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex flex-col">
+                      <div className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/40 mb-1 group-hover:text-primary/60 transition-colors">
+                        {it.siteName ?? "Site non défini"}
+                      </div>
+                      <div className="text-base font-black tracking-tight group-hover:premium-gradient-text transition-all duration-500 text-foreground">
+                        {reporter}
+                      </div>
                     </div>
+                    <Badge variant="outline" className={cn(
+                        "rounded-xl font-black text-[9px] uppercase tracking-widest py-1 px-3 border-none",
+                        severity === 'élevée' ? "bg-destructive/10 text-destructive" :
+                        severity === 'moyenne' ? "bg-orange-500/10 text-orange-600" :
+                        "bg-white/5 text-muted-foreground/60"
+                    )}>
+                      {it.severity ?? '—'}
+                    </Badge>
+                  </div>
 
-                    <div className="col-span-3">
-                      <SeverityBadge v={it.severity} />
+                  <div className="flex items-center justify-between mt-auto">
+                    <div className="flex items-center gap-2">
+                       <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", it.status === 'Ouvert' ? "bg-destructive" : "bg-green-500")}></div>
+                       <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">{it.status}</span>
                     </div>
-
-                    <div className="col-span-2">
-                      <StatusBadge v={it.status} />
-                    </div>
-
-                    <div className="col-span-2 text-right text-muted-foreground">
+                    <div className="text-[10px] font-black text-muted-foreground/20 uppercase tracking-[0.1em]">
                       {formatDateTimeFR(it.createdAt)}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }

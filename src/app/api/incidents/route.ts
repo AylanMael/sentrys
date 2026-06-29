@@ -5,33 +5,40 @@ import { FieldValue } from "firebase-admin/firestore";
 
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import { logActivity } from "@/lib/activity/logger";
+import { IncidentCreateSchema } from "@/lib/api/schemas";
+import { isWithinGeofence } from "@/lib/utils/geo";
 
 export const runtime = "nodejs";
 
 /* ================= helpers ================= */
 
-function json(status: number, body: any) {
+function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
 }
 
-function bad(msg: string, extra?: any) {
+function bad(msg: string, extra?: Record<string, unknown>) {
   return json(400, { ok: false, error: msg, ...extra });
 }
 
-function forbidden(msg = "Forbidden", extra?: any) {
+function forbidden(msg = "Forbidden", extra?: Record<string, unknown>) {
   return json(403, { ok: false, error: msg, ...extra });
 }
 
-function serverError(e: any, tag: string) {
+function serverError(e: unknown, tag: string) {
   console.error(`[${tag}]`, e);
-  return json(500, { ok: false, error: "Internal error", details: e?.message ?? String(e) });
+  return json(500, {
+    ok: false,
+    error: "Internal error",
+    details: e instanceof Error ? e.message : String(e),
+  });
 }
 
-function toIso(ts: any) {
-  return ts && typeof ts.toDate === "function" ? ts.toDate().toISOString() : null;
+function toIso(ts: unknown) {
+  const t = ts as { toDate?: () => Date } | null | undefined;
+  return typeof t?.toDate === "function" ? t.toDate().toISOString() : null;
 }
 
-function normalizeText(v: any) {
+function normalizeText(v: unknown) {
   return String(v ?? "").trim();
 }
 
@@ -52,13 +59,13 @@ function parseBool(v: string | null): boolean | null {
 type IncidentStatus = "open" | "investigating" | "resolved" | "closed";
 type IncidentSeverity = "low" | "medium" | "high" | "critical";
 
-function asStatus(v: any): IncidentStatus {
+function asStatus(v: unknown): IncidentStatus {
   const s = String(v ?? "").toLowerCase().trim();
   if (s === "open" || s === "investigating" || s === "resolved" || s === "closed") return s;
   return "open";
 }
 
-function asSeverity(v: any): IncidentSeverity {
+function asSeverity(v: unknown): IncidentSeverity {
   const s = String(v ?? "").toLowerCase().trim();
   if (s === "low" || s === "medium" || s === "high" || s === "critical") return s;
   return "medium";
@@ -93,29 +100,29 @@ function buildSearch(input: {
   return parts.join(" ");
 }
 
-function pickIncident(d: any, id: string) {
+function pickIncident(d: Record<string, unknown>, id: string) {
   return {
     id,
-    tenantId: d.tenantId,
+    tenantId: d.tenantId as string,
 
-    title: d.title ?? null,
-    description: d.description ?? null,
+    title: d.title as string | null ?? null,
+    description: d.description as string | null ?? null,
 
     status: asStatus(d.status),
     severity: asSeverity(d.severity),
 
-    siteId: d.siteId ?? null,
-    vacationId: d.vacationId ?? null,
-    agentId: d.agentId ?? null,
+    siteId: d.siteId as string | null ?? null,
+    vacationId: d.vacationId as string | null ?? null,
+    agentId: d.agentId as string | null ?? null,
 
-    tags: Array.isArray(d.tags) ? d.tags.filter((x: any) => typeof x === "string") : [],
+    tags: Array.isArray(d.tags) ? d.tags.filter((x) => typeof x === "string") as string[] : [],
 
     isDeleted: typeof d.isDeleted === "boolean" ? d.isDeleted : false,
 
-    search: d.search ?? null,
+    search: d.search as string | null ?? null,
 
-    createdBy: d.createdBy ?? null,
-    updatedBy: d.updatedBy ?? null,
+    createdBy: d.createdBy as string | null ?? null,
+    updatedBy: d.updatedBy as string | null ?? null,
 
     createdAtIso: toIso(d.createdAt),
     updatedAtIso: toIso(d.updatedAt),
@@ -164,8 +171,8 @@ export async function GET(req: NextRequest) {
     const docs = snap.docs.slice();
 
     docs.sort((a, b) => {
-      const da = a.data() as any;
-      const db = b.data() as any;
+      const da = a.data() as { updatedAt?: { toDate?: () => Date }; createdAt?: { toDate?: () => Date } };
+      const db = b.data() as { updatedAt?: { toDate?: () => Date }; createdAt?: { toDate?: () => Date } };
 
       const au = da?.updatedAt?.toDate?.()?.getTime?.() ?? 0;
       const bu = db?.updatedAt?.toDate?.()?.getTime?.() ?? 0;
@@ -176,11 +183,11 @@ export async function GET(req: NextRequest) {
       return bc - ac;
     });
 
-    let incidents = docs.map((d) => pickIncident(d.data(), d.id));
+    let incidents = docs.map((d) => pickIncident(d.data() as Record<string, unknown>, d.id));
 
     // filtre q en mémoire
     if (q) {
-      incidents = incidents.filter((it: any) => {
+      incidents = incidents.filter((it) => {
         const hay =
           String(it.search ?? "").toLowerCase().trim() ||
           `${it.title ?? ""} ${it.description ?? ""} ${it.siteId ?? ""} ${it.agentId ?? ""} ${it.vacationId ?? ""}`
@@ -191,7 +198,7 @@ export async function GET(req: NextRequest) {
     }
 
     return json(200, { ok: true, tenantId: auth.tenantId, count: incidents.length, incidents });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return serverError(e, "incidents.GET");
   }
 }
@@ -207,50 +214,63 @@ export async function POST(req: NextRequest) {
 
   if (!canWrite(auth.role)) return forbidden("Insufficient rights");
 
-  let body: any;
+  let rawBody: any;
   try {
-    body = await req.json();
+    rawBody = await req.json();
   } catch {
     return bad("Invalid JSON body");
   }
 
-  const title = normalizeText(body.title);
-  if (!title) return bad("title is required");
+  // VALIDATION ZOD
+  const validation = IncidentCreateSchema.safeParse(rawBody);
+  if (!validation.success) {
+    return bad("Données invalides", { detail: validation.error.format() });
+  }
 
-  const description = normalizeText(body.description) || null;
-
-  const severity = asSeverity(body.severity);
-  const status = asStatus(body.status);
-
-  const siteId = normalizeText(body.siteId) || null;
-  const agentId = normalizeText(body.agentId) || null;
-  const vacationId = normalizeText(body.vacationId) || null;
-
-  const tags = Array.isArray(body.tags)
-    ? uniq(
-        body.tags
-          .filter((x: any) => typeof x === "string")
-          .map((x: string) => x.trim())
-          .filter(Boolean)
-      ).slice(0, 20)
-    : [];
-
-  const search = buildSearch({ title, description, siteId, agentId, vacationId });
+  const values = validation.data;
 
   try {
-    const payload: any = {
+    // GEOFENCING CHECK
+    if (values.reportedLat && values.reportedLng) {
+      const siteSnap = await adminDb.collection("sites").doc(values.siteId).get();
+      if (siteSnap.exists) {
+        const siteData = siteSnap.data();
+        if (siteData?.latitude && siteData?.longitude) {
+          const within = isWithinGeofence(
+            values.reportedLat,
+            values.reportedLng,
+            siteData.latitude,
+            siteData.longitude,
+            500 // 500 mètres
+          );
+          if (!within) {
+            return bad("Hors périmètre", {
+              error: "Vous devez être à moins de 500m du site pour déclarer un incident."
+            });
+          }
+        }
+      }
+    }
+
+    const payload: Record<string, unknown> = {
       tenantId: auth.tenantId,
-      title,
-      description,
-      severity,
-      status,
-      siteId,
-      agentId,
-      vacationId,
-      tags,
+      title: values.title,
+      description: values.description,
+      severity: values.severity,
+      status: values.status,
+      siteId: values.siteId,
+      agentId: values.agentId ?? null,
+      vacationId: values.vacationId ?? null,
+      tags: values.tags,
 
       isDeleted: false,
-      search,
+      search: buildSearch({
+        title: values.title,
+        description: values.description,
+        siteId: values.siteId,
+        agentId: values.agentId,
+        vacationId: values.vacationId
+      }),
 
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -261,7 +281,7 @@ export async function POST(req: NextRequest) {
     const ref = await adminDb.collection("incidents").add(payload);
     const created = await ref.get();
 
-    // ✅ activity log
+    // activity log
     await logActivity({
       tenantId: auth.tenantId,
       actorUid: auth.uid,
@@ -270,18 +290,24 @@ export async function POST(req: NextRequest) {
       action: "incident.created",
       entityType: "incident",
       entityId: ref.id,
-      message: `Incident créé : ${title}`,
-      meta: { incidentId: ref.id, title, severity, status, siteId, agentId, vacationId },
-      severity: mapSeverityToActivity(severity),
+      message: `Incident créé : ${values.title}`,
+      meta: {
+        incidentId: ref.id,
+        title: values.title,
+        severity: values.severity,
+        status: values.status,
+        siteId: values.siteId
+      },
+      severity: mapSeverityToActivity(values.severity),
     });
 
     return json(201, {
       ok: true,
       tenantId: auth.tenantId,
       id: ref.id,
-      incident: pickIncident(created.data(), ref.id),
+      incident: pickIncident(payload as Record<string, unknown>, ref.id),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return serverError(e, "incidents.POST");
   }
 }

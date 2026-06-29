@@ -38,9 +38,9 @@ export async function requireMe(req: NextRequest): Promise<
       };
     }
 
-    const tu = tuSnap.data() as any;
+    const tu = tuSnap.data() as Record<string, unknown> | undefined;
 
-    if (tu.status !== "active") {
+    if (tu?.status !== "active") {
       return {
         ok: false,
         res: NextResponse.json({ ok: false, error: "User disabled" }, { status: 403 }),
@@ -51,9 +51,9 @@ export async function requireMe(req: NextRequest): Promise<
       uid,
       email: decoded.email ?? null,
       name: (decoded.name as string | undefined) ?? null,
-      tenantId: String(tu.tenantId || ""),
-      role: String(tu.role || "client"),
-      status: String(tu.status || "disabled"),
+      tenantId: String(tu?.tenantId || ""),
+      role: String(tu?.role || "client"),
+      status: String(tu?.status || "disabled"),
     };
 
     if (!me.tenantId) {
@@ -64,11 +64,11 @@ export async function requireMe(req: NextRequest): Promise<
     }
 
     return { ok: true, me };
-  } catch (e: any) {
+  } catch (e: unknown) {
     return {
       ok: false,
       res: NextResponse.json(
-        { ok: false, error: "Invalid token", details: e?.message ?? String(e) },
+        { ok: false, error: "Invalid token", details: e instanceof Error ? e.message : String(e) },
         { status: 401 }
       ),
     };

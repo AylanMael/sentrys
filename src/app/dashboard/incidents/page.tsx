@@ -1,49 +1,34 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
-import { PlusCircle, MoreHorizontal, Loader2 } from "lucide-react";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-  type QuerySnapshot,
-  type DocumentData,
-} from "firebase/firestore";
-
-import { useAuth } from "@/lib/auth-provider";
-import { db } from "@/lib/firebase/client";
-import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Clock3,
+  FileText,
+  Loader2,
+  MapPin,
+  PlusCircle,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  Siren,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -53,7 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -62,591 +47,935 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/lib/auth-provider";
+import { apiFetch, getApiErrorMessage } from "@/lib/api/client-fetch";
 import { cn } from "@/lib/utils";
+import { useAppFeedback } from "@/hooks/use-app-feedback";
 
-import { apiFetch } from "@/lib/api/client-fetch";
+type IncidentStatus = "open" | "investigating" | "resolved" | "closed";
+type IncidentSeverity = "low" | "medium" | "high" | "critical";
+type IncidentFilter = "all" | "critical" | IncidentStatus;
 
-/* ================= UI types (FR) ================= */
-
-type SeverityFR = "Faible" | "Moyenne" | "Élevée";
-type StatusFR = "Ouvert" | "Clos";
-type TabKey = "all" | "open" | "closed";
-
-/* ================= API types ================= */
-
-type IncidentStatusAPI = "open" | "investigating" | "resolved" | "closed";
-type IncidentSeverityAPI = "low" | "medium" | "high" | "critical";
-
-type IncidentApiItem = {
+type IncidentRow = {
   id: string;
-  tenantId: string;
   title: string | null;
   description: string | null;
-  status: IncidentStatusAPI;
-  severity: IncidentSeverityAPI;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
   siteId: string | null;
-  agentId: string | null;
-  vacationId: string | null;
-  tags: string[];
-  isDeleted: boolean;
+  tags?: string[];
   createdAtIso: string | null;
   updatedAtIso: string | null;
 };
 
+type SiteRow = {
+  id: string;
+  name?: string | null;
+  address?: string | null;
+  city?: string | null;
+};
+
 type IncidentsListResponse = {
   ok: boolean;
-  tenantId?: string;
-  count?: number;
-  incidents?: IncidentApiItem[];
-  error?: string;
+  incidents?: IncidentRow[];
+};
+
+type SitesListResponse = {
+  ok: boolean;
+  sites?: SiteRow[];
+  items?: SiteRow[];
 };
 
 type IncidentCreateResponse = {
   ok: boolean;
-  tenantId?: string;
-  id?: string;
-  incident?: IncidentApiItem;
-  error?: string;
+  incident?: IncidentRow;
 };
 
 type IncidentPatchResponse = {
   ok: boolean;
-  tenantId?: string;
-  incident?: IncidentApiItem;
-  error?: string;
+  incident?: IncidentRow;
 };
 
-/* ================= Sites (pour Select) ================= */
-
-type SiteSnapshot = {
-  id: string;
-  name: string;
-  address?: string | null;
-  city?: string | null;
-  riskLevel?: number | null;
+type QuickStatusAction = {
+  status: IncidentStatus;
+  label: string;
+  loadingLabel: string;
+  className: string;
 };
 
-type SiteRow = SiteSnapshot;
+const STATUS_OPTIONS: Array<{ id: IncidentFilter; label: string }> = [
+  { id: "all", label: "Tous" },
+  { id: "critical", label: "Critiques" },
+  { id: "open", label: "Ouverts" },
+  { id: "investigating", label: "En cours" },
+  { id: "resolved", label: "Resolus" },
+  { id: "closed", label: "Clos" },
+];
 
-/* ================= helpers ================= */
+const SEVERITY_OPTIONS: Array<{ value: IncidentSeverity; label: string; detail: string }> = [
+  { value: "low", label: "Faible", detail: "Information ou anomalie mineure" },
+  { value: "medium", label: "Moyenne", detail: "A surveiller et documenter" },
+  { value: "high", label: "Elevee", detail: "Prioritaire pour l'exploitation" },
+  { value: "critical", label: "Critique", detail: "Action immediate requise" },
+];
 
-function isoToDate(iso?: string | null) {
-  if (!iso) return new Date(0);
-  const d = new Date(iso);
-  return Number.isFinite(d.getTime()) ? d : new Date(0);
+function normalizeStatus(value: unknown): IncidentStatus {
+  const status = String(value ?? "").toLowerCase().trim();
+  if (status === "investigating" || status === "resolved" || status === "closed") {
+    return status;
+  }
+  return "open";
 }
 
-function severityToVariant(sev: SeverityFR) {
-  if (sev === "Élevée") return "destructive";
-  return "outline";
+function normalizeSeverity(value: unknown): IncidentSeverity {
+  const severity = String(value ?? "").toLowerCase().trim();
+  if (severity === "low" || severity === "high" || severity === "critical") {
+    return severity;
+  }
+  return "medium";
 }
 
-function toKey(v: string) {
-  return (v ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+function statusLabel(status: IncidentStatus) {
+  if (status === "investigating") return "En cours";
+  if (status === "resolved") return "Resolu";
+  if (status === "closed") return "Clos";
+  return "Ouvert";
 }
 
-function mapSeverityToApi(sev: SeverityFR): IncidentSeverityAPI {
-  if (sev === "Faible") return "low";
-  if (sev === "Moyenne") return "medium";
-  return "high";
+function severityLabel(severity: IncidentSeverity) {
+  if (severity === "critical") return "Critique";
+  if (severity === "high") return "Elevee";
+  if (severity === "low") return "Faible";
+  return "Moyenne";
 }
 
-function mapSeverityToFr(sev: IncidentSeverityAPI): SeverityFR {
-  if (sev === "low") return "Faible";
-  if (sev === "medium") return "Moyenne";
-  // high|critical => "Élevée" (tu peux affiner si tu veux)
-  return "Élevée";
+function statusClass(status: IncidentStatus) {
+  if (status === "closed") {
+    return "border-slate-500/25 bg-slate-500/10 text-slate-700 dark:text-slate-300";
+  }
+  if (status === "resolved") {
+    return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  }
+  if (status === "investigating") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  }
+  return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300";
 }
 
-function mapStatusToFr(st: IncidentStatusAPI): StatusFR {
-  return st === "closed" ? "Clos" : "Ouvert";
+function severityClass(severity: IncidentSeverity) {
+  if (severity === "critical") {
+    return "border-red-600/30 bg-red-600/10 text-red-700 dark:text-red-300";
+  }
+  if (severity === "high") {
+    return "border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300";
+  }
+  if (severity === "low") {
+    return "border-slate-500/25 bg-slate-500/10 text-slate-700 dark:text-slate-300";
+  }
+  return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
 }
 
-/* ================= page ================= */
+function incidentTimestamp(incident: IncidentRow) {
+  const value = incident.updatedAtIso || incident.createdAtIso;
+  if (!value) return 0;
+  const time = Date.parse(value);
+  return Number.isFinite(time) ? time : 0;
+}
+
+function sortIncidents(list: IncidentRow[]) {
+  return [...list].sort((a, b) => incidentTimestamp(b) - incidentTimestamp(a));
+}
+
+function formatMoment(iso: string | null) {
+  if (!iso) return "Non horodate";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "Date invalide";
+
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function cleanIncident(raw: IncidentRow): IncidentRow {
+  return {
+    ...raw,
+    title: raw.title ?? "Incident terrain",
+    description: raw.description ?? "",
+    siteId: raw.siteId ?? null,
+    status: normalizeStatus(raw.status),
+    severity: normalizeSeverity(raw.severity),
+    createdAtIso: raw.createdAtIso ?? null,
+    updatedAtIso: raw.updatedAtIso ?? null,
+  };
+}
+
+function quickStatusAction(incident: IncidentRow): QuickStatusAction | null {
+  if (incident.status === "open") {
+    return {
+      status: "investigating",
+      label: "Prendre en charge",
+      loadingLabel: "Prise en charge...",
+      className:
+        "border-amber-500/35 bg-amber-500/10 text-amber-800 hover:bg-amber-500/15 dark:text-amber-200",
+    };
+  }
+
+  if (incident.status === "investigating") {
+    return {
+      status: "resolved",
+      label: "Marquer resolu",
+      loadingLabel: "Resolution...",
+      className:
+        "border-emerald-500/35 bg-emerald-500/10 text-emerald-800 hover:bg-emerald-500/15 dark:text-emerald-200",
+    };
+  }
+
+  if (incident.status === "resolved") {
+    return {
+      status: "closed",
+      label: "Clore",
+      loadingLabel: "Cloture...",
+      className:
+        "border-slate-500/30 bg-slate-500/10 text-slate-800 hover:bg-slate-500/15 dark:text-slate-200",
+    };
+  }
+
+  return null;
+}
+
+function quickStatusSuccessTitle(status: IncidentStatus) {
+  if (status === "investigating") return "Incident pris en charge";
+  if (status === "resolved") return "Incident marque resolu";
+  if (status === "closed") return "Incident clos";
+  return "Incident mis a jour";
+}
+
+function IncidentsSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-40 rounded-[2rem]" />
+      <div className="grid gap-4 md:grid-cols-4">
+        <Skeleton className="h-28 rounded-[1.5rem]" />
+        <Skeleton className="h-28 rounded-[1.5rem]" />
+        <Skeleton className="h-28 rounded-[1.5rem]" />
+        <Skeleton className="h-28 rounded-[1.5rem]" />
+      </div>
+      <Skeleton className="h-96 rounded-[2rem]" />
+    </div>
+  );
+}
 
 export default function IncidentsPage() {
-  const { toast } = useToast();
-  const { user, loading } = useAuth();
+  const { loading: authLoading } = useAuth();
+  const feedback = useAppFeedback();
 
-  // incidents list (API)
-  const [rows, setRows] = useState<IncidentApiItem[]>([]);
-  const [loadingList, setLoadingList] = useState(true);
-
-  // sites list (Firestore realtime, OK)
+  const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [sites, setSites] = useState<SiteRow[]>([]);
-  const [loadingSites, setLoadingSites] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
 
-  // UI
   const [queryText, setQueryText] = useState("");
-  const [tab, setTab] = useState<TabKey>("all");
-  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState<IncidentFilter>("all");
 
-  // form
-  const [siteId, setSiteId] = useState<string>("");
-  const [severity, setSeverity] = useState<SeverityFR | "">("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newSiteId, setNewSiteId] = useState("");
+  const [newSeverity, setNewSeverity] = useState<IncidentSeverity>("medium");
   const [description, setDescription] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [updatingIncidentId, setUpdatingIncidentId] = useState<string | null>(null);
+  const [capturingLocation, setCapturingLocation] = useState(false);
+  const [reportedLat, setReportedLat] = useState<number | null>(null);
+  const [reportedLng, setReportedLng] = useState<number | null>(null);
+
+  const siteById = useMemo(() => {
+    return new Map(sites.map((site) => [site.id, site]));
+  }, [sites]);
 
   const selectedSite = useMemo(() => {
-    if (!siteId) return null;
-    return sites.find((s) => s.id === siteId) ?? null;
-  }, [siteId, sites]);
+    return sites.find((site) => site.id === newSiteId) ?? null;
+  }, [newSiteId, sites]);
 
-  // 0) LISTEN Sites (Select)
+  const stats = useMemo(() => {
+    const critical = incidents.filter((incident) => incident.severity === "critical").length;
+    const active = incidents.filter(
+      (incident) => incident.status === "open" || incident.status === "investigating"
+    ).length;
+    const resolved = incidents.filter((incident) => incident.status === "resolved").length;
+    const closed = incidents.filter((incident) => incident.status === "closed").length;
+
+    return {
+      total: incidents.length,
+      critical,
+      active,
+      resolved,
+      closed,
+    };
+  }, [incidents]);
+
+  const situation = useMemo(() => {
+    if (stats.critical > 0) {
+      return {
+        title: "Priorite critique",
+        detail: `${stats.critical} incident(s) critique(s) a traiter avant toute autre action.`,
+        tone: "danger" as const,
+      };
+    }
+
+    if (stats.active > 0) {
+      return {
+        title: "Suivi operationnel",
+        detail: `${stats.active} incident(s) ouvert(s) ou en cours attendent une decision.`,
+        tone: "warning" as const,
+      };
+    }
+
+    return {
+      title: "Situation maitrisee",
+      detail: "Aucun incident actif dans le perimetre charge.",
+      tone: "success" as const,
+    };
+  }, [stats.active, stats.critical]);
+
+  const filterItems = useMemo(() => {
+    return STATUS_OPTIONS.map((item) => {
+      let count = incidents.length;
+      if (item.id === "critical") {
+        count = incidents.filter((incident) => incident.severity === "critical").length;
+      } else if (item.id !== "all") {
+        count = incidents.filter((incident) => incident.status === item.id).length;
+      }
+
+      return { ...item, count };
+    });
+  }, [incidents]);
+
+  const filteredIncidents = useMemo(() => {
+    const filteredByStatus = incidents.filter((incident) => {
+      if (filter === "all") return true;
+      if (filter === "critical") return incident.severity === "critical";
+      return incident.status === filter;
+    });
+
+    const q = queryText.trim().toLowerCase();
+    if (!q) return filteredByStatus;
+
+    return filteredByStatus.filter((incident) => {
+      const site = incident.siteId ? siteById.get(incident.siteId) : null;
+      const haystack = [
+        site?.name,
+        site?.city,
+        incident.title,
+        incident.description,
+        severityLabel(incident.severity),
+        statusLabel(incident.status),
+        ...(incident.tags ?? []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(q);
+    });
+  }, [filter, incidents, queryText, siteById]);
+
+  const resetCreateForm = useCallback(() => {
+    setNewSiteId("");
+    setNewSeverity("medium");
+    setDescription("");
+    setReportedLat(null);
+    setReportedLng(null);
+    setCapturingLocation(false);
+  }, []);
+
+  const loadData = useCallback(
+    async (options: { quiet?: boolean; refresh?: boolean } = {}) => {
+      if (authLoading) return;
+
+      if (options.refresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      try {
+        const [incidentsResponse, sitesResponse] = await Promise.all([
+          apiFetch<IncidentsListResponse>("/api/incidents?max=200"),
+          apiFetch<SitesListResponse>("/api/sites?max=200"),
+        ]);
+
+        const nextSites = sitesResponse.sites ?? sitesResponse.items ?? [];
+        const nextIncidents = sortIncidents((incidentsResponse.incidents ?? []).map(cleanIncident));
+
+        setSites(nextSites);
+        setIncidents(nextIncidents);
+        setLastSync(new Date());
+
+        if (!options.quiet) {
+          feedback.info(
+            "Incidents synchronises",
+            `${nextIncidents.length} incident(s), ${nextSites.length} site(s) operationnel(s).`
+          );
+        }
+      } catch (err) {
+        const message = getApiErrorMessage(err, "Impossible de charger les incidents.");
+        setError(message);
+        feedback.error(err, {
+          title: "Incidents indisponibles",
+          fallback: message,
+        });
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [authLoading, feedback]
+  );
+
   useEffect(() => {
-    if (loading) return;
+    void loadData({ quiet: true });
+  }, [loadData]);
 
-    if (!db || !user?.tenantId) {
-      setLoadingSites(false);
-      setSites([]);
+  const captureLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      feedback.warning("Position non disponible", "Le navigateur ne permet pas la geolocalisation.");
       return;
     }
 
-    setLoadingSites(true);
-
-    const qy = query(
-      collection(db, "sites"),
-      where("tenantId", "==", user.tenantId),
-      orderBy("createdAt", "desc")
-    );
-
-    const unsub = onSnapshot(
-      qy,
-      (snap: QuerySnapshot<DocumentData>) => {
-        const next: SiteRow[] = snap.docs.map((d) => {
-          const data = d.data() as any;
-          return {
-            id: d.id,
-            name: (data?.name ?? "Site sans nom") as string,
-            address: data?.address ?? null,
-            city: data?.city ?? null,
-            riskLevel: typeof data?.riskLevel === "number" ? data.riskLevel : null,
-          };
-        });
-        setSites(next);
-        setLoadingSites(false);
+    setCapturingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setReportedLat(position.coords.latitude);
+        setReportedLng(position.coords.longitude);
+        setCapturingLocation(false);
+        feedback.success("Position ajoutee", "La position terrain sera jointe a la declaration.");
       },
-      (err) => {
-        console.error("Sites onSnapshot error:", err);
-        setLoadingSites(false);
-        toast({
-          variant: "destructive",
-          title: "Erreur de lecture (sites)",
-          description:
-            err?.message?.includes("requires an index")
-              ? "Index Firestore manquant pour la requête sites."
-              : err?.message?.includes("Missing or insufficient permissions")
-              ? "Permissions Firestore insuffisantes (règles sites)."
-              : "Impossible de charger les sites.",
-        });
-      }
+      () => {
+        setCapturingLocation(false);
+        feedback.warning("Position non ajoutee", "Vous pouvez declarer l'incident sans coordonnees GPS.");
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
+  }, [feedback]);
 
-    return () => unsub();
-  }, [loading, toast, user?.tenantId]);
+  async function updateIncidentStatus(incident: IncidentRow, status: IncidentStatus) {
+    if (updatingIncidentId) return;
 
-  async function loadIncidents() {
-    if (!user?.tenantId) {
-      setRows([]);
-      setLoadingList(false);
-      return;
-    }
+    const site = incident.siteId ? siteById.get(incident.siteId) : null;
+    setUpdatingIncidentId(incident.id);
 
-    setLoadingList(true);
     try {
-      const res = await apiFetch<IncidentsListResponse>("/api/incidents?max=200");
-      if (!res?.ok) {
-        setRows([]);
-        toast({
-          variant: "destructive",
-          title: "Impossible de charger les incidents",
-          description: res?.error ?? "Erreur API",
-        });
-        return;
+      const response = await apiFetch<IncidentPatchResponse>(`/api/incidents/${incident.id}`, {
+        method: "PATCH",
+        body: { status },
+      });
+
+      if (response.incident) {
+        const nextIncident = cleanIncident(response.incident);
+        setIncidents((current) =>
+          sortIncidents(current.map((item) => (item.id === incident.id ? nextIncident : item)))
+        );
+        setLastSync(new Date());
+      } else {
+        await loadData({ quiet: true });
       }
-      setRows(res.incidents ?? []);
-    } catch (e: any) {
-      setRows([]);
-      toast({
-        variant: "destructive",
-        title: "Impossible de charger les incidents",
-        description: e?.message ?? "Erreur inconnue",
+
+      feedback.success(
+        quickStatusSuccessTitle(status),
+        `${site?.name ?? "Site"} : la main courante est mise a jour et tracee.`
+      );
+    } catch (err) {
+      feedback.error(err, {
+        title: "Traitement impossible",
+        fallback: "Le statut de l'incident n'a pas pu etre mis a jour.",
       });
     } finally {
-      setLoadingList(false);
+      setUpdatingIncidentId(null);
     }
   }
 
-  // 1) LOAD Incidents (API)
-  useEffect(() => {
-    if (loading) return;
-    loadIncidents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, user?.tenantId]);
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-  const counts = useMemo(() => {
-    const openCount = rows.filter((r) => r.status !== "closed").length;
-    const closedCount = rows.filter((r) => r.status === "closed").length;
-    return { all: rows.length, open: openCount, closed: closedCount };
-  }, [rows]);
-
-  const filtered = useMemo(() => {
-    const base =
-      tab === "open"
-        ? rows.filter((r) => r.status !== "closed")
-        : tab === "closed"
-        ? rows.filter((r) => r.status === "closed")
-        : rows;
-
-    const q = queryText.trim().toLowerCase();
-    if (!q) return base;
-
-    return base.filter((r) => {
-      const siteName = sites.find((s) => s.id === r.siteId)?.name ?? "";
-      const hay = `${siteName} ${r.severity} ${r.status} ${r.title ?? ""} ${r.description ?? ""}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [queryText, rows, tab, sites]);
-
-  const resetForm = () => {
-    setSiteId("");
-    setSeverity("");
-    setDescription("");
-  };
-
-  // 2) CREATE via API (=> activity feed OK)
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-  
-    if (!user?.tenantId || !user?.uid) return;
-  
-    if (!siteId || !selectedSite) {
-      toast({
-        variant: "destructive",
-        title: "Site requis",
-        description: "Sélectionne un site existant.",
-      });
+    if (!newSiteId || !description.trim()) {
+      feedback.warning("Declaration incomplete", "Choisissez un site et decrivez les faits.");
       return;
     }
-  
-    const cleanDesc = description.trim();
-    if (!severity || !cleanDesc) return;
-  
-    // mapping UI -> API
-    const severityApi =
-      severity === "Faible" ? "low" : severity === "Moyenne" ? "medium" : "high";
-  
-    setIsSaving(true);
+
+    setSaving(true);
+
     try {
-      await apiFetch("/api/incidents", {
+      await apiFetch<IncidentCreateResponse>("/api/incidents", {
         method: "POST",
         body: {
-          title: `Incident — ${selectedSite.name}`, // ou un vrai champ title si tu veux
-          description: cleanDesc,
-          severity: severityApi,
+          title: `Incident - ${selectedSite?.name ?? "site"}`,
+          description: description.trim(),
+          severity: newSeverity,
           status: "open",
-          siteId: selectedSite.id,
+          siteId: newSiteId,
           tags: [],
+          reportedLat,
+          reportedLng,
         },
       });
-  
-      toast({
-        title: "Incident créé",
-        description: "Il apparaît dans la boîte de réception.",
-      });
-  
-      setOpen(false);
-      resetForm();
-      setTab("open");
-    } catch (err: any) {
-      console.error("Create incident API error:", err);
-      toast({
-        variant: "destructive",
-        title: "Création impossible",
-        description: err?.message ?? "Erreur API.",
+
+      feedback.success(
+        "Incident enregistre",
+        `${selectedSite?.name ?? "Site"} passe dans la conduite operationnelle.`
+      );
+      setDialogOpen(false);
+      resetCreateForm();
+      await loadData({ quiet: true });
+    } catch (err) {
+      feedback.error(err, {
+        title: "Declaration impossible",
+        fallback: "Verifiez le site, la description et vos droits.",
       });
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
-  };  
+  }
 
-  // 3) Close via API (=> activity feed OK)
-  const markClosed = async (id: string) => {
-    try {
-      await apiFetch(`/api/incidents/${id}`, {
-        method: "PATCH",
-        body: { status: "closed" },
-      });
-  
-      toast({ title: "Incident clos", description: "Statut mis à jour." });
-    } catch (err: any) {
-      console.error("Close incident API error:", err);
-      toast({
-        variant: "destructive",
-        title: "Action impossible",
-        description: err?.message ?? "Erreur API.",
-      });
-    }
-  };  
-
-  const canCreate = !!user?.tenantId && !loadingSites && sites.length > 0;
+  if (loading) {
+    return <IncidentsSkeleton />;
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Boîte de réception — Incidents</CardTitle>
-            <CardDescription>Derniers rapports d&apos;incidents de votre tenant.</CardDescription>
+    <div className="mx-auto w-full max-w-[1600px] space-y-8 px-4 pb-20 md:px-0">
+      <section className="relative overflow-hidden rounded-[2rem] border bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-8 text-white shadow-2xl shadow-slate-950/10 md:p-10">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-red-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-cyan-400/10 blur-2xl" />
+
+        <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <Badge className="mb-5 border-white/10 bg-white/10 text-[10px] font-black uppercase tracking-[0.25em] text-white hover:bg-white/10">
+              Main courante exploitation
+            </Badge>
+            <div className="flex items-start gap-5">
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/10 p-4 shadow-xl">
+                <Siren className="h-8 w-8 text-red-200" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-black tracking-tight md:text-5xl">
+                  Incidents terrain
+                </h1>
+                <p className="mt-3 max-w-2xl text-base font-medium leading-relaxed text-slate-300">
+                  Prioriser, traiter et documenter les signaux terrain sans perdre le fil
+                  exploitation.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-            <div className="w-full sm:w-[300px]">
-              <Input
-                value={queryText}
-                onChange={(e) => setQueryText(e.target.value)}
-                placeholder="Rechercher (site, statut, texte...)"
-              />
-            </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-12 rounded-2xl bg-white/10 px-5 font-black text-white hover:bg-white/20"
+              disabled={refreshing}
+              onClick={() => void loadData({ refresh: true })}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Actualiser
+            </Button>
 
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog
+              open={dialogOpen}
+              onOpenChange={(next) => {
+                setDialogOpen(next);
+                if (!next) resetCreateForm();
+              }}
+            >
               <DialogTrigger asChild>
-                <Button size="sm" className="gap-1" disabled={!canCreate}>
-                  <PlusCircle className="h-3.5 w-3.5" />
-                  <span className="sm:whitespace-nowrap">
-                    {loadingSites ? "Sites…" : sites.length === 0 ? "Aucun site" : "Nouveau rapport"}
-                  </span>
+                <Button className="h-12 rounded-2xl px-5 font-black shadow-xl shadow-red-950/20">
+                  <PlusCircle className="h-4 w-4" />
+                  Nouvel incident
                 </Button>
               </DialogTrigger>
-
-              <DialogContent className="sm:max-w-[560px]">
-                <DialogHeader>
-                  <DialogTitle>Créer un rapport</DialogTitle>
-                  <DialogDescription>
-                    Création via API (log automatique dans l’activité).
+              <DialogContent className="max-w-2xl rounded-[2rem] p-0">
+                <DialogHeader className="border-b bg-muted/30 p-8">
+                  <DialogTitle className="flex items-center gap-3 text-2xl font-black">
+                    <ShieldAlert className="h-6 w-6 text-red-600" />
+                    Declarer un incident
+                  </DialogTitle>
+                  <DialogDescription className="font-medium">
+                    Une declaration courte, propre et exploitable vaut mieux qu'un long
+                    rapport flou. Le detail pourra etre enrichi ensuite.
                   </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleCreate}>
-                  <div className="grid gap-4 py-4">
-                    {/* SITE SELECT */}
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label className="text-right">Site</Label>
-
-                      <div className="col-span-3">
-                        <Select value={siteId} onValueChange={setSiteId} disabled={isSaving || loadingSites}>
-                          <SelectTrigger>
-                            <SelectValue placeholder={loadingSites ? "Chargement des sites…" : "Sélectionnez un site"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {sites.map((s) => (
-                              <SelectItem key={s.id} value={s.id}>
-                                {s.name}{s.city ? ` — ${s.city}` : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-
-                        {selectedSite ? (
-                          <div className="mt-2 rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
-                            <div className="font-medium text-foreground">{selectedSite.name}</div>
-                            <div>
-                              {selectedSite.address ? selectedSite.address : "Adresse non renseignée"}
-                              {selectedSite.city ? ` • ${selectedSite.city}` : ""}
-                              {typeof selectedSite.riskLevel === "number" ? ` • Risque ${selectedSite.riskLevel}/5` : ""}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
+                <form onSubmit={handleCreate} className="space-y-6 p-8">
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Site concerne</Label>
+                      <Select value={newSiteId} onValueChange={setNewSiteId}>
+                        <SelectTrigger className="h-12 rounded-xl">
+                          <SelectValue placeholder="Choisir un site" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sites.map((site) => (
+                            <SelectItem key={site.id} value={site.id}>
+                              {site.name ?? "Site sans nom"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
-                    {/* SEVERITY */}
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label className="text-right">Sévérité</Label>
-                      <div className="col-span-3">
-                        <Select value={severity} onValueChange={(v) => setSeverity(v as SeverityFR)} disabled={isSaving}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionnez la sévérité" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Faible">Faible</SelectItem>
-                            <SelectItem value="Moyenne">Moyenne</SelectItem>
-                            <SelectItem value="Élevée">Élevée</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    {/* DESCRIPTION */}
-                    <div className="grid grid-cols-4 items-start gap-4">
-                      <Label className="pt-2 text-right">Description</Label>
-                      <Textarea
-                        className="col-span-3 min-h-[110px]"
-                        placeholder="Décrivez l'incident…"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        disabled={isSaving}
-                        required
-                      />
+                    <div className="space-y-2">
+                      <Label>Gravite</Label>
+                      <Select
+                        value={newSeverity}
+                        onValueChange={(value) => setNewSeverity(value as IncidentSeverity)}
+                      >
+                        <SelectTrigger className="h-12 rounded-xl">
+                          <SelectValue placeholder="Choisir la gravite" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SEVERITY_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label} - {option.detail}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
-                  <DialogFooter>
+                  <div className="space-y-2">
+                    <Label>Faits constates</Label>
+                    <Textarea
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                      rows={6}
+                      className="rounded-xl"
+                      placeholder="Exemple : altercation a l'accueil, appel du responsable site, agent reste en surveillance..."
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-black">Position terrain optionnelle</p>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Utile si l'incident est declare depuis le site.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl font-black"
+                      onClick={captureLocation}
+                      disabled={capturingLocation}
+                    >
+                      {capturingLocation ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <MapPin className="h-4 w-4" />
+                      )}
+                      {reportedLat && reportedLng ? "Position ajoutee" : "Ajouter ma position"}
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-col-reverse gap-3 border-t pt-6 sm:flex-row sm:justify-end">
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={() => {
-                        setOpen(false);
-                        resetForm();
-                      }}
-                      disabled={isSaving}
+                      className="rounded-xl font-black"
+                      onClick={() => setDialogOpen(false)}
                     >
                       Annuler
                     </Button>
-
                     <Button
                       type="submit"
-                      disabled={
-                        isSaving ||
-                        !user?.tenantId ||
-                        !siteId ||
-                        !selectedSite ||
-                        !severity ||
-                        !description.trim()
-                      }
+                      className="rounded-xl font-black"
+                      disabled={saving || !newSiteId || !description.trim()}
                     >
-                      {isSaving ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Enregistrement…
-                        </>
-                      ) : (
-                        "Enregistrer"
-                      )}
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                      Enregistrer
                     </Button>
-                  </DialogFooter>
+                  </div>
                 </form>
               </DialogContent>
             </Dialog>
           </div>
         </div>
+      </section>
 
-        {/* Onglets + compteurs */}
-        <div className="pt-2">
-          <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
-            <TabsList>
-              <TabsTrigger value="all">
-                Tous <span className="ml-2 text-xs text-muted-foreground">({counts.all})</span>
-              </TabsTrigger>
-              <TabsTrigger value="open">
-                Ouverts <span className="ml-2 text-xs text-muted-foreground">({counts.open})</span>
-              </TabsTrigger>
-              <TabsTrigger value="closed">
-                Clos <span className="ml-2 text-xs text-muted-foreground">({counts.closed})</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+      {error ? (
+        <EmptyState
+          icon={AlertTriangle}
+          tone="danger"
+          title="Incidents indisponibles"
+          description={error}
+          action={
+            <Button className="rounded-xl font-black" onClick={() => void loadData({ refresh: true })}>
+              Reessayer
+            </Button>
+          }
+        />
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card className="rounded-[1.5rem] border-slate-200/70">
+          <CardContent className="flex items-center justify-between p-6">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">
+                Total
+              </p>
+              <p className="mt-2 text-3xl font-black">{stats.total}</p>
+            </div>
+            <FileText className="h-7 w-7 text-slate-400" />
+          </CardContent>
+        </Card>
+        <Card className="rounded-[1.5rem] border-red-500/25 bg-red-500/5">
+          <CardContent className="flex items-center justify-between p-6">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-red-700 dark:text-red-300">
+                Critiques
+              </p>
+              <p className="mt-2 text-3xl font-black text-red-700 dark:text-red-300">
+                {stats.critical}
+              </p>
+            </div>
+            <ShieldAlert className="h-7 w-7 text-red-500" />
+          </CardContent>
+        </Card>
+        <Card className="rounded-[1.5rem] border-amber-500/25 bg-amber-500/5">
+          <CardContent className="flex items-center justify-between p-6">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">
+                A traiter
+              </p>
+              <p className="mt-2 text-3xl font-black text-amber-700 dark:text-amber-300">
+                {stats.active}
+              </p>
+            </div>
+            <Clock3 className="h-7 w-7 text-amber-500" />
+          </CardContent>
+        </Card>
+        <Card className="rounded-[1.5rem] border-emerald-500/25 bg-emerald-500/5">
+          <CardContent className="flex items-center justify-between p-6">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                Resolus / clos
+              </p>
+              <p className="mt-2 text-3xl font-black text-emerald-700 dark:text-emerald-300">
+                {stats.resolved + stats.closed}
+              </p>
+            </div>
+            <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className={cn("rounded-[1.5rem] border p-0", statusClass(stats.critical > 0 ? "open" : stats.active > 0 ? "investigating" : "resolved"))}>
+        <CardContent className="flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] opacity-70">
+              Lecture exploitation
+            </p>
+            <h2 className="mt-2 text-2xl font-black">{situation.title}</h2>
+            <p className="mt-1 font-medium opacity-80">{situation.detail}</p>
+            <p className="mt-2 text-xs font-black uppercase tracking-[0.18em] opacity-60">
+              Chaque action est journalisee avec date, utilisateur et changement de statut.
+            </p>
+          </div>
+          <div className="text-sm font-black opacity-75">
+            Derniere synchro :{" "}
+            {lastSync
+              ? new Intl.DateTimeFormat("fr-FR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                }).format(lastSync)
+              : "jamais"}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden rounded-[2rem]">
+        <div className="flex flex-col gap-4 border-b bg-muted/20 p-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {filterItems.map((item) => (
+              <Button
+                key={item.id}
+                type="button"
+                variant={filter === item.id ? "default" : "outline"}
+                className="rounded-xl font-black"
+                onClick={() => setFilter(item.id)}
+              >
+                {item.label}
+                <Badge
+                  className={cn(
+                    "ml-1 border-none",
+                    filter === item.id
+                      ? "bg-white/20 text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {item.count}
+                </Badge>
+              </Button>
+            ))}
+          </div>
+
+          <div className="relative w-full xl:w-[360px]">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={queryText}
+              onChange={(event) => setQueryText(event.target.value)}
+              placeholder="Rechercher site, statut, gravite..."
+              className="h-12 rounded-xl pl-11 font-bold"
+            />
+          </div>
         </div>
-      </CardHeader>
 
-      <CardContent>
-        {loadingList ? (
-          <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Chargement de la boîte de réception…
+        {sites.length === 0 ? (
+          <div className="p-6">
+            <EmptyState
+              icon={MapPin}
+              tone="warning"
+              title="Aucun site operationnel charge"
+              description="Un incident doit etre rattache a un site pour rester exploitable."
+              action={
+                <Button asChild className="rounded-xl font-black">
+                  <Link href="/dashboard/sites">Ouvrir les sites</Link>
+                </Button>
+              }
+            />
+          </div>
+        ) : filteredIncidents.length === 0 ? (
+          <div className="p-6">
+            <EmptyState
+              icon={Siren}
+              tone={incidents.length === 0 ? "success" : "neutral"}
+              title={incidents.length === 0 ? "Aucun incident declare" : "Aucun incident dans ce filtre"}
+              description={
+                incidents.length === 0
+                  ? "La main courante incidents est propre. Vous pouvez declarer le premier signal terrain si necessaire."
+                  : "Essayez un autre filtre ou une recherche moins precise."
+              }
+              action={
+                <Button className="rounded-xl font-black" onClick={() => setDialogOpen(true)}>
+                  Declarer un incident
+                </Button>
+              }
+            />
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Site</TableHead>
-                <TableHead>Sévérité</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Horodatage</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              {filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                    Aucun incident {tab === "open" ? "ouvert" : tab === "closed" ? "clos" : ""}.
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="min-w-[220px] pl-6">Site</TableHead>
+                  <TableHead className="min-w-[360px]">Incident</TableHead>
+                  <TableHead>Gravite</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead className="min-w-[180px]">Mise a jour</TableHead>
+                  <TableHead className="min-w-[280px] pr-6 text-right">Actions</TableHead>
                 </TableRow>
-              ) : (
-                filtered.map((incident) => {
-                  const siteName = sites.find((s) => s.id === incident.siteId)?.name ?? "—";
-                  const sevFR = mapSeverityToFr(incident.severity);
-                  const stFR = mapStatusToFr(incident.status);
+              </TableHeader>
+              <TableBody>
+                {filteredIncidents.map((incident) => {
+                  const site = incident.siteId ? siteById.get(incident.siteId) : null;
+                  const siteLabel = site?.name ?? "Site inconnu";
+                  const quickAction = quickStatusAction(incident);
+                  const isUpdating = updatingIncidentId === incident.id;
 
                   return (
-                    <TableRow key={incident.id}>
-                      <TableCell>
-                        <div className="font-medium">{siteName}</div>
-                        <div className="text-sm text-muted-foreground">{incident.title ?? "—"}</div>
+                    <TableRow key={incident.id} className="group">
+                      <TableCell className="pl-6">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                            <MapPin className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="font-black">{siteLabel}</p>
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {site?.city || site?.address || "Localisation non renseignee"}
+                            </p>
+                          </div>
+                        </div>
                       </TableCell>
-
                       <TableCell>
-                        <Badge
-                          variant={severityToVariant(sevFR)}
-                          className={cn(sevFR === "Moyenne" && "bg-accent text-accent-foreground border-accent")}
-                        >
-                          {sevFR}
+                        <div className="max-w-xl">
+                          <p className="font-black tracking-tight text-foreground">
+                            {incident.title || "Incident terrain"}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-sm font-medium leading-relaxed text-muted-foreground">
+                            {incident.description || "Aucun detail renseigne."}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn("font-black", severityClass(incident.severity))}>
+                          {severityLabel(incident.severity)}
                         </Badge>
                       </TableCell>
-
                       <TableCell>
-                        <Badge
-                          variant={stFR === "Ouvert" ? "default" : "outline"}
-                          className={cn(stFR === "Ouvert" && "bg-red-500 hover:bg-red-500/80")}
-                        >
-                          {stFR}
+                        <Badge variant="outline" className={cn("font-black", statusClass(incident.status))}>
+                          {statusLabel(incident.status)}
                         </Badge>
                       </TableCell>
-
-                      <TableCell>
-                        {format(isoToDate(incident.createdAtIso), "PPPP 'à' p", { locale: fr })}
+                      <TableCell className="text-sm font-medium text-muted-foreground">
+                        {formatMoment(incident.updatedAtIso || incident.createdAtIso)}
                       </TableCell>
-
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Toggle menu</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem asChild>
-                              <Link href={`/dashboard/incidents/${incident.id}`}>Voir les détails</Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => markClosed(incident.id)}
-                              disabled={incident.status === "closed"}
+                      <TableCell className="pr-6 text-right">
+                        <div className="flex flex-col items-stretch justify-end gap-2 sm:flex-row sm:items-center">
+                          {quickAction ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className={cn("rounded-xl font-black", quickAction.className)}
+                              disabled={Boolean(updatingIncidentId)}
+                              onClick={() => void updateIncidentStatus(incident, quickAction.status)}
                             >
-                              Marquer comme clos
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              {isUpdating ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : quickAction.status === "resolved" ? (
+                                <CheckCircle2 className="h-4 w-4" />
+                              ) : quickAction.status === "closed" ? (
+                                <FileText className="h-4 w-4" />
+                              ) : (
+                                <Clock3 className="h-4 w-4" />
+                              )}
+                              {isUpdating ? quickAction.loadingLabel : quickAction.label}
+                            </Button>
+                          ) : (
+                            <Badge variant="outline" className="rounded-xl px-3 py-1.5 font-black text-muted-foreground">
+                              Traite
+                            </Badge>
+                          )}
+
+                          <Button asChild size="sm" className="rounded-xl font-black">
+                            <Link href={`/dashboard/incidents/${incident.id}`}>
+                              Ouvrir
+                              <ArrowRight className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
-                })
-              )}
-            </TableBody>
-          </Table>
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
-      </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }

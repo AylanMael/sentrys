@@ -57,28 +57,35 @@
     /* Bordures sidebar discrètes */
     --sidebar-border: 214 22% 90%;
     --sidebar-ring: 221 83% 53%;
+
+    /* Luxe Phase 4 */
+    --glass-background: 0 0% 100% / 0.5;
+    --glass-border: 0 0% 100% / 0.2;
+    --premium-gradient: linear-gradient(135deg, #3b82f6 0%, #2dd4bf 100%);
+    --surface-mesh: radial-gradient(at 0% 0%, hsla(221, 83%, 53%, 0.05) 0, transparent 50%),
+                    radial-gradient(at 50% 0%, hsla(188, 86%, 53%, 0.05) 0, transparent 50%);
   }
 
   .dark {
     /* Surfaces */
-    --background: 222 47% 7%; /* #0B1220 */
+    --background: 222 47% 4%; /* #060912 - Deep midnight */
     --foreground: 210 40% 98%;
 
-    --card: 222 47% 10%; /* #0F1B2D */
+    --card: 222 47% 8%; /* #0B1324 */
     --card-foreground: 210 40% 98%;
 
-    --popover: 222 47% 9%;
+    --popover: 222 47% 7%;
     --popover-foreground: 210 40% 98%;
 
     /* Brand */
     --primary: 221 83% 62%;
     --primary-foreground: 222 47% 11%;
 
-    --secondary: 222 28% 14%;
+    --secondary: 222 28% 12%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 222 28% 14%;
-    --muted-foreground: 215 20% 70%;
+    --muted: 222 28% 12%;
+    --muted-foreground: 215 20% 65%;
 
     --accent: 188 86% 53%;
     --accent-foreground: 222 47% 11%;
@@ -86,24 +93,30 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 222 25% 18%;
-    --input: 222 25% 18%;
+    --border: 222 25% 15%;
+    --input: 222 25% 15%;
     --ring: 221 83% 62%;
 
     /* Sidebar (dark) */
-    --app-surface: 222 47% 7%;
+    --app-surface: 222 47% 4%;
 
-    --sidebar-background: 222 47% 7%;
+    --sidebar-background: 222 47% 4%;
     --sidebar-foreground: 210 40% 98%;
 
     --sidebar-primary: 221 83% 62%;
     --sidebar-primary-foreground: 222 47% 11%;
 
-    --sidebar-accent: 222 28% 14%;
+    --sidebar-accent: 222 28% 12%;
     --sidebar-accent-foreground: 210 40% 98%;
 
-    --sidebar-border: 222 25% 18%;
+    --sidebar-border: 222 25% 15%;
     --sidebar-ring: 221 83% 62%;
+
+    /* Luxe Phase 4 (Dark) */
+    --glass-background: 222 47% 8% / 0.7;
+    --glass-border: 210 40% 98% / 0.08;
+    --surface-mesh: radial-gradient(at 0% 0%, hsla(221, 83%, 62%, 0.1) 0, transparent 50%),
+                    radial-gradient(at 50% 0%, hsla(188, 86%, 53%, 0.1) 0, transparent 50%);
   }
 
   /* ✅ Pas de @apply (Firebase Studio n’aime pas) */
@@ -114,8 +127,98 @@
   body {
     min-height: 100dvh;
     background: hsl(var(--background));
+    background-image: var(--surface-mesh);
+    background-attachment: fixed;
     color: hsl(var(--foreground));
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ✅ Luxe Utility Classes */
+  .glass-card {
+    background: hsl(var(--glass-background)) !important;
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid hsl(var(--glass-border)) !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08);
+  }
+
+  .glass-morphism {
+    background: hsla(0, 0%, 100%, 0.03);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid hsla(0, 0%, 100%, 0.05);
+  }
+
+  .premium-gradient-text {
+    background: var(--premium-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block;
+  }
+
+  .premium-shadow {
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.1);
+  }
+
+  /* --- Sentrys Planning System Luxe Update --- */
+
+  .glass-card {
+    @apply bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border border-white/20 dark:border-slate-800/40;
+  }
+
+  .shadow-luxe {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1), 0 0 0 1px rgb(0 0 0 / 0.05);
+  }
+
+  .shadow-luxe-hover {
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1), 0 0 0 1px rgb(0 0 0 / 0.1);
+  }
+
+  .fc-event.evt-absence {
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(99, 102, 241, 0.05),
+      rgba(99, 102, 241, 0.05) 10px,
+      rgba(99, 102, 241, 0.12) 10px,
+      rgba(99, 102, 241, 0.12) 20px
+    ) !important;
+    border-left: 4px solid #6366f1 !important;
+    opacity: 0.8;
+  }
+
+  /* --- Excel Mode Grid System --- */
+  .excel-grid .fc-timeline-event {
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    height: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-right: 1px solid rgba(0,0,0,0.1) !important;
+    border-bottom: 1px solid rgba(0,0,0,0.1) !important;
+  }
+
+  .excel-grid .fc-event-main {
+    padding: 0 !important;
+    height: 100% !important;
+    display: flex !important;
+  }
+
+  /* Correction pour le mode sombre sur la grille */
+  .dark .excel-grid .fc-timeline-event {
+    border-right-color: rgba(255,255,255,0.05) !important;
+    border-bottom-color: rgba(255,255,255,0.05) !important;
+  }
+
+  /* Suppression des barres de scroll inutiles sur les cellules */
+  .fc-timeline-slot {
+    border-color: rgba(0,0,0,0.05) !important;
+  }
+
+  /* Transition fluide globale */
+  * {
+    transition: background-color 0.2s ease, border-color 0.2s ease;
   }
 }

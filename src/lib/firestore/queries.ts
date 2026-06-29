@@ -41,11 +41,21 @@ export function qActiveSites(db: Firestore, tenantId: string) {
   );
 }
 
-// ✅ standard: isActive (à appliquer aussi sur agents)
 export function qActiveAgents(db: Firestore, tenantId: string) {
   return query(
     collection(db, "agents"),
     where("tenantId", "==", tenantId),
     where("isActive", "==", true)
+  );
+}
+
+export function qAgentAssignments(db: Firestore, tenantId: string, agentId: string) {
+  return query(
+    collection(db, "assignments"),
+    where("tenantId", "==", tenantId),
+    where("agentId", "==", agentId),
+    where("status", "==", "assigned"),
+    orderBy("updatedAt", "desc"),
+    limit(10)
   );
 }

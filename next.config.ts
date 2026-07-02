@@ -14,6 +14,15 @@ function parseFirebaseWebAppConfig() {
 
 const firebaseWebConfig = parseFirebaseWebAppConfig();
 
+const defaultFirebaseWebConfig: Record<string, string> = {
+  apiKey: "AIzaSyABPFu91CWi0LkdBXD-1OXgHgheFYLwZFE",
+  appId: "1:782055895046:web:474cf111d4b4b759cb9387",
+  authDomain: "sentrys.firebaseapp.com",
+  messagingSenderId: "782055895046",
+  projectId: "sentrys",
+  storageBucket: "sentrys.firebasestorage.app",
+};
+
 function nonEmpty(value: string | undefined) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -22,6 +31,7 @@ function publicFirebaseEnv(key: string, firebaseConfigKey: string) {
   return (
     nonEmpty(process.env[key]) ??
     nonEmpty(firebaseWebConfig?.[firebaseConfigKey]) ??
+    defaultFirebaseWebConfig[firebaseConfigKey] ??
     ""
   );
 }

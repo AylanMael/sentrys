@@ -2,10 +2,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   PlusCircle,
   CreditCard,
+  CalendarClock,
+  Clock3,
   Users,
   MapPin,
   Building2,
@@ -15,6 +17,7 @@ import {
   Loader2,
   FileWarning,
   ShieldCheck,
+  Siren,
   BarChart3,
   Eye,
   EyeOff,
@@ -30,7 +33,10 @@ import { LiveMap } from "@/components/dashboard/live-map";
 import { AnalyticsCharts } from "@/components/dashboard/analytics-charts";
 import { AiRiskAlerts } from "@/components/dashboard/ai-risk-alerts";
 import { OperationsOverview } from "@/components/dashboard/operations-overview";
-import { ExploitationCockpit } from "@/components/dashboard/exploitation-cockpit";
+import {
+  ExploitationCockpit,
+  type DashboardCockpitSnapshot,
+} from "@/components/dashboard/exploitation-cockpit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -118,14 +124,14 @@ const DASHBOARD_VIEWS: {
 }[] = [
   {
     id: "realtime",
-    label: "Temps reel",
+    label: "Temps r\u00e9el",
     description: "Urgences, conduite, couverture terrain.",
     icon: Gauge,
   },
   {
     id: "analytics",
     label: "Analyses",
-    description: "Tendances, historique, activite.",
+    description: "Tendances, historique, activit\u00e9.",
     icon: BarChart3,
   },
   {
@@ -135,6 +141,96 @@ const DASHBOARD_VIEWS: {
     icon: WalletCards,
   },
 ];
+
+function DashboardControlTower({
+  snapshot,
+}: {
+  snapshot: DashboardCockpitSnapshot | null;
+}) {
+  const metrics = [
+    {
+      label: "Postes \u00e0 couvrir",
+      value: snapshot ? snapshot.uncoveredPosts : "â€”",
+      icon: CalendarClock,
+      href: "/dashboard/planning",
+      tone:
+        snapshot && snapshot.uncoveredPosts > 0
+          ? "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300"
+          : "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    },
+    {
+      label: "Incidents ouverts",
+      value: snapshot ? snapshot.openIncidents : "â€”",
+      icon: Siren,
+      href: "/dashboard/incidents",
+      tone:
+        snapshot && snapshot.openIncidents > 0
+          ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+          : "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    },
+    {
+      label: "Prises < 2h",
+      value: snapshot ? snapshot.startsNextTwoHours : "â€”",
+      icon: Clock3,
+      href: "/dashboard/planning",
+      tone: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    },
+  ];
+
+  return (
+    <div className="grid gap-2 md:grid-cols-4">
+      {metrics.map((metric) => {
+        const Icon = metric.icon;
+
+        return (
+          <Link
+            key={metric.label}
+            href={metric.href}
+            className={cn(
+              "flex min-h-20 items-center justify-between rounded-2xl border px-4 py-3 transition hover:-translate-y-0.5",
+              metric.tone
+            )}
+          >
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+                {metric.label}
+              </p>
+              <p className="mt-1 text-2xl font-black leading-none">
+                {metric.value}
+              </p>
+            </div>
+            <Icon className="h-5 w-5 opacity-80" />
+          </Link>
+        );
+      })}
+
+      <Link
+        href={snapshot?.actionHref ?? "/dashboard/planning"}
+        className={cn(
+          "group flex min-h-20 items-center justify-between rounded-2xl border px-4 py-3 transition hover:-translate-y-0.5",
+          snapshot?.verdict === "critical"
+            ? "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300"
+            : snapshot?.verdict === "warning"
+              ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+              : "border-primary/25 bg-primary/10 text-primary"
+        )}
+      >
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+            Action prioritaire
+          </p>
+          <p className="mt-1 truncate text-sm font-black">
+            {snapshot?.actionTitle ?? "Chargement du cockpit"}
+          </p>
+          <p className="mt-0.5 text-xs font-semibold opacity-70">
+            {snapshot?.actionLabel ?? "Synchronisation..."}
+          </p>
+        </div>
+        <ArrowRight className="h-5 w-5 shrink-0 transition group-hover:translate-x-1" />
+      </Link>
+    </div>
+  );
+}
 
 function toAtLimitList(b: BillingUsageResponse | null): string[] {
   if (!b) return [];
@@ -149,7 +245,7 @@ function toAtLimitList(b: BillingUsageResponse | null): string[] {
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const isAgent = isAgentRole(user?.role);
 
   const [billing, setBilling] = useState<BillingUsageResponse | null>(null);
@@ -160,6 +256,10 @@ export default function DashboardPage() {
     useState<ComplianceSummaryResponse | null>(null);
   const [complianceSummaryError, setComplianceSummaryError] =
     useState<string | null>(null);
+  const [complianceSummaryLoading, setComplianceSummaryLoading] =
+    useState(false);
+  const [cockpitSnapshot, setCockpitSnapshot] =
+    useState<DashboardCockpitSnapshot | null>(null);
   const [dashboardView, setDashboardView] =
     useState<DashboardView>("realtime");
   const [calmMode, setCalmMode] = useState(true);
@@ -167,18 +267,29 @@ export default function DashboardPage() {
   const [showAiRisk, setShowAiRisk] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
+    if (
+      authLoading ||
+      isAgent ||
+      dashboardView !== "account" ||
+      billing ||
+      billingLoading ||
+      billingError
+    ) {
+      return;
+    }
 
-    async function loadData() {
+    let mounted = true;
+    const controller = new AbortController();
+
+    async function loadBilling() {
       setBillingLoading(true);
       setBillingError(null);
-      setComplianceSummaryError(null);
 
       try {
-        const [billingRes, sitesRes] = await Promise.all([
-          apiFetch<BillingUsageResponse>("/api/billing/usage"),
-          apiFetch<{ ok: boolean; sites: SiteApiRow[] }>("/api/sites?limit=100"),
-        ]);
+        const billingRes = await apiFetch<BillingUsageResponse>(
+          "/api/billing/usage",
+          { signal: controller.signal }
+        );
 
         if (!mounted) return;
 
@@ -187,6 +298,46 @@ export default function DashboardPage() {
         } else if (billingRes) {
           setBillingError(billingRes.error ?? "Erreur billing");
         }
+      } catch (error: unknown) {
+        if (!mounted || controller.signal.aborted) return;
+        setBillingError(
+          error instanceof Error ? error.message : "Erreur de chargement"
+        );
+      } finally {
+        if (!mounted) return;
+        setBillingLoading(false);
+      }
+    }
+
+    void loadBilling();
+
+    return () => {
+      mounted = false;
+      controller.abort();
+      setBillingLoading(false);
+    };
+  }, [authLoading, billing, billingError, dashboardView, isAgent]);
+
+  useEffect(() => {
+    if (authLoading || isAgent || dashboardView !== "realtime") {
+      return;
+    }
+
+    let mounted = true;
+
+    async function loadRealtimeSupport() {
+      setComplianceSummaryLoading(true);
+      setComplianceSummaryError(null);
+
+      try {
+        const [sitesRes, complianceRes] = await Promise.all([
+          apiFetch<{ ok: boolean; sites: SiteApiRow[] }>("/api/sites?limit=100"),
+          apiFetch<ComplianceSummaryResponse>(
+            "/api/compliance-overrides/summary"
+          ),
+        ]);
+
+        if (!mounted) return;
 
         if (sitesRes?.ok) {
           const mapReadySites = (sitesRes.sites ?? [])
@@ -203,101 +354,73 @@ export default function DashboardPage() {
 
           setSites(mapReadySites);
         }
-      } catch (error: unknown) {
-        if (!mounted) return;
-        setBillingError(
-          error instanceof Error ? error.message : "Erreur de chargement"
-        );
-      }
-
-      try {
-        const complianceRes = await apiFetch<ComplianceSummaryResponse>(
-          "/api/compliance-overrides/summary"
-        );
-
-        if (!mounted) return;
 
         if (complianceRes?.ok) {
           setComplianceSummary(complianceRes);
         } else {
           setComplianceSummaryError(
-            complianceRes?.error ?? "Erreur conformite"
+            complianceRes?.error ?? "Erreur conformit\u00e9"
           );
         }
       } catch (error: unknown) {
         if (!mounted) return;
         setComplianceSummary(null);
         setComplianceSummaryError(
-          error instanceof Error ? error.message : "Erreur conformite"
+          error instanceof Error ? error.message : "Erreur conformit\u00e9"
         );
       } finally {
         if (!mounted) return;
-        setBillingLoading(false);
+        setComplianceSummaryLoading(false);
       }
     }
 
-    loadData();
+    void loadRealtimeSupport();
 
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [authLoading, dashboardView, isAgent]);
+
+  const handleCockpitSnapshot = useCallback(
+    (snapshot: DashboardCockpitSnapshot) => {
+      setCockpitSnapshot(snapshot);
+    },
+    []
+  );
 
   const usedTenants = billing?.usage?.activeTenants ?? billing?.usage?.tenants ?? 0;
   const atLimitList = useMemo(() => toAtLimitList(billing), [billing]);
 
   return (
-    <div className="mx-auto max-w-[1600px] animate-in space-y-6 fade-in duration-700 pb-10">
-      <div className="rounded-[2rem] border border-border/60 bg-background/85 p-5 shadow-sm backdrop-blur">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+    <div className="mx-auto max-w-[1600px] animate-in space-y-4 fade-in duration-700 pb-8">
+      <section className="rounded-[1.5rem] border border-border/60 bg-background/90 p-3 shadow-sm backdrop-blur">
+        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                variant="outline"
-                className="rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-primary"
-              >
-                Poste de conduite
-              </Badge>
-              <Badge className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300">
-                Vue epuree
-              </Badge>
-            </div>
-            <h1 className="mt-3 text-3xl font-black tracking-tight text-foreground md:text-4xl">
-              Tableau de bord exploitation
+            <Badge
+              variant="outline"
+              className="rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-primary"
+            >
+              {"Tour de contr\u00f4le du jour"}
+            </Badge>
+            <h1 className="mt-2 text-2xl font-black tracking-tight text-foreground">
+              {"Ce qui n\u00e9cessite votre attention maintenant"}
             </h1>
-            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
-              L&apos;essentiel pour demarrer la journee : couvrir les postes,
-              traiter les urgences, publier, diffuser, puis suivre la conduite.
-            </p>
           </div>
 
-          <div className="grid w-full gap-2 sm:grid-cols-3 xl:w-[520px] xl:shrink-0">
-            <Button
-              asChild
-              variant="outline"
-              className="h-12 justify-start rounded-2xl border-border/60 bg-background px-4 font-black"
-            >
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" className="h-10 rounded-xl px-3 font-black">
               <Link href="/dashboard/planning">
                 <ShieldCheck className="mr-2 h-4 w-4 text-primary" />
                 Planning
               </Link>
             </Button>
-
-            <Button
-              asChild
-              className="h-12 justify-start rounded-2xl bg-primary px-4 font-black shadow-lg shadow-primary/15"
-            >
+            <Button asChild className="h-10 rounded-xl bg-primary px-3 font-black shadow-sm shadow-primary/15">
               <Link href="/dashboard/incidents">
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Incident
               </Link>
             </Button>
-
-            <Button
-              asChild
-              variant="outline"
-              className="h-12 justify-start rounded-2xl border-border/60 bg-background px-4 font-black"
-            >
+            <Button asChild variant="outline" className="h-10 rounded-xl px-3 font-black">
               <Link href="/dashboard/conduite">
                 <FileWarning className="mr-2 h-4 w-4 text-amber-600" />
                 Conduite
@@ -305,12 +428,14 @@ export default function DashboardPage() {
             </Button>
           </div>
         </div>
-      </div>
+
+        {!isAgent ? <DashboardControlTower snapshot={cockpitSnapshot} /> : null}
+      </section>
 
       {!isAgent && (
-        <section className="rounded-[2rem] border border-border/60 bg-background/85 p-3 shadow-sm backdrop-blur">
-          <div className="grid gap-3 xl:grid-cols-[1fr_auto] xl:items-center">
-            <div className="grid gap-2 md:grid-cols-3">
+        <section className="rounded-[1.25rem] border border-border/60 bg-background/85 p-2 shadow-sm backdrop-blur">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap gap-1">
               {DASHBOARD_VIEWS.map((item) => {
                 const Icon = item.icon;
                 const isActive = dashboardView === item.id;
@@ -321,7 +446,7 @@ export default function DashboardPage() {
                     type="button"
                     onClick={() => setDashboardView(item.id)}
                     className={cn(
-                      "group rounded-[1.5rem] border p-4 text-left transition",
+                      "group flex h-10 items-center gap-2 rounded-xl border px-3 text-left transition",
                       isActive
                         ? "border-primary/30 bg-primary/10 shadow-sm"
                         : "border-transparent bg-muted/35 hover:border-border hover:bg-background"
@@ -330,7 +455,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-3">
                       <span
                         className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-2xl",
+                          "flex h-7 w-7 items-center justify-center rounded-lg",
                           isActive
                             ? "bg-primary text-primary-foreground"
                             : "bg-background text-muted-foreground"
@@ -347,7 +472,7 @@ export default function DashboardPage() {
                         >
                           {item.label}
                         </p>
-                        <p className="mt-0.5 line-clamp-1 text-xs font-semibold text-muted-foreground">
+                        <p className="sr-only">
                           {item.description}
                         </p>
                       </div>
@@ -367,7 +492,7 @@ export default function DashboardPage() {
                 setShowAiRisk(false);
               }}
               className={cn(
-                "h-14 rounded-[1.4rem] px-5 font-black",
+                "h-10 rounded-xl px-3 font-black",
                 calmMode && "shadow-lg shadow-primary/15"
               )}
             >
@@ -384,14 +509,14 @@ export default function DashboardPage() {
 
       {!isAgent && dashboardView === "realtime" && (
         <div className="relative z-10 animate-in slide-in-from-top-6 duration-700">
-          <ExploitationCockpit />
+          <ExploitationCockpit onSnapshot={handleCockpitSnapshot} />
         </div>
       )}
 
       {!isAgent && dashboardView === "realtime" && (
         <div className="relative z-10 animate-in slide-in-from-top-5 duration-700">
           <ComplianceSummaryAlert
-            loading={billingLoading && !complianceSummary}
+            loading={complianceSummaryLoading && !complianceSummary}
             summary={complianceSummary}
             error={complianceSummaryError}
           />
@@ -406,7 +531,7 @@ export default function DashboardPage() {
                 Supervision terrain
               </p>
               <h2 className="text-xl font-black tracking-tight text-foreground">
-                Situations a surveiller
+                {"Situations \u00e0 surveiller"}
               </h2>
             </div>
             <p className="max-w-2xl text-sm font-semibold text-muted-foreground">
@@ -501,25 +626,25 @@ export default function DashboardPage() {
 
       <div className="grid items-start gap-6 lg:grid-cols-3">
         {((!isAgent && dashboardView === "realtime") || isAgent) && (
-          <div className="glass-card overflow-hidden rounded-[2.5rem] border-none lg:col-span-1">
+          <div className="glass-card overflow-hidden rounded-[1.75rem] border-none lg:col-span-1">
             <RecentIncidentsCard />
           </div>
         )}
 
         {!isAgent && dashboardView === "analytics" && (
-          <div className="glass-card overflow-hidden rounded-[2.5rem] border-none lg:col-span-1">
+          <div className="glass-card overflow-hidden rounded-[1.75rem] border-none lg:col-span-1">
             <RecentActivityCard />
           </div>
         )}
 
         {!isAgent && dashboardView === "account" && (
         <div className="flex h-full flex-col lg:col-span-2">
-          <div className="glass-card group relative flex flex-1 flex-col overflow-hidden rounded-[2.5rem] border-none p-10">
+          <div className="glass-card group relative flex flex-1 flex-col overflow-hidden rounded-[1.75rem] border-none p-6">
             <div className="pointer-events-none absolute right-0 top-0 p-8 opacity-5 transition-opacity group-hover:opacity-10">
               <CreditCard className="h-40 w-40 rotate-12" />
             </div>
 
-            <div className="relative z-10 mb-10 flex flex-col gap-4">
+            <div className="relative z-10 mb-6 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="rounded-2xl border border-primary/10 bg-primary/10 p-3 backdrop-blur-md">
@@ -546,7 +671,7 @@ export default function DashboardPage() {
                       </Badge>
                     ) : (
                       <Badge className="rounded-full border-transparent bg-green-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-green-500 hover:bg-green-500/20">
-                        Opérationnel
+                        {"Op\u00e9rationnel"}
                       </Badge>
                     )}
                   </div>
@@ -570,7 +695,7 @@ export default function DashboardPage() {
                   </p>
                 </div>
               ) : billing?.ok ? (
-                <div className="space-y-8">
+                <div className="space-y-5">
                   <div className="group/plan flex items-center justify-between rounded-3xl border border-white/5 bg-white/5 p-6 backdrop-blur-md transition-all hover:border-white/10">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">
@@ -592,10 +717,10 @@ export default function DashboardPage() {
                     </Button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <div
                       className={cn(
-                        "rounded-3xl border p-6 transition-all duration-500 hover:translate-y-[-4px]",
+                        "rounded-2xl border p-4 transition-all duration-300",
                         atLimitList.includes("agents")
                           ? "border-destructive/20 bg-destructive/5"
                           : "border-white/5 bg-white/5 hover:border-white/10"
@@ -626,7 +751,7 @@ export default function DashboardPage() {
 
                     <div
                       className={cn(
-                        "rounded-3xl border p-6 transition-all duration-500 hover:translate-y-[-4px]",
+                        "rounded-2xl border p-4 transition-all duration-300",
                         atLimitList.includes("sites")
                           ? "border-destructive/20 bg-destructive/5"
                           : "border-white/5 bg-white/5 hover:border-white/10"
@@ -657,7 +782,7 @@ export default function DashboardPage() {
 
                     <div
                       className={cn(
-                        "col-span-2 rounded-3xl border p-6 transition-all duration-500 hover:translate-y-[-4px]",
+                        "col-span-2 rounded-2xl border p-4 transition-all duration-300",
                         atLimitList.includes("tenants")
                           ? "border-destructive/20 bg-destructive/5"
                           : "border-white/5 bg-white/5 hover:border-white/10"

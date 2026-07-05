@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React from "react";
 import type { LucideIcon } from "lucide-react";
@@ -40,6 +40,15 @@ const toneClasses: Record<ActionTone, string> = {
   emerald:
     "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   sky: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+};
+
+const actionButtonClasses: Record<ActionTone, string> = {
+  red: "border-red-600 bg-red-600 text-white hover:bg-red-700 hover:text-white",
+  amber:
+    "border-amber-600 bg-amber-600 text-white hover:bg-amber-700 hover:text-white",
+  emerald:
+    "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white",
+  sky: "border-sky-600 bg-sky-600 text-white hover:bg-sky-700 hover:text-white",
 };
 
 function activeOnly(vacation: VacationApiItem) {
@@ -368,6 +377,44 @@ export const OperationsActionCenter: React.FC = () => {
         return leftScore - rightScore;
       });
 
+    const maxDurationVacation = activeVacations.find((vacation) =>
+      stats.maxDurationViolations.includes(vacation.id)
+    );
+
+    if (maxDurationVacation) {
+      nextActions.push({
+        id: `max-duration-${maxDurationVacation.id}`,
+        priority: 28,
+        tone: "red",
+        icon: ClockAlert,
+        title: "Vacation > 12h",
+        description: `${getVacationLabel(maxDurationVacation)} depasse le plafond de reference de 12 heures.`,
+        meta: formatDateTime(maxDurationVacation.startAtIso),
+        actionLabel: "Ajuster",
+        busyVacationId: maxDurationVacation.id,
+        onAction: () => openVacation(maxDurationVacation, "details"),
+      });
+    }
+
+    const sstWarningVacation = activeVacations.find((vacation) =>
+      stats.sstCoverageWarnings.includes(vacation.id)
+    );
+
+    if (sstWarningVacation) {
+      nextActions.push({
+        id: `sst-${sstWarningVacation.id}`,
+        priority: 42,
+        tone: "amber",
+        icon: ShieldAlert,
+        title: "Presence SST a verifier",
+        description: `${getVacationLabel(sstWarningVacation)} est une vacation collective sans agent SST identifie.`,
+        meta: sstWarningVacation.siteName || "Site a verifier",
+        actionLabel: "Affecter",
+        busyVacationId: sstWarningVacation.id,
+        onAction: () => openVacation(sstWarningVacation, "assign"),
+      });
+    }
+
     conflictItems.slice(0, 2).forEach((entry, index) => {
       const vacation = entry.vacation as VacationApiItem;
       const isCritical = entry.meta.severity === "critical";
@@ -468,6 +515,7 @@ export const OperationsActionCenter: React.FC = () => {
     ).length;
     const hasBlocking =
       uncoveredVacations.length > 0 ||
+      Boolean(maxDurationVacation) ||
       conflictItems.some((entry) => entry.meta.severity === "critical");
 
     if (draftCount > 0) {
@@ -506,6 +554,8 @@ export const OperationsActionCenter: React.FC = () => {
     sites,
     stats.agentContractualHours,
     stats.agentMonthlyHours,
+    stats.maxDurationViolations,
+    stats.sstCoverageWarnings,
   ]);
 
   if (actions.length === 0) {
@@ -528,9 +578,9 @@ export const OperationsActionCenter: React.FC = () => {
   const FirstIcon = firstAction.icon;
 
   return (
-    <div className="fixed bottom-5 right-5 z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-3">
+    <div className="fixed bottom-4 right-4 z-40 flex max-w-[calc(100vw-1.5rem)] flex-col items-end gap-2">
       {open && (
-        <div className="w-[min(440px,calc(100vw-2rem))] overflow-hidden rounded-[1.75rem] border border-border/60 bg-background/95 shadow-2xl shadow-slate-900/20 backdrop-blur-xl">
+        <div className="w-[min(380px,calc(100vw-1.5rem))] overflow-hidden rounded-[1.5rem] border border-border/60 bg-background/95 shadow-2xl shadow-slate-900/20 backdrop-blur-xl">
           <div className="border-b border-border/50 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -553,7 +603,7 @@ export const OperationsActionCenter: React.FC = () => {
             </div>
           </div>
 
-          <div className="max-h-[62vh] space-y-3 overflow-y-auto p-3">
+          <div className="max-h-[54vh] space-y-2 overflow-y-auto p-2.5">
             {actions.map((action) => {
               const Icon = action.icon;
 
@@ -561,7 +611,7 @@ export const OperationsActionCenter: React.FC = () => {
                 <div
                   key={action.id}
                   className={cn(
-                    "rounded-2xl border p-3",
+                    "rounded-2xl border p-3 shadow-sm",
                     toneClasses[action.tone]
                   )}
                 >
@@ -593,11 +643,14 @@ export const OperationsActionCenter: React.FC = () => {
 
                   <Button
                     type="button"
-                    variant={action.tone === "red" ? "destructive" : "outline"}
+                    variant="outline"
                     size="sm"
                     onClick={action.onAction}
                     disabled={publishing || assigningId === action.busyVacationId}
-                    className="mt-3 h-9 w-full rounded-xl bg-background/80 text-xs font-black"
+                    className={cn(
+                      "mt-3 h-9 w-full rounded-xl border text-xs font-black shadow-sm",
+                      actionButtonClasses[action.tone]
+                    )}
                   >
                     {(publishing && action.id === "draft-period") ||
                     assigningId === action.busyVacationId ? (
@@ -633,3 +686,4 @@ export const OperationsActionCenter: React.FC = () => {
     </div>
   );
 };
+

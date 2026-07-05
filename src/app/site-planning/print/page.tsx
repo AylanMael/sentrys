@@ -29,6 +29,7 @@ type AgentPrintItem = {
   email?: string | null;
   phone?: string | null;
   employeeNumber?: string | null;
+  qualifications?: string[];
 };
 
 type VacationPrintItem = {
@@ -262,17 +263,25 @@ function getAgentName(agent?: AgentPrintItem | null) {
   if (!agent) return "Agent non renseigne";
 
   const name = `${agent.firstName ?? ""} ${agent.lastName ?? ""}`.trim();
-  return name || agent.email || "Agent sans nom";
+  const employeeNumber = normalizeText(agent.employeeNumber);
+
+  return name || (employeeNumber ? `Matricule ${employeeNumber}` : "Agent sans nom");
 }
 
 function getAgentSubtitle(agent?: AgentPrintItem | null) {
   if (!agent) return null;
 
-  const details = [agent.employeeNumber, agent.phone, agent.email]
-    .map(normalizeText)
-    .filter(Boolean);
+  const employeeNumber = normalizeText(agent.employeeNumber);
+  const qualifications = Array.isArray(agent.qualifications)
+    ? agent.qualifications.map(normalizeText).filter(Boolean)
+    : [];
 
-  return details.join(" - ") || null;
+  const details = [
+    employeeNumber ? `Matricule ${employeeNumber}` : "",
+    qualifications.slice(0, 3).join(" - "),
+  ].filter(Boolean);
+
+  return details.join(" | ") || null;
 }
 
 function getMissionCode(vacation: VacationPrintItem) {

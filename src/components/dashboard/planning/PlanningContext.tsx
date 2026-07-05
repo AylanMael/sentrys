@@ -499,8 +499,10 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
         end: v.endAtIso as string,
         status: v.status,
         assignedAgentIds: Array.isArray(v.assignedAgentIds) ? v.assignedAgentIds : [],
+        siteId: v.siteId,
         siteName: v.siteName,
         requiredAgents: v.requiredAgents,
+        requiredQualification: v.requiredQualification,
       }));
   }, [filteredVacations]);
 
@@ -513,7 +515,10 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
         end: v.endAtIso as string,
         status: v.status,
         assignedAgentIds: Array.isArray(v.assignedAgentIds) ? v.assignedAgentIds : [],
+        siteId: v.siteId,
         siteName: v.siteName,
+        requiredAgents: v.requiredAgents,
+        requiredQualification: v.requiredQualification,
       }));
   }, [vacations]);
 
@@ -529,15 +534,27 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
     [agents]
   );
 
+  const agentQualifications = useMemo(
+    () =>
+      agents.reduce<Record<string, string[]>>((acc, agent) => {
+        acc[agent.id] = Array.isArray(agent.qualifications)
+          ? agent.qualifications
+          : [];
+        return acc;
+      }, {}),
+    [agents]
+  );
+
   const stats = useMemo(
     () =>
       computePlanningStats(
         statsInput,
         range || undefined,
         globalStatsInput,
-        agentContractualTargets
+        agentContractualTargets,
+        agentQualifications
       ),
-    [agentContractualTargets, globalStatsInput, range, statsInput]
+    [agentContractualTargets, agentQualifications, globalStatsInput, range, statsInput]
   );
   const conflictIndex = useMemo(() => buildConflictIndex(globalStatsInput), [globalStatsInput]);
 

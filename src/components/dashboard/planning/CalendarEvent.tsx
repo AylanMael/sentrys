@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React from "react";
 import { EventContentArg } from "@fullcalendar/core";
@@ -33,6 +33,7 @@ type ComplianceIssue = {
 export const CalendarEvent: React.FC<CalendarEventProps> = ({
   arg,
   viewDensity,
+  mode,
   agents,
 }) => {
   if (!arg.event.extendedProps?.v) {
@@ -49,6 +50,8 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
     conflictMessages,
     publicationStatus,
     violatesRest,
+    legalWarning,
+    sstWarning,
     originalStart,
     originalEnd,
   } = arg.event.extendedProps as {
@@ -59,6 +62,8 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
     conflictMessages: string;
     publicationStatus: VacationPublicationStatus;
     violatesRest: boolean;
+    legalWarning?: boolean;
+    sstWarning?: boolean;
     originalStart?: string;
     originalEnd?: string;
   };
@@ -66,6 +71,11 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
   const sanitizeTitle = (title: string | null) => {
     if (!title) return "";
     return title.replace(/\s*\(Copie\)\s*/gi, "").trim();
+  };
+
+  const sanitizeAgentName = (name: string) => {
+    if (!name.includes("@")) return name;
+    return name.split("@")[0].replace(/[._-]+/g, " ").trim();
   };
 
   const assignedComplianceIssue = v.assignedAgentIds
@@ -94,6 +104,25 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
     sanitizeTitle(v.title) && sanitizeTitle(v.title) !== displayTitle
       ? sanitizeTitle(v.title)
       : null;
+  const assignedAgentNames =
+    v.assignedAgentIds
+      ?.map((agentId: string) => {
+        const agent = agents.find((item) => item.id === agentId);
+        if (!agent) return null;
+        return sanitizeAgentName(`${agent.firstName ?? ""} ${agent.lastName ?? ""}`.trim());
+      })
+      .filter((name): name is string => Boolean(name)) ?? [];
+  const timelineTitle =
+    mode === "agent"
+      ? displayTitle
+      : assignedAgentNames.length > 0
+        ? assignedAgentNames.join(", ")
+        : "Ã€ affecter";
+  const timelineMeta = [
+    mode === "agent" ? secondaryTitle : null,
+    v.missionType,
+    isUncovered ? "Ã€ pourvoir" : null,
+  ].filter((item): item is string => Boolean(item));
 
   const startSource = originalStart || arg.event.start;
   const endSource = originalEnd || arg.event.end;
@@ -117,7 +146,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
       : v.status === "closed"
         ? "Cloturee"
         : isUncovered
-          ? "A pourvoir"
+          ? "Ã€ pourvoir"
           : filled < need
             ? "Partielle"
             : "Complete";
@@ -135,7 +164,12 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
       : publicationStatus === "modified"
         ? "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
         : "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200";
-  const showPublicationBadge = !isCompact || publicationStatus !== "published";
+  const showPublicationBadge = publicationStatus === "draft" || publicationStatus === "modified";
+  const legalWarningTitle = legalWarning
+    ? "Vacation superieure a 12h"
+    : sstWarning
+      ? "Vacation collective sans agent SST identifie"
+      : "";
 
   const MiniBadge = ({
     children,
@@ -184,7 +218,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
   const isTimeline = arg.view.type.includes("resourceTimeline");
   if (isTimeline) {
     const showTimelineBadges =
-      hasConflict || violatesRest || hasComplianceIssue || showPublicationBadge;
+      hasConflict || violatesRest || legalWarning || sstWarning || hasComplianceIssue || showPublicationBadge;
 
     return (
       <div
@@ -206,11 +240,13 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
               isCompact ? "text-[9px] font-bold" : "text-[10px] font-black"
             )}
           >
-            {displayTitle}
+            {timelineTitle}
           </span>
-          <span className={cn("shrink-0 font-black tabular-nums", isCompact ? "text-[8px]" : "text-[9px]")}>
-            {filled}/{need}
-          </span>
+          {(need > 1 || filled < need) && (
+            <span className={cn("shrink-0 font-black tabular-nums", isCompact ? "text-[8px]" : "text-[9px]")}>
+              {filled}/{need}
+            </span>
+          )}
         </div>
         <div
           className={cn(
@@ -218,11 +254,13 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
             isCompact ? "gap-1 text-[7px]" : "gap-2 text-[8px]"
           )}
         >
-          <span>
+          <span className="shrink-0 tabular-nums">
             {startTime} - {endTime}
           </span>
-          {v.missionType && <span className="truncate">{v.missionType}</span>}
-          {!isCompact && <span>{statusLabel}</span>}
+          {timelineMeta.map((item) => (
+            <span key={item} className="truncate">{item}</span>
+          ))}
+          {v.status === "cancelled" && <span>{statusLabel}</span>}
         </div>
         {showTimelineBadges && (
           <div className={cn("flex flex-wrap", isCompact ? "mt-0 gap-0.5" : "mt-0.5 gap-1")}>
@@ -234,6 +272,16 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
             {violatesRest && (
               <MiniBadge className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
                 Repos
+              </MiniBadge>
+            )}
+            {legalWarning && (
+              <MiniBadge className="border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                CCN
+              </MiniBadge>
+            )}
+            {sstWarning && (
+              <MiniBadge className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+                SST
               </MiniBadge>
             )}
             {hasComplianceIssue && (
@@ -279,8 +327,13 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
             </span>
           )}
           {violatesRest && (
-            <span title={conflictMessages}>
+            <span title={conflictMessages || "Repos minimum a controler"}>
               <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+            </span>
+          )}
+          {(legalWarning || sstWarning) && (
+            <span title={legalWarningTitle}>
+              <AlertTriangle className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
             </span>
           )}
           {hasComplianceIssue && (
@@ -333,3 +386,5 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
     </div>
   );
 };
+
+

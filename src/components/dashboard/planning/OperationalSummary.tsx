@@ -28,7 +28,15 @@ export const OperationalSummary: React.FC = () => {
 
   const coverage = ops.total > 0 ? Math.round((ops.full / ops.total) * 100) : 100;
   const conflictCount = conflictIndex.size;
-  const restViolationCount = stats.restPeriodViolations.length;
+  const restViolationCount =
+    stats.restPeriodViolations.length +
+    stats.weeklyRestViolations.length +
+    stats.consecutiveDayViolations.length;
+  const legalRiskCount =
+    stats.maxDurationViolations.length +
+    stats.weeklyRestViolations.length +
+    stats.consecutiveDayViolations.length +
+    stats.sstCoverageWarnings.length;
 
   const StatBadge = ({
     label,
@@ -60,18 +68,18 @@ export const OperationalSummary: React.FC = () => {
           <TooltipTrigger asChild>
             <div
               className={cn(
-                "group flex items-center gap-3 rounded-2xl border bg-gradient-to-br px-4 py-2 transition-all duration-500 hover:scale-[1.02] hover:shadow-lg",
+                "group flex items-center gap-2 rounded-xl border bg-gradient-to-br px-3 py-1.5 transition-all duration-500 hover:scale-[1.02] hover:shadow-lg",
                 variants[variant]
               )}
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/20 backdrop-blur-md transition-transform group-hover:rotate-12 dark:bg-black/20">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/20 backdrop-blur-md transition-transform group-hover:rotate-12 dark:bg-black/20">
                 <Icon className="h-4.5 w-4.5" />
               </div>
               <div className="flex flex-col">
-                <span className="text-xl font-black leading-none tracking-tight">
+                <span className="text-lg font-black leading-none tracking-tight">
                   {value}
                 </span>
-                <span className="mt-1 text-[10px] font-black uppercase leading-none tracking-widest opacity-60">
+                <span className="mt-0.5 text-[9px] font-black uppercase leading-none tracking-widest opacity-60">
                   {label}
                 </span>
               </div>
@@ -89,10 +97,10 @@ export const OperationalSummary: React.FC = () => {
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-top-4 flex flex-wrap items-center gap-4 rounded-[2rem] border border-white/20 bg-white/40 p-3 shadow-2xl shadow-black/10 backdrop-blur-2xl duration-700 dark:border-white/5 dark:bg-black/40">
-      <div className="mr-2 flex items-center gap-4 px-4">
+    <div className="animate-in fade-in slide-in-from-top-4 flex flex-wrap items-center gap-2 rounded-[1.5rem] border border-white/20 bg-white/40 p-2 shadow-xl shadow-black/10 backdrop-blur-2xl duration-700 dark:border-white/5 dark:bg-black/40">
+      <div className="mr-1 flex items-center gap-2 px-2">
         <div className="relative">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/30 bg-primary/20 shadow-inner">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/30 bg-primary/20 shadow-inner">
             <CalendarDays className="h-5 w-5 text-primary" />
           </div>
           {loading && (
@@ -111,9 +119,9 @@ export const OperationalSummary: React.FC = () => {
         </div>
       </div>
 
-      <Separator orientation="vertical" className="hidden h-10 opacity-10 lg:block" />
+      <Separator orientation="vertical" className="hidden h-8 opacity-10 lg:block" />
 
-      <div className="flex flex-1 flex-wrap gap-3 px-2">
+      <div className="flex flex-1 flex-wrap gap-2 px-1">
         <StatBadge
           label="Complets"
           value={ops.full}
@@ -121,13 +129,15 @@ export const OperationalSummary: React.FC = () => {
           variant="emerald"
           description="Efficacité maximale : effectifs au complet"
         />
-        <StatBadge
-          label="Partiels"
-          value={ops.partial}
-          icon={PieChart}
-          variant="amber"
-          description="Couverture incomplète détectée"
-        />
+        {ops.partial > 0 && (
+          <StatBadge
+            label="Partiels"
+            value={ops.partial}
+            icon={PieChart}
+            variant="amber"
+            description="Couverture incomplète détectée"
+          />
+        )}
         <StatBadge
           label="À pourvoir"
           value={ops.uncovered}
@@ -135,15 +145,17 @@ export const OperationalSummary: React.FC = () => {
           variant="red"
           description="Priorité haute : aucun agent affecté"
         />
+        {ops.absences > 0 && (
+          <StatBadge
+            label="Absences"
+            value={ops.absences}
+            icon={UserX}
+            variant="indigo"
+            description="Absences et congés signalés"
+          />
+        )}
         <StatBadge
-          label="Absences"
-          value={ops.absences}
-          icon={UserX}
-          variant="indigo"
-          description="Absences et congés signalés"
-        />
-        <StatBadge
-          label="Conflits"
+          label="Alertes"
           value={conflictCount}
           icon={ShieldAlert}
           variant={conflictCount > 0 ? "red" : "emerald"}
@@ -154,11 +166,20 @@ export const OperationalSummary: React.FC = () => {
           value={restViolationCount}
           icon={ClockAlert}
           variant={restViolationCount > 0 ? "amber" : "emerald"}
-          description="Prises de service avec repos insuffisant"
+          description="Repos quotidien, repos hebdomadaire 35h et 6 jours consecutifs"
         />
+        {legalRiskCount > 0 && (
+          <StatBadge
+            label="CCN"
+            value={legalRiskCount}
+            icon={AlertTriangle}
+            variant="red"
+            description="Alerte conventionnelle : vacation >12h, repos hebdo, jours consecutifs ou SST"
+          />
+        )}
       </div>
 
-      <div className="ml-auto flex items-center gap-4 rounded-2xl border border-black/5 bg-black/5 px-4 py-2 dark:border-white/5 dark:bg-white/5">
+      <div className="ml-auto flex items-center gap-3 rounded-xl border border-black/5 bg-black/5 px-3 py-1.5 dark:border-white/5 dark:bg-white/5">
         <div className="flex flex-col items-end">
           <div
             className={cn(
@@ -191,7 +212,7 @@ export const OperationalSummary: React.FC = () => {
         </div>
 
         {ops.missingAgents > 0 && (
-          <div className="animate-pulse flex items-center gap-2 rounded-xl border border-white/20 bg-red-600 px-4 py-2 text-white shadow-xl shadow-red-500/30">
+          <div className="animate-pulse flex items-center gap-2 rounded-lg border border-white/20 bg-red-600 px-3 py-1.5 text-white shadow-xl shadow-red-500/30">
             <AlertTriangle className="h-4 w-4" />
             <div className="flex flex-col items-start leading-none">
               <span className="text-sm font-black">{ops.missingAgents}</span>

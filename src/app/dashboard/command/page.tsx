@@ -78,6 +78,17 @@ type CommandResponse = {
   incidents: CommandIncident[];
 };
 
+type CommandView = "overview" | "map" | "alerts";
+
+const COMMAND_VIEWS: Array<{
+  id: CommandView;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+}> = [
+  { id: "overview", label: "Vue rapide", icon: Radar },
+  { id: "map", label: "Carte", icon: MapIcon },
+  { id: "alerts", label: "Alertes", icon: Siren },
+];
 type SituationTone = "clear" | "watch" | "alert";
 
 function priorityLabel(priority: string | null | undefined) {
@@ -160,9 +171,9 @@ function situationClass(tone: SituationTone) {
 
 function CommandSkeleton() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Skeleton className="h-36 rounded-[2rem]" />
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         <Skeleton className="h-28 rounded-[1.5rem]" />
         <Skeleton className="h-28 rounded-[1.5rem]" />
         <Skeleton className="h-28 rounded-[1.5rem]" />
@@ -179,12 +190,20 @@ export default function CommandPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [commandView, setCommandView] = useState<CommandView>("overview");
 
   const situation = useMemo(() => getSituation(data), [data]);
   const highIncidentCount = useMemo(
     () => data?.incidents?.filter((incident) => incident.priority === "high").length ?? 0,
     [data]
   );
+  const watchIncidentCount = useMemo(
+    () =>
+      data?.incidents?.filter((incident) => incident.priority !== "high").length ?? 0,
+    [data]
+  );
+  const situationHref =
+    situation.tone === "alert" ? "/dashboard/incidents" : "/dashboard/conduite";
 
   const fetchStats = useCallback(
     async (options: { quiet?: boolean; refresh?: boolean } = {}) => {
@@ -235,27 +254,27 @@ export default function CommandPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6 pb-10">
-      <section className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-6 text-white shadow-xl dark:border-white/10">
+    <div className="mx-auto max-w-[1600px] space-y-5 pb-8">
+      <section className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-4 text-white shadow-xl dark:border-white/10">
         <div className="pointer-events-none absolute right-[-6rem] top-[-7rem] h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
 
-        <div className="relative z-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
+        <div className="relative z-10 grid gap-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
           <div>
             <Badge className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100">
               Supervision temps reel
             </Badge>
-            <h1 className="mt-4 flex items-center gap-3 text-3xl font-black tracking-tight md:text-4xl">
-              <Radar className="h-8 w-8 text-cyan-200" />
+            <h1 className="mt-2 flex items-center gap-3 text-2xl font-black tracking-tight md:text-3xl">
+              <Radar className="h-7 w-7 text-cyan-200" />
               Command Center
             </h1>
-            <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-slate-300">
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-300">
               Vue courte pour savoir ce qui se passe maintenant : sites, rondes,
               incidents recents et priorites terrain. La conduite garde ensuite
               la trace des decisions prises.
             </p>
           </div>
 
-          <div className={cn("rounded-[1.5rem] border p-4", situationClass(situation.tone))}>
+          <div className={cn("rounded-2xl border p-4", situationClass(situation.tone))}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-75">
@@ -278,35 +297,103 @@ export default function CommandPage() {
         </div>
       </section>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-muted-foreground">
-          <Badge variant="outline" className="rounded-full px-3 py-1 font-black">
-            Derniere synchro : {formatSyncTime(lastSync)}
-          </Badge>
-          <span>Actualisation automatique toutes les 30 secondes.</span>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className={cn("rounded-2xl border p-4", situationClass(situation.tone))}>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+            Priorite terrain
+          </p>
+          <p className="mt-1 text-xl font-black">{situation.title}</p>
+          <p className="mt-1 line-clamp-2 text-xs font-semibold opacity-75">
+            {situation.detail}
+          </p>
         </div>
+        <div
+          className={cn(
+            "rounded-2xl border p-4",
+            highIncidentCount > 0
+              ? "border-red-500/25 bg-red-500/10 text-red-800 dark:text-red-100"
+              : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-100"
+          )}
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+            Critiques
+          </p>
+          <p className="mt-1 text-2xl font-black">{highIncidentCount}</p>
+          <p className="mt-1 text-xs font-semibold opacity-75">
+            {watchIncidentCount} signalement(s) a surveiller
+          </p>
+        </div>
+        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-cyan-800 dark:text-cyan-100">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+            Rondes actives
+          </p>
+          <p className="mt-1 text-2xl font-black">{data?.stats.activePatrols ?? 0}</p>
+          <p className="mt-1 text-xs font-semibold opacity-75">
+            {data?.stats.totalSites ?? 0} site(s) suivis
+          </p>
+        </div>
+        <Link
+          href={situationHref}
+          className="group rounded-2xl border border-primary/25 bg-primary/10 p-4 text-primary transition hover:-translate-y-0.5"
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+            Action prioritaire
+          </p>
+          <p className="mt-1 text-sm font-black">{situation.action}</p>
+          <p className="mt-1 flex items-center gap-1 text-xs font-semibold opacity-75">
+            Ouvrir maintenant
+            <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-1" />
+          </p>
+        </Link>
+      </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void fetchStats({ refresh: true })}
-            disabled={refreshing}
-            className="rounded-2xl font-black"
-          >
-            <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
-            Rafraichir
-          </Button>
-          <Button asChild variant="outline" className="rounded-2xl font-black">
-            <Link href="/dashboard/conduite">
-              Ouvrir conduite <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
-          <Button asChild className="rounded-2xl bg-slate-950 font-black text-white hover:bg-slate-800">
-            <Link href="/dashboard/incidents">
-              Voir incidents <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
+      <div className="rounded-[1.25rem] border border-border/60 bg-background/85 p-2 shadow-sm backdrop-blur">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap gap-1">
+            {COMMAND_VIEWS.map((item) => {
+              const Icon = item.icon;
+              const active = commandView === item.id;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setCommandView(item.id)}
+                  className={cn(
+                    "flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-black transition",
+                    active
+                      ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-800 shadow-sm dark:text-cyan-100"
+                      : "border-transparent bg-muted/35 text-muted-foreground hover:border-border hover:bg-background"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="rounded-full px-3 py-1 font-black">
+              Synchro : {formatSyncTime(lastSync)}
+            </Badge>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void fetchStats({ refresh: true })}
+              disabled={refreshing}
+              className="h-10 rounded-xl font-black"
+            >
+              <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
+              Rafraichir
+            </Button>
+            <Button asChild variant="outline" className="h-10 rounded-xl font-black">
+              <Link href="/dashboard/conduite">Conduite</Link>
+            </Button>
+            <Button asChild className="h-10 rounded-xl bg-slate-950 font-black text-white hover:bg-slate-800">
+              <Link href="/dashboard/incidents">Incidents</Link>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -328,7 +415,7 @@ export default function CommandPage() {
         />
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className={cn("grid gap-3 md:grid-cols-3", commandView !== "overview" && "hidden")}>
         <CommandKpi
           label="Sites suivis"
           value={data?.stats.totalSites ?? 0}
@@ -356,8 +443,9 @@ export default function CommandPage() {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
-        <Card className="overflow-hidden rounded-[2rem] border-border/60 shadow-sm">
+      <div className="grid gap-5">
+        {commandView === "map" && (
+        <Card className="overflow-hidden rounded-[1.5rem] border-border/60 shadow-sm">
           <CardHeader className="border-b bg-muted/20">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
@@ -376,8 +464,8 @@ export default function CommandPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-4">
-            <div className="h-[560px] min-h-[420px] overflow-hidden rounded-[1.5rem] border bg-slate-950">
+          <CardContent className="p-3">
+            <div className="h-[560px] min-h-[420px] overflow-hidden rounded-2xl border bg-slate-950">
               <TacticalMap
                 sites={data?.sites ?? []}
                 incidents={data?.incidents ?? []}
@@ -386,9 +474,10 @@ export default function CommandPage() {
             </div>
           </CardContent>
         </Card>
+        )}
 
-        <div className="space-y-6">
-          <Card className="rounded-[2rem] border-border/60 shadow-sm">
+        <div className="space-y-5">
+          <Card className={cn("rounded-[1.5rem] border-border/60 shadow-sm", commandView !== "alerts" && commandView !== "overview" && "hidden")}>
             <CardHeader className="border-b bg-muted/20">
               <CardTitle className="flex items-center gap-2 text-xl font-black">
                 <Siren className="h-5 w-5 text-primary" />
@@ -434,7 +523,7 @@ export default function CommandPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[2rem] border-cyan-500/20 bg-cyan-500/5 shadow-sm">
+          <Card className={cn("rounded-[1.5rem] border-cyan-500/20 bg-cyan-500/5 shadow-sm", commandView !== "overview" && "hidden")}>
             <CardContent className="space-y-4 p-5">
               <div className="flex items-start gap-3">
                 <div className="rounded-2xl bg-cyan-500/15 p-3 text-cyan-700 dark:text-cyan-200">
@@ -448,7 +537,7 @@ export default function CommandPage() {
                   </p>
                 </div>
               </div>
-              <Button asChild variant="outline" className="w-full rounded-2xl font-black">
+              <Button asChild variant="outline" className="w-full rounded-xl font-black">
                 <Link href="/dashboard/conduite">
                   Tracer une decision <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
@@ -477,22 +566,22 @@ function CommandKpi({
   return (
     <Card
       className={cn(
-        "rounded-[1.5rem] border shadow-sm",
+        "rounded-2xl border shadow-sm",
         tone === "success" && "border-emerald-500/25 bg-emerald-500/10",
         tone === "info" && "border-sky-500/25 bg-sky-500/10",
         tone === "warning" && "border-amber-500/30 bg-amber-500/10",
         tone === "danger" && "border-red-500/30 bg-red-500/10"
       )}
     >
-      <CardContent className="flex items-center justify-between gap-4 p-5">
+      <CardContent className="flex items-center justify-between gap-4 p-4">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
             {label}
           </p>
-          <p className="mt-2 text-3xl font-black text-foreground">{value}</p>
+          <p className="mt-1 text-2xl font-black text-foreground">{value}</p>
           <p className="mt-1 text-xs font-bold text-muted-foreground">{detail}</p>
         </div>
-        <div className="rounded-2xl bg-background/70 p-3 shadow-sm">
+        <div className="rounded-xl bg-background/70 p-2.5 shadow-sm">
           <Icon className="h-6 w-6 text-primary" />
         </div>
       </CardContent>

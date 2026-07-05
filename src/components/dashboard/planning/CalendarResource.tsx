@@ -36,10 +36,14 @@ export const CalendarResource: React.FC<CalendarResourceProps> = ({
   const { type, unassignedCount, status: agentStatus } =
     info.resource.extendedProps;
   const pendingCount = unassignedCount ?? 0;
+  const cleanedTitle = info.resource.title.includes("@")
+    ? info.resource.title.split("@")[0].replace(/[._-]+/g, " ").trim()
+    : info.resource.title;
+  const displayResourceTitle = cleanedTitle || info.resource.title;
 
   if (type === "agent") {
     const initials =
-      info.resource.title
+      displayResourceTitle
         .split(" ")
         .map((name: string) => name[0])
         .join("")
@@ -74,7 +78,7 @@ export const CalendarResource: React.FC<CalendarResourceProps> = ({
               isCompact ? "text-[9px] font-bold" : "text-[10px] font-black"
             )}
           >
-            {info.resource.title}
+            {displayResourceTitle}
           </div>
           {!isCompact && (
             <div className="mt-0.5 flex items-center gap-2 text-[9px] font-semibold text-slate-500 dark:text-slate-400">
@@ -103,7 +107,16 @@ export const CalendarResource: React.FC<CalendarResourceProps> = ({
         )}
       >
         <AlertCircle className={cn("animate-pulse", isCompact ? "h-3 w-3" : "h-3.5 w-3.5")} />
-        <span className={cn("font-extrabold uppercase tracking-widest", isCompact ? "text-[8px]" : "text-[9px]")}>{info.resource.title}</span>
+        <div className="min-w-0">
+          <div className={cn("truncate font-extrabold uppercase tracking-widest", isCompact ? "text-[8px]" : "text-[9px]")}>
+            {displayResourceTitle}
+          </div>
+          {!isCompact && (
+            <div className="text-[8px] font-bold uppercase tracking-wider text-red-600/80 dark:text-red-300/80">
+              Affecter en priorité
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -131,7 +144,7 @@ export const CalendarResource: React.FC<CalendarResourceProps> = ({
               isCompact ? "text-[9px] font-bold" : "text-[10px] font-black"
             )}
           >
-            {info.resource.title}
+            {displayResourceTitle}
           </span>
         </div>
         {pendingCount > 0 && (
@@ -166,3 +179,4 @@ export const ResourceAreaHeader: React.FC<{ mode: "site" | "agent" }> = ({
     </span>
   </div>
 );
+

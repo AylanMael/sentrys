@@ -185,6 +185,18 @@ const RUBRIC_FIELDS: Array<{
   },
 ];
 
+type PrepaieView = "controle" | "donnees" | "cycle" | "reglages";
+
+const PREPAIE_VIEWS: Array<{
+  id: PrepaieView;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  { id: "controle", label: "Controle", icon: ShieldCheck },
+  { id: "donnees", label: "Donnees", icon: FileSpreadsheet },
+  { id: "cycle", label: "Cycle", icon: History },
+  { id: "reglages", label: "Reglages", icon: Settings2 },
+];
 type PrepayPreflightVerdict = "ready" | "warning" | "blocking";
 type PrepayPreflightSeverity = "ok" | "warning" | "blocking";
 
@@ -548,6 +560,7 @@ export default function PrepaiePage() {
   const [error, setError] = React.useState<string | null>(null);
   const [csvHref, setCsvHref] = React.useState<string | null>(null);
   const [cabinetCsvHref, setCabinetCsvHref] = React.useState<string | null>(null);
+  const [prepaieView, setPrepaieView] = React.useState<PrepaieView>("controle");
 
   const loadReport = React.useCallback(async (quiet = false) => {
     setLoading(true);
@@ -727,6 +740,19 @@ export default function PrepaiePage() {
     [period, report]
   );
   const preflightMeta = PREFLIGHT_META[preflight.verdict];
+  const priorityItem =
+    preflight.items.find((item) => item.severity === "blocking") ??
+    preflight.items.find((item) => item.severity === "warning") ??
+    preflight.items[0];
+  const priorityAction =
+    loading
+      ? "Calcul en cours..."
+      : priorityItem?.action ??
+        (currentPeriodStatus === "locked"
+          ? "Telecharger CSV cabinet + PDF synthese."
+          : currentPeriodActions[0]
+            ? `${PERIOD_ACTION_META[currentPeriodActions[0]].label} la periode.`
+            : "Aucune action urgente.");
 
   const statCards = [
     {
@@ -767,24 +793,24 @@ export default function PrepaiePage() {
   ];
 
   return (
-    <div className="space-y-8">
-      <div className="overflow-hidden rounded-[2rem] border border-slate-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-7 text-white shadow-2xl">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
+    <div className="space-y-5">
+      <div className="overflow-hidden rounded-[1.5rem] border border-slate-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-4 text-white shadow-xl">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-2xl">
             <div className="inline-flex items-center rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">
               Module gestion sociale
             </div>
-            <h1 className="mt-4 text-3xl font-black tracking-tight lg:text-5xl">
+            <h1 className="mt-2 text-2xl font-black tracking-tight lg:text-3xl">
               Pre-paie exploitation
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-200">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200">
               Transforme les vacations validees en variables de paie :
               heures, nuit, dimanche, jours feries, absences et anomalies
               avant export.
             </p>
           </div>
 
-          <div className="grid gap-3 rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto_auto_auto_auto]">
+          <div className="grid gap-2 rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur md:grid-cols-2 xl:grid-cols-[130px_130px_auto_auto_auto_auto]">
             <div>
               <Label className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">
                 Du
@@ -793,7 +819,7 @@ export default function PrepaiePage() {
                 type="date"
                 value={from}
                 onChange={(event) => setFrom(event.target.value)}
-                className="mt-2 border-white/10 bg-white text-slate-950"
+                className="mt-1 h-10 border-white/10 bg-white text-slate-950"
               />
             </div>
             <div>
@@ -804,14 +830,14 @@ export default function PrepaiePage() {
                 type="date"
                 value={to}
                 onChange={(event) => setTo(event.target.value)}
-                className="mt-2 border-white/10 bg-white text-slate-950"
+                className="mt-1 h-10 border-white/10 bg-white text-slate-950"
               />
             </div>
             <Button
               type="button"
               onClick={() => void loadReport()}
               disabled={loading}
-              className="self-end rounded-2xl bg-emerald-400 px-5 font-black text-slate-950 hover:bg-emerald-300"
+              className="h-10 self-end rounded-xl bg-emerald-400 px-4 font-black text-slate-950 hover:bg-emerald-300"
             >
               <RefreshCw
                 className={cn("mr-2 h-4 w-4", loading && "animate-spin")}
@@ -822,7 +848,7 @@ export default function PrepaiePage() {
               asChild
               variant="outline"
               className={cn(
-                "self-end rounded-2xl border-white/20 bg-white/10 px-5 font-black text-white hover:bg-white/20",
+                "h-10 self-end rounded-xl border-white/20 bg-white/10 px-4 font-black text-white hover:bg-white/20",
                 (!csvHref || loading) && "pointer-events-none opacity-50"
               )}
             >
@@ -842,7 +868,7 @@ export default function PrepaiePage() {
               asChild
               variant="outline"
               className={cn(
-                "self-end rounded-2xl border-white/20 bg-white/10 px-5 font-black text-white hover:bg-white/20",
+                "h-10 self-end rounded-xl border-white/20 bg-white/10 px-4 font-black text-white hover:bg-white/20",
                 (!cabinetCsvHref || loading) && "pointer-events-none opacity-50"
               )}
             >
@@ -862,7 +888,7 @@ export default function PrepaiePage() {
               asChild
               variant="outline"
               className={cn(
-                "self-end rounded-2xl border-white/20 bg-white/10 px-5 font-black text-white hover:bg-white/20",
+                "h-10 self-end rounded-xl border-white/20 bg-white/10 px-4 font-black text-white hover:bg-white/20",
                 (!report || loading) && "pointer-events-none opacity-50"
               )}
             >
@@ -894,19 +920,104 @@ export default function PrepaiePage() {
         />
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className={cn("rounded-2xl border p-4", currentPeriodMeta.tone)}>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+            Statut periode
+          </p>
+          <p className="mt-1 text-xl font-black">{currentPeriodMeta.label}</p>
+          <p className="mt-1 line-clamp-2 text-xs font-semibold opacity-75">
+            {currentPeriodMeta.description}
+          </p>
+        </div>
+        <div
+          className={cn(
+            "rounded-2xl border p-4",
+            preflight.blockingCount > 0
+              ? "border-red-500/25 bg-red-500/10 text-red-800 dark:text-red-100"
+              : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-100"
+          )}
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+            Blocages
+          </p>
+          <p className="mt-1 text-2xl font-black">{preflight.blockingCount}</p>
+          <p className="mt-1 text-xs font-semibold opacity-75">
+            {preflight.warningCount} avertissement(s)
+          </p>
+        </div>
+        <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4 text-sky-800 dark:text-sky-100">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+            Volume traite
+          </p>
+          <p className="mt-1 text-2xl font-black">
+            {report?.summary.agentCount ?? "-"} agent(s)
+          </p>
+          <p className="mt-1 text-xs font-semibold opacity-75">
+            {report?.summary.vacationCount ?? "-"} vacation(s)
+          </p>
+        </div>
+        <div
+          className={cn(
+            "rounded-2xl border p-4",
+            preflight.verdict === "blocking"
+              ? "border-red-500/25 bg-red-500/10 text-red-800 dark:text-red-100"
+              : preflight.verdict === "warning"
+                ? "border-amber-500/25 bg-amber-500/10 text-amber-900 dark:text-amber-100"
+                : "border-primary/25 bg-primary/10 text-primary"
+          )}
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+            Action prioritaire
+          </p>
+          <p className="mt-1 line-clamp-2 text-sm font-black">
+            {priorityItem?.title ?? preflightMeta.title}
+          </p>
+          <p className="mt-1 line-clamp-2 text-xs font-semibold opacity-75">
+            {priorityAction}
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-[1.25rem] border border-border/60 bg-background/85 p-2 shadow-sm backdrop-blur">
+        <div className="flex flex-wrap gap-1">
+          {PREPAIE_VIEWS.map((item) => {
+            const Icon = item.icon;
+            const active = prepaieView === item.id;
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setPrepaieView(item.id)}
+                className={cn(
+                  "flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-black transition",
+                  active
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 shadow-sm dark:text-emerald-100"
+                    : "border-transparent bg-muted/35 text-muted-foreground hover:border-border hover:bg-background"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
             <Card key={card.label} className={cn("border", card.tone)}>
-              <CardContent className="flex items-center justify-between p-5">
+              <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-70">
                     {card.label}
                   </p>
-                  <p className="mt-2 text-3xl font-black">{card.value}</p>
+                  <p className="mt-1 text-2xl font-black">{card.value}</p>
                 </div>
-                <div className="rounded-2xl bg-white/60 p-3 dark:bg-black/20">
+                <div className="rounded-xl bg-white/60 p-2.5 dark:bg-black/20">
                   <Icon className="h-6 w-6" />
                 </div>
               </CardContent>
@@ -915,7 +1026,7 @@ export default function PrepaiePage() {
         })}
       </div>
 
-      <Card className={cn("rounded-[1.75rem] border shadow-sm", preflightMeta.tone)}>
+      <Card className={cn("rounded-[1.5rem] border shadow-sm", preflightMeta.tone, prepaieView !== "controle" && "hidden")}>
         <CardHeader>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -1006,8 +1117,8 @@ export default function PrepaiePage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-        <Card className="overflow-hidden rounded-[1.75rem] border-border/60 shadow-sm">
+      <div className="grid gap-5">
+        <Card className={cn("overflow-hidden rounded-[1.5rem] border-border/60 shadow-sm", prepaieView !== "donnees" && "hidden")}>
           <CardHeader className="border-b bg-muted/20">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -1100,8 +1211,8 @@ export default function PrepaiePage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-6">
-          <Card className="rounded-[1.75rem] border-sky-500/20 bg-sky-500/5">
+        <div className="space-y-5">
+          <Card className={cn("rounded-[1.5rem] border-sky-500/20 bg-sky-500/5", prepaieView !== "cycle" && "hidden")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-black">
                 <FileCheck2 className="h-5 w-5 text-sky-700 dark:text-sky-300" />
@@ -1237,7 +1348,7 @@ export default function PrepaiePage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[1.75rem] border-emerald-500/20 bg-emerald-500/5">
+          <Card className={cn("rounded-[1.5rem] border-emerald-500/20 bg-emerald-500/5", prepaieView !== "reglages" && "hidden")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-black">
                 <Settings2 className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
@@ -1520,7 +1631,7 @@ export default function PrepaiePage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[1.75rem] border-amber-500/30 bg-amber-500/10">
+          <Card className={cn("rounded-[1.5rem] border-amber-500/30 bg-amber-500/10", prepaieView !== "controle" && prepaieView !== "reglages" && "hidden")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-black text-amber-900 dark:text-amber-100">
                 <ShieldCheck className="h-5 w-5" />
@@ -1540,7 +1651,7 @@ export default function PrepaiePage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[1.75rem] border-border/60">
+          <Card className={cn("rounded-[1.5rem] border-border/60", prepaieView !== "controle" && "hidden")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-black">
                 <CalendarRange className="h-5 w-5 text-primary" />

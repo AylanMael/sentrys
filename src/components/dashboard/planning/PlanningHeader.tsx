@@ -204,18 +204,18 @@ export const PlanningHeader: React.FC = () => {
   }, [range?.from, range?.to, siteId, sites.length, toast]);
 
   return (
-    <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-6 duration-700 ease-out">
-      <div className="rounded-[1.75rem] border border-border/50 bg-background/90 shadow-sm">
-        <div className="flex flex-col gap-4 p-4 md:p-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+    <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-6 duration-700 ease-out">
+      <div className="rounded-[1.35rem] border border-border/50 bg-background/90 shadow-sm">
+        <div className="flex flex-col gap-2 p-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
                 <CalendarClock className="h-5 w-5" />
               </div>
 
-              <div className="min-w-0 space-y-2">
+              <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl font-black tracking-tight text-foreground">
+                  <h1 className="text-xl font-black tracking-tight text-foreground">
                     Planning
                   </h1>
                   <Badge
@@ -262,9 +262,8 @@ export const PlanningHeader: React.FC = () => {
                   )}
                 </div>
 
-                <p className="max-w-2xl text-sm text-muted-foreground">
-                  Organise les vacations, affecte les agents et traite les urgences
-                  sans te perdre dans des outils secondaires.
+                <p className="sr-only">
+                  Organise les vacations, affecte les agents et traite les urgences sans te perdre dans des outils secondaires.
                 </p>
               </div>
             </div>
@@ -301,67 +300,89 @@ export const PlanningHeader: React.FC = () => {
                   </Button>
                 </div>
               )}
+              <div className="flex flex-wrap items-center gap-1 rounded-2xl border border-primary/15 bg-primary/5 p-1">
+                <span className="sr-only">
+                  Saisie
+                </span>
+                <Button
+                  variant="outline"
+                  onClick={() => setSiteTemplateOpen(true)}
+                  size="sm"
+                  aria-label="Remplir avec un planning type"
+                  title="Remplir avec un planning type"
+                  className="h-8 w-8 rounded-xl border-primary/30 bg-background px-0 text-primary hover:bg-primary/10"
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  <span className="sr-only">Remplir</span>
+                </Button>
+                <Button
+                  onClick={() => setCreateOpen(true)}
+                  size="sm"
+                  aria-label="Créer une vacation"
+                  title="Créer une vacation"
+                  className="h-8 rounded-xl px-3 text-[10px] font-black uppercase tracking-[0.14em]"
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  <span>Créer</span>
+                </Button>
+              </div>
 
-              <Button
-                variant={tensionMode ? "destructive" : "outline"}
-                size="sm"
-                onClick={() => setTensionMode(!tensionMode)}
-                className={cn(
-                  "h-10 rounded-xl px-4 text-xs font-bold",
-                  !tensionMode && "border-border/60 bg-background"
-                )}
-              >
-                <AlertTriangle className="mr-2 h-4 w-4" />
-                {tensionMode ? "Mode tension actif" : "Mode tension"}
-              </Button>
+              <div className="flex flex-wrap items-center gap-1 rounded-2xl border border-orange-500/15 bg-orange-500/5 p-1">
+                <span className="sr-only">
+                  Contrôler
+                </span>
+                <Button
+                  variant={tensionMode ? "destructive" : "ghost"}
+                  size="sm"
+                  onClick={() => setTensionMode(!tensionMode)}
+                  aria-label={tensionMode ? "Désactiver le mode tension" : "Activer le mode tension"}
+                  title={tensionMode ? "Désactiver le mode tension" : "Activer le mode tension"}
+                  className={cn(
+                    "h-8 w-8 rounded-xl px-0 text-[10px] font-black uppercase tracking-[0.12em]",
+                    !tensionMode && "text-orange-700 hover:bg-orange-500/10 dark:text-orange-300"
+                  )}
+                >
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  <span className="sr-only">{tensionMode ? "Tension active" : "Tension"}</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setValidationOpen(true)}
+                  size="sm"
+                  disabled={!canPublish}
+                  aria-label="Ouvrir le cockpit de validation"
+                  title="Ouvrir le cockpit de validation"
+                  className="h-8 w-8 rounded-xl px-0 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span className="sr-only">Cockpit</span>
+                </Button>
+              </div>
 
-              <Button
-                variant="outline"
-                onClick={() => setSiteTemplateOpen(true)}
-                size="sm"
-                className="h-10 rounded-xl border-primary/30 bg-primary/5 px-4 text-xs font-black uppercase tracking-[0.14em] text-primary hover:bg-primary/10"
-              >
-                <CalendarDays className="mr-2 h-4 w-4" />
-                Remplir
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => setValidationOpen(true)}
-                size="sm"
-                disabled={!canPublish}
-                className="h-10 rounded-xl border-emerald-500/30 bg-emerald-500/5 px-4 text-xs font-black uppercase tracking-[0.14em] text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
-              >
-                <ShieldCheck className="mr-2 h-4 w-4" />
-                Cockpit
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => setDispatchOpen(true)}
-                size="sm"
-                disabled={!canPublish}
-                className="h-10 rounded-xl border-sky-500/30 bg-sky-500/5 px-4 text-xs font-black uppercase tracking-[0.14em] text-sky-700 hover:bg-sky-500/10 dark:text-sky-300"
-              >
-                <Send className="mr-2 h-4 w-4" />
-                Diffuser
-              </Button>
-
-              <Button
-                onClick={() => setCreateOpen(true)}
-                size="sm"
-                className="h-10 rounded-xl px-5 text-xs font-black uppercase tracking-[0.16em]"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Créer
-              </Button>
+              <div className="flex flex-wrap items-center gap-1 rounded-2xl border border-sky-500/15 bg-sky-500/5 p-1">
+                <span className="sr-only">
+                  Envoyer
+                </span>
+                <Button
+                  variant="ghost"
+                  onClick={() => setDispatchOpen(true)}
+                  size="sm"
+                  disabled={!canPublish}
+                  aria-label="Diffuser les plannings"
+                  title="Diffuser les plannings"
+                  className="h-8 w-8 rounded-xl px-0 text-sky-700 hover:bg-sky-500/10 dark:text-sky-300"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span className="sr-only">Diffuser</span>
+                </Button>
+              </div>
 
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={refresh}
                 disabled={loading}
-                className="h-10 w-10 rounded-xl border border-border/50 text-muted-foreground"
+                className="h-9 w-9 rounded-xl border border-border/50 text-muted-foreground"
               >
                 <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
               </Button>
@@ -371,7 +392,7 @@ export const PlanningHeader: React.FC = () => {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-10 w-10 rounded-xl border-border/60"
+                    className="h-9 w-9 rounded-xl border-border/60"
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
@@ -555,3 +576,4 @@ export const PlanningHeader: React.FC = () => {
     </div>
   );
 };
+

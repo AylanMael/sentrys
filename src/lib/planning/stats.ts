@@ -6,8 +6,10 @@ export type VacationEvent = {
   end: string;
   status?: string;
   assignedAgentIds?: string[];
+  siteId?: string | null;
   siteName?: string | null;
   requiredAgents?: number;
+  requiredQualification?: string | null;
 };
 
 export type PlanningStats = {
@@ -21,7 +23,18 @@ export type PlanningStats = {
   agentContractualHours: Record<string, number>;
   agentWorkingDays: Record<string, number>;
   restPeriodViolations: string[];
+  maxDurationViolations: string[];
+  consecutiveDayViolations: string[];
+  weeklyRestViolations: string[];
+  sstCoverageWarnings: string[];
 };
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const MAX_SHIFT_HOURS = 12;
+const MIN_DAILY_REST_HOURS = 11;
+const MIN_WEEKLY_REST_HOURS = 35;
+const MAX_CONSECUTIVE_WORK_DAYS = 6;
 
 function calculateNightHours(start: Date, end: Date): number {
   let nightHours = 0;
@@ -40,13 +53,13 @@ function calculateNightHours(start: Date, end: Date): number {
     const intersectStart1 = Math.max(current.getTime(), nightStart1.getTime());
     const intersectEnd1 = Math.min(end.getTime(), nightEnd1.getTime());
     if (intersectStart1 < intersectEnd1) {
-      nightHours += (intersectEnd1 - intersectStart1) / (1000 * 60 * 60);
+      nightHours += (intersectEnd1 - intersectStart1) / HOUR_MS;
     }
 
     const intersectStart2 = Math.max(current.getTime(), nightStart2.getTime());
     const intersectEnd2 = Math.min(end.getTime(), nightEnd2.getTime());
     if (intersectStart2 < intersectEnd2) {
-      nightHours += (intersectEnd2 - intersectStart2) / (1000 * 60 * 60);
+      nightHours += (intersectEnd2 - intersectStart2) / HOUR_MS;
     }
 
     current = new Date(year, month, date + 1, 0, 0, 0);
@@ -55,11 +68,60 @@ function calculateNightHours(start: Date, end: Date): number {
   return nightHours;
 }
 
+function isCancelled(event: VacationEvent) {
+  return String(event.status ?? "").toLowerCase() === "cancelled";
+}
+
+function eventBounds(event: VacationEvent) {
+  const startMs = new Date(event.start).getTime();
+  const endMs = new Date(event.end).getTime();
+
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    return null;
+  }
+
+  return { startMs, endMs };
+}
+
+function dayKeyFromMs(ms: number) {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function startOfUtcDay(ms: number) {
+  const d = new Date(ms);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+function startOfIsoWeek(ms: number) {
+  const dayStart = startOfUtcDay(ms);
+  const day = new Date(dayStart).getUTCDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  return dayStart + mondayOffset * DAY_MS;
+}
+
+function normalizeQualification(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function hasSst(agentId: string, agentQualifications?: Record<string, string[]>) {
+  return (agentQualifications?.[agentId] ?? []).some((qualification) =>
+    normalizeQualification(qualification).includes("sst")
+  );
+}
+
+function addUnique(target: string[], ids: Iterable<string>) {
+  const set = new Set(target);
+  for (const id of ids) set.add(id);
+  target.length = 0;
+  target.push(...set);
+}
+
 export function computePlanningStats(
   events: VacationEvent[],
   range?: { from: string; to: string },
   allEvents?: VacationEvent[],
-  agentContractualTargets?: Record<string, number>
+  agentContractualTargets?: Record<string, number>,
+  agentQualifications?: Record<string, string[]>
 ): PlanningStats {
   let totalHours = 0;
   let nightHours = 0;
@@ -72,21 +134,28 @@ export function computePlanningStats(
   const agentWorkingDays: Record<string, number> = {};
   const agentDailyMap: Record<string, Set<string>> = {};
   const restPeriodViolations: string[] = [];
+  const maxDurationViolations: string[] = [];
+  const consecutiveDayViolations: string[] = [];
+  const weeklyRestViolations: string[] = [];
+  const sstCoverageWarnings: string[] = [];
 
   const rangeStart = range ? new Date(range.from) : null;
   const rangeEnd = range ? new Date(range.to) : null;
 
   const relevantEvents = events.filter((event) => {
+    const bounds = eventBounds(event);
+    if (!bounds) return false;
     if (!rangeStart || !rangeEnd) return true;
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    return start < rangeEnd && end > rangeStart;
+    return bounds.startMs < rangeEnd.getTime() && bounds.endMs > rangeStart.getTime();
   });
 
-  const eventsForRestCheck = allEvents || events;
-  const sorted = [...eventsForRestCheck].sort(
-    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
-  );
+  const eventsForLegalChecks = (allEvents || events)
+    .filter((event) => !isCancelled(event))
+    .filter((event) => eventBounds(event))
+    .sort(
+      (a, b) =>
+        new Date(a.start).getTime() - new Date(b.start).getTime()
+    );
 
   if (agentContractualTargets) {
     Object.entries(agentContractualTargets).forEach(([agentId, hours]) => {
@@ -99,11 +168,18 @@ export function computePlanningStats(
   for (const event of relevantEvents) {
     let start = new Date(event.start);
     let end = new Date(event.end);
+    const originalBounds = eventBounds(event);
+
+    if (!originalBounds) continue;
+
+    if ((originalBounds.endMs - originalBounds.startMs) / HOUR_MS > MAX_SHIFT_HOURS) {
+      maxDurationViolations.push(event.id);
+    }
 
     if (rangeStart && start < rangeStart) start = rangeStart;
     if (rangeEnd && end > rangeEnd) end = rangeEnd;
 
-    const hours = Math.max(0, (end.getTime() - start.getTime()) / 1000 / 60 / 60);
+    const hours = Math.max(0, (end.getTime() - start.getTime()) / HOUR_MS);
     totalHours += hours;
     nightHours += calculateNightHours(start, end);
 
@@ -111,14 +187,14 @@ export function computePlanningStats(
     else if (event.status === "partially_filled") partiallyFilledCount++;
     else if (event.status === "filled") filledCount++;
 
-    if (event.assignedAgentIds) {
-      for (const agentId of event.assignedAgentIds) {
+    const assignedAgentIds = event.assignedAgentIds ?? [];
+    if (assignedAgentIds.length > 0) {
+      for (const agentId of assignedAgentIds) {
         agentMonthlyHours[agentId] = (agentMonthlyHours[agentId] || 0) + hours;
         agentWeeklyHours[agentId] = (agentWeeklyHours[agentId] || 0) + hours;
 
         if (!agentDailyMap[agentId]) agentDailyMap[agentId] = new Set();
-        const dayKey = new Date(event.start).toISOString().split("T")[0];
-        agentDailyMap[agentId].add(dayKey);
+        agentDailyMap[agentId].add(dayKeyFromMs(originalBounds.startMs));
 
         const targetHours = agentContractualTargets?.[agentId];
         agentContractualHours[agentId] =
@@ -127,27 +203,93 @@ export function computePlanningStats(
             : 151.67;
       }
     }
+
+    const collectiveShift = Math.max(1, Number(event.requiredAgents ?? 1)) > 1;
+    if (
+      collectiveShift &&
+      assignedAgentIds.length > 0 &&
+      !assignedAgentIds.some((agentId) => hasSst(agentId, agentQualifications))
+    ) {
+      sstCoverageWarnings.push(event.id);
+    }
   }
 
   Object.keys(agentDailyMap).forEach((agentId) => {
     agentWorkingDays[agentId] = agentDailyMap[agentId].size;
   });
 
-  const agentLastEnd: Record<string, number> = {};
-  for (const event of sorted) {
-    if (!event.assignedAgentIds) continue;
-    const startMs = new Date(event.start).getTime();
-    const endMs = new Date(event.end).getTime();
+  const eventsByAgent = new Map<string, Array<{ id: string; startMs: number; endMs: number }>>();
+  for (const event of eventsForLegalChecks) {
+    const bounds = eventBounds(event);
+    if (!bounds) continue;
 
-    for (const agentId of event.assignedAgentIds) {
-      if (agentLastEnd[agentId]) {
-        const diffMs = startMs - agentLastEnd[agentId];
-        const diffHours = diffMs / (1000 * 60 * 60);
-        if (diffHours < 11) {
+    for (const agentId of event.assignedAgentIds ?? []) {
+      const bucket = eventsByAgent.get(agentId) ?? [];
+      bucket.push({ id: event.id, ...bounds });
+      eventsByAgent.set(agentId, bucket);
+    }
+  }
+
+  for (const agentEvents of eventsByAgent.values()) {
+    agentEvents.sort((a, b) => a.startMs - b.startMs);
+
+    let lastEnd: number | null = null;
+    for (const event of agentEvents) {
+      if (lastEnd !== null) {
+        const restHours = (event.startMs - lastEnd) / HOUR_MS;
+        if (restHours < MIN_DAILY_REST_HOURS) {
           restPeriodViolations.push(event.id);
         }
       }
-      agentLastEnd[agentId] = endMs;
+      lastEnd = Math.max(lastEnd ?? event.endMs, event.endMs);
+    }
+
+    const days = Array.from(
+      new Map(
+        agentEvents.map((event) => [
+          startOfUtcDay(event.startMs),
+          event.id,
+        ])
+      ).entries()
+    ).sort(([left], [right]) => left - right);
+
+    let streak = 0;
+    let previousDay: number | null = null;
+    for (const [day, eventId] of days) {
+      streak = previousDay !== null && day - previousDay === DAY_MS ? streak + 1 : 1;
+      if (streak > MAX_CONSECUTIVE_WORK_DAYS) {
+        consecutiveDayViolations.push(eventId);
+      }
+      previousDay = day;
+    }
+
+    const eventsByWeek = new Map<number, Array<{ id: string; startMs: number; endMs: number }>>();
+    for (const event of agentEvents) {
+      const weekStart = startOfIsoWeek(event.startMs);
+      const bucket = eventsByWeek.get(weekStart) ?? [];
+      bucket.push(event);
+      eventsByWeek.set(weekStart, bucket);
+    }
+
+    for (const [weekStart, weekEvents] of eventsByWeek.entries()) {
+      weekEvents.sort((a, b) => a.startMs - b.startMs);
+      const weekEnd = weekStart + 7 * DAY_MS;
+      let cursor = weekStart;
+      let maxGap = 0;
+
+      for (const event of weekEvents) {
+        maxGap = Math.max(maxGap, event.startMs - cursor);
+        cursor = Math.max(cursor, event.endMs);
+      }
+
+      maxGap = Math.max(maxGap, weekEnd - cursor);
+
+      if (maxGap / HOUR_MS < MIN_WEEKLY_REST_HOURS) {
+        addUnique(
+          weeklyRestViolations,
+          weekEvents.map((event) => event.id)
+        );
+      }
     }
   }
 
@@ -161,6 +303,10 @@ export function computePlanningStats(
     agentMonthlyHours,
     agentContractualHours,
     agentWorkingDays,
-    restPeriodViolations,
+    restPeriodViolations: Array.from(new Set(restPeriodViolations)),
+    maxDurationViolations: Array.from(new Set(maxDurationViolations)),
+    consecutiveDayViolations: Array.from(new Set(consecutiveDayViolations)),
+    weeklyRestViolations: Array.from(new Set(weeklyRestViolations)),
+    sstCoverageWarnings: Array.from(new Set(sstCoverageWarnings)),
   };
 }

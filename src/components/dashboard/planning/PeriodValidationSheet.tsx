@@ -274,11 +274,38 @@ export const PeriodValidationSheet: React.FC = () => {
   const restViolationIds = React.useMemo(
     () =>
       new Set(
-        stats.restPeriodViolations.filter((eventId) =>
+        [
+          ...stats.restPeriodViolations,
+          ...stats.weeklyRestViolations,
+          ...stats.consecutiveDayViolations,
+        ].filter((eventId) => activeVacationIds.has(eventId))
+      ),
+    [
+      activeVacationIds,
+      stats.consecutiveDayViolations,
+      stats.restPeriodViolations,
+      stats.weeklyRestViolations,
+    ]
+  );
+
+  const maxDurationViolationIds = React.useMemo(
+    () =>
+      new Set(
+        stats.maxDurationViolations.filter((eventId) =>
           activeVacationIds.has(eventId)
         )
       ),
-    [activeVacationIds, stats.restPeriodViolations]
+    [activeVacationIds, stats.maxDurationViolations]
+  );
+
+  const sstCoverageWarningIds = React.useMemo(
+    () =>
+      new Set(
+        stats.sstCoverageWarnings.filter((eventId) =>
+          activeVacationIds.has(eventId)
+        )
+      ),
+    [activeVacationIds, stats.sstCoverageWarnings]
   );
 
   const criticalConflictCount = React.useMemo(
@@ -300,6 +327,8 @@ export const PeriodValidationSheet: React.FC = () => {
   );
 
   const restViolationCount = restViolationIds.size;
+  const maxDurationViolationCount = maxDurationViolationIds.size;
+  const sstCoverageWarningCount = sstCoverageWarningIds.size;
 
   const overtimeAgents = React.useMemo(
     () =>
@@ -464,6 +493,8 @@ export const PeriodValidationSheet: React.FC = () => {
     conflictEntries.forEach(([vacationId]) => ids.add(vacationId));
     uncoveredVacationIds.forEach((vacationId) => ids.add(vacationId));
     restViolationIds.forEach((vacationId) => ids.add(vacationId));
+    maxDurationViolationIds.forEach((vacationId) => ids.add(vacationId));
+    sstCoverageWarningIds.forEach((vacationId) => ids.add(vacationId));
     complianceEntries.forEach((entry) => {
       entry.vacationIds.forEach((vacationId) => ids.add(vacationId));
     });
@@ -472,7 +503,9 @@ export const PeriodValidationSheet: React.FC = () => {
   }, [
     complianceEntries,
     conflictEntries,
+    maxDurationViolationIds,
     restViolationIds,
+    sstCoverageWarningIds,
     uncoveredVacationIds,
   ]);
   const riskyVacationsToPublish = React.useMemo(
@@ -488,13 +521,15 @@ export const PeriodValidationSheet: React.FC = () => {
     (ops.total === 0 ? 1 : 0) +
     (ops.missingAgents > 0 ? 1 : 0) +
     (criticalConflictCount > 0 ? 1 : 0) +
-    (complianceBlockingAgents.length > 0 ? 1 : 0);
+    (complianceBlockingAgents.length > 0 ? 1 : 0) +
+    (maxDurationViolationCount > 0 ? 1 : 0);
   const warningCount =
     (restViolationCount > 0 ? 1 : 0) +
     (overtimeAgents.length > 0 ? 1 : 0) +
     (sitesWithoutCoverage.length > 0 ? 1 : 0) +
     (warningConflictCount > 0 ? 1 : 0) +
-    (complianceWarningAgents.length > 0 ? 1 : 0);
+    (complianceWarningAgents.length > 0 ? 1 : 0) +
+    (sstCoverageWarningCount > 0 ? 1 : 0);
 
   const validationStatus = blockingCount > 0
     ? "blocking"
@@ -510,10 +545,12 @@ export const PeriodValidationSheet: React.FC = () => {
       ops.missingAgents * 10 -
       criticalConflictCount * 25 -
       complianceBlockingAgents.length * 18 -
+      maxDurationViolationCount * 18 -
       restViolationCount * 5 -
       warningConflictCount * 8 -
       complianceWarningAgents.length * 4 -
       Math.min(overtimeAgents.length * 4, 12) -
+      Math.min(sstCoverageWarningCount * 5, 15) -
       Math.min(sitesWithoutCoverage.length * 2, 10);
 
     return Math.max(0, Math.min(100, Math.round(rawScore)));
@@ -523,9 +560,11 @@ export const PeriodValidationSheet: React.FC = () => {
     criticalConflictCount,
     ops.missingAgents,
     ops.total,
+    maxDurationViolationCount,
     overtimeAgents.length,
     restViolationCount,
     sitesWithoutCoverage.length,
+    sstCoverageWarningCount,
     warningConflictCount,
   ]);
 
@@ -565,9 +604,21 @@ export const PeriodValidationSheet: React.FC = () => {
           tone: "blocking" as const,
         },
         {
+          title: "Vacation > 12h",
+          description: "Une vacation depasse le plafond de reference de 12 heures.",
+          count: maxDurationViolationCount,
+          tone: "blocking" as const,
+        },
+        {
           title: "Repos insuffisants",
-          description: "Certaines reprises sont trop rapprochees.",
+          description: "Repos quotidien, repos hebdomadaire 35h ou 6 jours consecutifs.",
           count: restViolationCount,
+          tone: "warning" as const,
+        },
+        {
+          title: "Couverture SST",
+          description: "Une vacation collective n'a aucun agent SST identifie.",
+          count: sstCoverageWarningCount,
           tone: "warning" as const,
         },
         {
@@ -587,9 +638,11 @@ export const PeriodValidationSheet: React.FC = () => {
       complianceBlockingAgents.length,
       criticalConflictCount,
       ops.missingAgents,
+      maxDurationViolationCount,
       overtimeAgents.length,
       restViolationCount,
       sitesWithoutCoverage.length,
+      sstCoverageWarningCount,
     ]
   );
 
@@ -642,14 +695,34 @@ export const PeriodValidationSheet: React.FC = () => {
       icon: ShieldCheck,
     },
     {
+      title: "Vacation > 12h",
+      description:
+        maxDurationViolationCount > 0
+          ? "Au moins une vacation depasse 12 heures consecutives."
+          : "Aucune vacation ne depasse 12 heures.",
+      count: maxDurationViolationCount,
+      tone: maxDurationViolationCount > 0 ? "blocking" : "ok",
+      icon: AlertTriangle,
+    },
+    {
       title: "Repos insuffisants",
       description:
         restViolationCount > 0
-          ? "Certaines reprises ne respectent pas 11h de repos."
+          ? "Controlez les 11h, le repos hebdomadaire 35h et les 6 jours consecutifs."
           : "Repos minimum respecte sur les vacations visibles.",
       count: restViolationCount,
       tone: restViolationCount > 0 ? "warning" : "ok",
       icon: ClockAlert,
+    },
+    {
+      title: "Presence SST",
+      description:
+        sstCoverageWarningCount > 0
+          ? "Une vacation collective n'a aucun agent SST identifie."
+          : "Les vacations collectives couvertes ont une vigilance SST acceptable.",
+      count: sstCoverageWarningCount,
+      tone: sstCoverageWarningCount > 0 ? "warning" : "ok",
+      icon: ShieldCheck,
     },
     {
       title: "Depassements horaires",
@@ -699,6 +772,10 @@ export const PeriodValidationSheet: React.FC = () => {
               criticalConflictCount,
               warningConflictCount,
               restViolationCount,
+              maxDurationViolationCount,
+              weeklyRestViolationCount: stats.weeklyRestViolations.length,
+              consecutiveDayViolationCount: stats.consecutiveDayViolations.length,
+              sstCoverageWarningCount,
               complianceBlockingAgentCount: complianceBlockingAgents.length,
               complianceWarningAgentCount: complianceWarningAgents.length,
               overtimeAgentCount: overtimeAgents.length,
@@ -731,6 +808,7 @@ export const PeriodValidationSheet: React.FC = () => {
       criticalConflictCount,
       draftCount,
       ops.missingAgents,
+      maxDurationViolationCount,
       overtimeAgents.length,
       range?.from,
       range?.to,
@@ -738,6 +816,9 @@ export const PeriodValidationSheet: React.FC = () => {
       restViolationCount,
       riskyVacationsToPublish.length,
       sitesWithoutCoverage.length,
+      sstCoverageWarningCount,
+      stats.consecutiveDayViolations.length,
+      stats.weeklyRestViolations.length,
       validationRiskSummary,
       validationStatus,
       warningConflictCount,
@@ -833,13 +914,33 @@ export const PeriodValidationSheet: React.FC = () => {
       });
     }
 
+    if (maxDurationViolationCount > 0) {
+      actions.push({
+        title: "Corriger les vacations > 12h",
+        description: `${maxDurationViolationCount} vacation(s) depassent 12 heures consecutives.`,
+        tone: "blocking",
+        actionLabel: "Voir planning",
+        onAction: focusCorrections,
+      });
+    }
+
     if (restViolationCount > 0) {
       actions.push({
         title: "Verifier les temps de repos",
-        description: `${restViolationCount} vacation(s) exposent un repos inferieur au seuil de reference.`,
+        description: `${restViolationCount} vacation(s) exposent un repos quotidien, hebdomadaire ou une serie de jours a verifier.`,
         tone: "warning",
         actionLabel: "Voir alertes",
         onAction: focusConflicts,
+      });
+    }
+
+    if (sstCoverageWarningCount > 0) {
+      actions.push({
+        title: "Verifier la presence SST",
+        description: `${sstCoverageWarningCount} vacation(s) collective(s) sans agent SST identifie.`,
+        tone: "warning",
+        actionLabel: "Voir planning",
+        onAction: focusCorrections,
       });
     }
 
@@ -874,9 +975,11 @@ export const PeriodValidationSheet: React.FC = () => {
     handlePreviewPublish,
     ops.missingAgents,
     ops.total,
+    maxDurationViolationCount,
     overtimeAgents.length,
     restViolationCount,
     setValidationOpen,
+    sstCoverageWarningCount,
     vacationsToPublish.length,
   ]);
 

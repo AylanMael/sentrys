@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React from "react";
 import { createPortal } from "react-dom";
@@ -16,6 +16,7 @@ interface CalendarContextMenuProps {
   filteredVacations: VacationApiItem[];
   setActiveVacationId: (id: string) => void;
   setDetailsOpen: (open: boolean) => void;
+  setReplaceOpen: (open: boolean) => void;
   duplicateVacation: (id: string) => void;
   openPropagation: (id: string) => void;
   setIdsToDelete: (ids: string[]) => void;
@@ -25,10 +26,16 @@ interface CalendarContextMenuProps {
 
 export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
   x, y, eventId, onClose, selectedIds, setSelectedIds,
-  filteredVacations, setActiveVacationId, setDetailsOpen,
+  filteredVacations, setActiveVacationId, setDetailsOpen, setReplaceOpen,
   duplicateVacation, openPropagation, setIdsToDelete, setDeleteConfirmOpen, magicFill
 }) => {
   if (typeof document === "undefined") return null;
+
+  const activeVacation =
+    filteredVacations.find((vacation) => vacation.id === eventId) ??
+    filteredVacations.find((vacation) => eventId.startsWith(`${vacation.id}-`));
+  const baseEventId = activeVacation?.id ?? eventId;
+  const canReplace = Boolean(activeVacation && activeVacation.status !== "cancelled" && activeVacation.status !== "closed");
 
   return createPortal(
     <>
@@ -66,14 +73,14 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
             <div className="h-6 w-6 rounded bg-amber-500/20 flex items-center justify-center group-hover/item:bg-white/20">
               <Wand2 className="h-3.5 w-3.5" />
             </div>
-            Optimiser la sélection
+            Optimiser la sÃ©lection
           </button>
         )}
 
         <button
           className="w-full text-left px-4 py-2 text-sm hover:bg-primary hover:text-white flex items-center gap-2 transition-all duration-200 group/item"
           onClick={() => {
-            const v = filteredVacations.find(x => x.id === eventId);
+            const v = activeVacation;
             if (v) {
               setActiveVacationId(v.id);
               setDetailsOpen(true);
@@ -84,13 +91,31 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
           <div className="h-6 w-6 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover/item:bg-white/20">
             <Users className="h-3.5 w-3.5" />
           </div>
-          Détails de la mission
+          DÃ©tails de la mission
         </button>
 
         <button
+          className="w-full text-left px-4 py-2 text-sm bg-cyan-500/10 hover:bg-cyan-600 hover:text-white flex items-center gap-2 transition-all duration-200 group/item text-cyan-700 dark:text-cyan-300 disabled:pointer-events-none disabled:opacity-45"
+          disabled={!canReplace}
+          onClick={() => {
+            const v = activeVacation;
+            if (v) {
+              setActiveVacationId(v.id);
+              setDetailsOpen(false);
+              setReplaceOpen(true);
+            }
+            onClose();
+          }}
+        >
+          <div className="h-6 w-6 rounded bg-cyan-500/15 flex items-center justify-center group-hover/item:bg-white/20">
+            <Wand2 className="h-3.5 w-3.5" />
+          </div>
+          Remplacer l&apos;agent
+        </button>
+        <button
           className="w-full text-left px-4 py-2 text-sm hover:bg-primary hover:text-white flex items-center gap-2 transition-all duration-200 group/item"
           onClick={() => {
-            duplicateVacation(eventId);
+            duplicateVacation(baseEventId);
             onClose();
           }}
         >
@@ -103,7 +128,7 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
         <button
           className="w-full text-left px-4 py-2 text-sm hover:bg-primary hover:text-white flex items-center gap-2 transition-all duration-200 group/item"
           onClick={() => {
-            openPropagation(eventId);
+            openPropagation(baseEventId);
             onClose();
           }}
         >
@@ -116,14 +141,14 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
         <button
           className="w-full text-left px-4 py-2 text-sm hover:bg-primary hover:text-white flex items-center gap-2 transition-all duration-200 group/item"
           onClick={() => {
-            setSelectedIds(new Set([eventId]));
+            setSelectedIds(new Set([baseEventId]));
             onClose();
           }}
         >
           <div className="h-6 w-6 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover/item:bg-white/20">
             <div className="h-3 w-3 border-2 border-current rounded-sm" />
           </div>
-          Sélectionner
+          SÃ©lectionner
         </button>
 
         <div className="h-px bg-border/50 my-1 mx-2" />
@@ -131,7 +156,7 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
         <button
           className="w-full text-left px-4 py-2 text-sm hover:bg-destructive hover:text-white flex items-center gap-2 transition-all duration-200 group/item"
           onClick={() => {
-            setIdsToDelete([eventId]);
+            setIdsToDelete([baseEventId]);
             setDeleteConfirmOpen(true);
             onClose();
           }}
@@ -146,3 +171,6 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
     document.body
   );
 };
+
+
+

@@ -135,14 +135,16 @@ export const BulkActionBar: React.FC = () => {
         </div>
 
         {/* Clear Group */}
-        <div className="pl-4 border-l border-white/10">
+        <div className="pl-3 border-l border-white/10">
           <Button
             variant="ghost"
-            size="icon"
+            size="sm"
             onClick={clearSelection}
-            className="h-8 w-8 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition-all"
+            aria-label="Quitter la selection"
+            className="h-9 rounded-xl px-3 text-xs font-bold text-white/70 transition-all hover:bg-white/10 hover:text-white"
           >
-            <X className="h-4 w-4" />
+            <X className="mr-1.5 h-4 w-4" />
+            Terminer
           </Button>
         </div>
       </div>

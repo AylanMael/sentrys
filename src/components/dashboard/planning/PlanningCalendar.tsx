@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
@@ -79,6 +79,7 @@ export const PlanningCalendar: React.FC = () => {
     performPasteAt,
     pasteBusy,
     setDetailsOpen,
+    setReplaceOpen,
     setActiveVacationId,
     setPropagationOpen,
     updateVacation,
@@ -206,7 +207,7 @@ export const PlanningCalendar: React.FC = () => {
         const getBaseClass = () => {
           if (v.status === "cancelled") return "evt-cancelled";
           if (v.status === "closed") return "evt-closed";
-          const absKeywords = ["absence", "congé", "vacances", "maladie", "repos", "conge"];
+          const absKeywords = ["absence", "congÃ©", "vacances", "maladie", "repos", "conge"];
           if (absKeywords.some(kw => (v.title || "").toLowerCase().includes(kw) || (v.notes || "").toLowerCase().includes(kw))) return "evt-absence";
           if (v.status === "filled") return "evt-filled";
           if (v.status === "partially_filled") return "evt-partial";
@@ -220,7 +221,7 @@ export const PlanningCalendar: React.FC = () => {
         const conflictMessages = metas.map(m => m.message).join(" | ");
 
         // --- LOGIQUE EXCEL SNAPPING ---
-        // En vue mensuelle, on arrondit aux limites de journée pour un aspect "case de tableur"
+        // En vue mensuelle, on arrondit aux limites de journÃ©e pour un aspect "case de tableur"
         let displayStart = v.startAtIso!;
         let displayEnd = v.endAtIso!;
 
@@ -249,6 +250,8 @@ export const PlanningCalendar: React.FC = () => {
             publicationStatus === "draft" ? "evt-draft" : "",
             publicationStatus === "published" ? "evt-published" : "",
             publicationStatus === "modified" ? "evt-publication-stale" : "",
+            stats.maxDurationViolations.includes(v.id) ? "evt-legal-block" : "",
+            stats.sstCoverageWarnings.includes(v.id) ? "evt-sst-warning" : "",
           ].filter(Boolean),
           extendedProps: {
             v,
@@ -257,7 +260,12 @@ export const PlanningCalendar: React.FC = () => {
             hasConflict,
             conflictMessages,
             publicationStatus,
-            violatesRest: stats.restPeriodViolations.includes(v.id),
+            violatesRest:
+              stats.restPeriodViolations.includes(v.id) ||
+              stats.weeklyRestViolations.includes(v.id) ||
+              stats.consecutiveDayViolations.includes(v.id),
+            legalWarning: stats.maxDurationViolations.includes(v.id),
+            sstWarning: stats.sstCoverageWarnings.includes(v.id),
             originalStart: v.startAtIso!,
             originalEnd: v.endAtIso!
           },
@@ -301,7 +309,7 @@ export const PlanningCalendar: React.FC = () => {
       }
 
       return [
-        { id: "unassigned", title: "MISSIONS À POURVOIR", extendedProps: { type: "system" } },
+        { id: "unassigned", title: "MISSIONS Ã€ POURVOIR", extendedProps: { type: "system" } },
         ...agentRes
       ];
     }
@@ -316,7 +324,7 @@ export const PlanningCalendar: React.FC = () => {
 
     filteredVacations.forEach(v => {
       const sid = v.siteId || "unassigned";
-      const sname = v.siteName || "SITES À DÉFINIR";
+      const sname = v.siteName || "SITES Ã€ DÃ‰FINIR";
 
       // If we're filtering by a specific site and this mission isn't part of it, skip
       if (siteId !== "all" && sid !== siteId) return;
@@ -442,8 +450,8 @@ export const PlanningCalendar: React.FC = () => {
     }
 
     const ok = await updateVacation(id, patch);
-    if (!ok) { arg.revert(); toast({ variant: "destructive", title: "Erreur", description: "Échec de sauvegarde." }); }
-    else { toast({ title: "Planning mis à jour" }); }
+    if (!ok) { arg.revert(); toast({ variant: "destructive", title: "Erreur", description: "Ã‰chec de sauvegarde." }); }
+    else { toast({ title: "Planning mis Ã  jour" }); }
     if (ok) {
       scheduleScrollRestore();
     } else {
@@ -504,7 +512,7 @@ export const PlanningCalendar: React.FC = () => {
            <div className="flex flex-col gap-1">
              <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Client</span>
              <div className="h-8 px-3 rounded bg-white dark:bg-slate-800 border border-border/50 flex items-center shadow-sm">
-                <span className="text-xs font-bold text-primary truncate max-w-[200px]">SAMSIC SÉCURITÉ</span>
+                <span className="text-xs font-bold text-primary truncate max-w-[200px]">SAMSIC SÃ‰CURITÃ‰</span>
              </div>
            </div>
            <div className="flex flex-col gap-1">
@@ -526,9 +534,9 @@ export const PlanningCalendar: React.FC = () => {
              </div>
            </div>
            <div className="flex flex-col gap-1">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Activité</span>
+             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">ActivitÃ©</span>
              <div className="h-8 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center shadow-sm">
-                <span className="text-[10px] font-black text-emerald-600 uppercase">Agent de Sécurité</span>
+                <span className="text-[10px] font-black text-emerald-600 uppercase">Agent de SÃ©curitÃ©</span>
              </div>
            </div>
         </div>
@@ -580,11 +588,8 @@ export const PlanningCalendar: React.FC = () => {
           </div>
         </div>
       )}
-
       {autoDensityAllowed && densityPressure && viewDensity !== "compact" && (
-        <div className="pointer-events-none absolute right-4 top-4 z-20 hidden rounded-full border border-slate-200/70 bg-white/90 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-600 shadow-sm backdrop-blur md:flex dark:border-white/10 dark:bg-slate-950/90 dark:text-slate-300">
-          Compact auto
-        </div>
+        <span className="sr-only">Mode compact automatique actif.</span>
       )}
 
       <FullCalendar
@@ -600,7 +605,7 @@ export const PlanningCalendar: React.FC = () => {
             width: effectiveDensity === "compact" ? 185 : 220
           },
           {
-            headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">RÉALISÉ</span>,
+            headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">RÃ‰ALISÃ‰</span>,
             cellContent: (info: CalendarResourceMetricInfo) => {
                const hours = stats.agentMonthlyHours[info.resource.id] || 0;
                return <div className="text-right pr-2 text-[10px] font-black tabular-nums">{hours.toFixed(1)}h</div>;
@@ -657,7 +662,7 @@ export const PlanningCalendar: React.FC = () => {
            <div className="flex items-center gap-2 px-2">
              <GripVertical className="h-3 w-3 opacity-30" />
              <span className="font-black tracking-widest text-[10px] uppercase">
-               SITES OPÉRATIONNELS
+               SITES OPÃ‰RATIONNELS
              </span>
            </div>
         ) : undefined}
@@ -729,8 +734,6 @@ export const PlanningCalendar: React.FC = () => {
         }}
         dayHeaderFormat={{
           weekday: "short",
-          day: "2-digit",
-          month: "2-digit",
         }}
         allDaySlot={false}
         slotDuration="00:30:00"
@@ -780,6 +783,7 @@ export const PlanningCalendar: React.FC = () => {
           filteredVacations={filteredVacations}
           setActiveVacationId={setActiveVacationId}
           setDetailsOpen={setDetailsOpen}
+          setReplaceOpen={setReplaceOpen}
           duplicateVacation={duplicateVacation}
           openPropagation={(id) => {
             setActiveVacationId(id);
@@ -997,6 +1001,22 @@ export const PlanningCalendar: React.FC = () => {
           border-style: dashed !important;
         }
 
+        .evt-legal-block {
+          box-shadow: inset 0 0 0 2px rgba(220, 38, 38, 0.72), 0 8px 16px -8px rgba(220, 38, 38, 0.42) !important;
+        }
+
+        .excel-grid .evt-legal-block {
+          box-shadow: inset 0 0 0 3px rgb(185, 28, 28) !important;
+        }
+
+        .evt-sst-warning {
+          box-shadow: inset 0 -3px 0 rgba(245, 158, 11, 0.78), 0 6px 14px -8px rgba(245, 158, 11, 0.45) !important;
+        }
+
+        .excel-grid .evt-sst-warning {
+          box-shadow: inset 0 -4px 0 rgb(245, 158, 11) !important;
+        }
+
         .evt-draft {
           border-style: dashed !important;
           box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.38), 0 4px 6px -1px rgba(0,0,0,0.05) !important;
@@ -1078,3 +1098,6 @@ export const PlanningCalendar: React.FC = () => {
     </div>
   );
 };
+
+
+

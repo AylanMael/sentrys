@@ -31,7 +31,7 @@ export default function PlanningPage() {
         </div>
 
         {/* --- Main Content (Elevated above background) --- */}
-        <div className="relative z-10 flex flex-col h-full w-full p-4 lg:p-6 gap-6">
+        <div className="relative z-10 flex flex-col h-full w-full gap-3 p-3 lg:p-4">
           {/* Module Header & Summary (Contains Filters) */}
           <PlanningHeader />
 

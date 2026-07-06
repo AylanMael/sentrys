@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
@@ -24,7 +24,7 @@ import {
   SlotLaneContentArg,
 } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
-import { CalendarPlus, ClipboardList, GripVertical, Sparkles } from "lucide-react";
+import { CalendarPlus, ClipboardList, Focus, GripVertical, RotateCcw, Sparkles, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -56,6 +56,8 @@ type EventChangeWithResource = (EventDropArg | EventResizeDoneArg) & {
 
 const DENSITY_SOURCE_STORAGE_KEY = "sentrys:display-density-source";
 const DENSITY_EVENT = "sentrys:density-change";
+const PLANNING_ZOOM_STORAGE_KEY = "sentrys:planning-zoom";
+const PLANNING_ZOOM_LEVELS = [0.8, 1, 1.25, 1.5, 1.75, 2] as const;
 const AUTO_COMPACT_RESOURCE_THRESHOLD = 10;
 const AUTO_COMPACT_EVENT_THRESHOLD = 80;
 const AUTO_COMPACT_HEIGHT_THRESHOLD = 820;
@@ -105,6 +107,14 @@ export const PlanningCalendar: React.FC = () => {
   const { toast } = useToast();
   const [autoDensityAllowed, setAutoDensityAllowed] = useState(true);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+
+  useEffect(() => {
+    const savedZoom = Number(window.localStorage.getItem(PLANNING_ZOOM_STORAGE_KEY));
+    if (PLANNING_ZOOM_LEVELS.some((level) => level === savedZoom)) {
+      setZoomLevel(savedZoom);
+    }
+  }, []);
 
   useEffect(() => {
     function refreshAutoDensityPreference() {
@@ -197,6 +207,39 @@ export const PlanningCalendar: React.FC = () => {
     }, 1800);
   }, [restoreScrollPosition]);
 
+  const zoomIndex = Math.max(
+    0,
+    PLANNING_ZOOM_LEVELS.findIndex((level) => level === zoomLevel)
+  );
+  const zoomPercent = Math.round(zoomLevel * 100);
+
+  const applyZoom = useCallback(
+    (nextZoom: number) => {
+      captureScrollPosition();
+      setZoomLevel(nextZoom);
+      window.localStorage.setItem(PLANNING_ZOOM_STORAGE_KEY, String(nextZoom));
+      window.setTimeout(() => {
+        calendarRef.current?.getApi().updateSize();
+        scheduleScrollRestore();
+      }, 0);
+    },
+    [captureScrollPosition, scheduleScrollRestore]
+  );
+
+  const zoomOut = useCallback(() => {
+    const nextIndex = Math.max(0, zoomIndex - 1);
+    applyZoom(PLANNING_ZOOM_LEVELS[nextIndex]);
+  }, [applyZoom, zoomIndex]);
+
+  const zoomIn = useCallback(() => {
+    const nextIndex = Math.min(PLANNING_ZOOM_LEVELS.length - 1, zoomIndex + 1);
+    applyZoom(PLANNING_ZOOM_LEVELS[nextIndex]);
+  }, [applyZoom, zoomIndex]);
+
+  const resetZoom = useCallback(() => {
+    applyZoom(1);
+  }, [applyZoom]);
+
   // --- Calendar Data ---
   const events: EventInput[] = useMemo(() => {
     return filteredVacations
@@ -207,7 +250,7 @@ export const PlanningCalendar: React.FC = () => {
         const getBaseClass = () => {
           if (v.status === "cancelled") return "evt-cancelled";
           if (v.status === "closed") return "evt-closed";
-          const absKeywords = ["absence", "congÃ©", "vacances", "maladie", "repos", "conge"];
+          const absKeywords = ["absence", "conge", "vacances", "maladie", "repos", "conge"];
           if (absKeywords.some(kw => (v.title || "").toLowerCase().includes(kw) || (v.notes || "").toLowerCase().includes(kw))) return "evt-absence";
           if (v.status === "filled") return "evt-filled";
           if (v.status === "partially_filled") return "evt-partial";
@@ -221,7 +264,7 @@ export const PlanningCalendar: React.FC = () => {
         const conflictMessages = metas.map(m => m.message).join(" | ");
 
         // --- LOGIQUE EXCEL SNAPPING ---
-        // En vue mensuelle, on arrondit aux limites de journÃ©e pour un aspect "case de tableur"
+        // En vue mensuelle, on arrondit aux limites de journee pour un aspect "case de tableur"
         let displayStart = v.startAtIso!;
         let displayEnd = v.endAtIso!;
 
@@ -309,7 +352,7 @@ export const PlanningCalendar: React.FC = () => {
       }
 
       return [
-        { id: "unassigned", title: "MISSIONS Ã€ POURVOIR", extendedProps: { type: "system" } },
+        { id: "unassigned", title: "MISSIONS A POURVOIR", extendedProps: { type: "system" } },
         ...agentRes
       ];
     }
@@ -324,7 +367,7 @@ export const PlanningCalendar: React.FC = () => {
 
     filteredVacations.forEach(v => {
       const sid = v.siteId || "unassigned";
-      const sname = v.siteName || "SITES Ã€ DÃ‰FINIR";
+      const sname = v.siteName || "SITES A DEFINIR";
 
       // If we're filtering by a specific site and this mission isn't part of it, skip
       if (siteId !== "all" && sid !== siteId) return;
@@ -366,7 +409,27 @@ export const PlanningCalendar: React.FC = () => {
   const effectiveDensity: "compact" | "comfortable" =
     autoDensityAllowed && densityPressure ? "compact" : viewDensity;
 
+  const zoomedDimension = useCallback(
+    (value: number) => Math.round(value * zoomLevel),
+    [zoomLevel]
+  );
+  const resourceAreaWidthPx =
+    mode === "agent"
+      ? zoomedDimension(effectiveDensity === "compact" ? 470 : 560)
+      : zoomedDimension(effectiveDensity === "compact" ? 260 : 320);
+  const rowHeightPx = zoomedDimension(effectiveDensity === "compact" ? 28 : 52);
+  const eventMinHeightPx = zoomedDimension(effectiveDensity === "compact" ? 24 : 45);
+  const monthSlotMinWidth = zoomedDimension(effectiveDensity === "compact" ? 88 : 120);
+  const weekSlotMinWidth = zoomedDimension(effectiveDensity === "compact" ? 110 : 150);
+  const daySlotMinWidth = zoomedDimension(effectiveDensity === "compact" ? 70 : 90);
+  const fallbackSlotMinWidth = zoomedDimension(effectiveDensity === "compact" ? 48 : 60);
+  const calendarZoomStyle = {
+    "--planning-resource-height": `${rowHeightPx}px`,
+    "--planning-event-min-height": `${eventMinHeightPx}px`,
+  } as React.CSSProperties;
+
   useLayoutEffect(() => {
+    calendarRef.current?.getApi().updateSize();
     if (!pendingScrollRestoreRef.current) return;
 
     const frame = window.requestAnimationFrame(() => {
@@ -374,7 +437,7 @@ export const PlanningCalendar: React.FC = () => {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [events, calendarResources, restoreScrollPosition]);
+  }, [events, calendarResources, restoreScrollPosition, zoomLevel]);
 
   // --- Handlers ---
   const handleEventClick = useCallback((arg: EventClickArg) => {
@@ -450,8 +513,8 @@ export const PlanningCalendar: React.FC = () => {
     }
 
     const ok = await updateVacation(id, patch);
-    if (!ok) { arg.revert(); toast({ variant: "destructive", title: "Erreur", description: "Ã‰chec de sauvegarde." }); }
-    else { toast({ title: "Planning mis Ã  jour" }); }
+    if (!ok) { arg.revert(); toast({ variant: "destructive", title: "Erreur", description: "Echec de sauvegarde." }); }
+    else { toast({ title: "Planning mis a jour" }); }
     if (ok) {
       scheduleScrollRestore();
     } else {
@@ -502,17 +565,21 @@ export const PlanningCalendar: React.FC = () => {
   const showEmptyStarter = !loading && filteredVacations.length === 0;
 
   return (
-    <div ref={containerRef} className={cn(
-      "flex-1 w-full bg-white/40 dark:bg-[#0f121e]/40 backdrop-blur-xl border border-white/20 dark:border-white/5 rounded-2xl overflow-hidden shadow-2xl relative group flex flex-col transition-all duration-500 excel-grid",
-      effectiveDensity === "compact" ? "density-compact" : "density-comfortable"
-    )}>
+    <div
+      ref={containerRef}
+      style={calendarZoomStyle}
+      className={cn(
+        "flex-1 w-full bg-white/40 dark:bg-[#0f121e]/40 backdrop-blur-xl border border-white/20 dark:border-white/5 rounded-2xl overflow-hidden shadow-2xl relative group flex flex-col transition-all duration-500 excel-grid",
+        effectiveDensity === "compact" ? "density-compact" : "density-comfortable"
+      )}
+    >
       {/* Operational Context Header (inspired by screenshot 1) */}
       {siteId !== "all" && (
         <div className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-border/10 p-4 flex flex-wrap items-center gap-6 animate-in slide-in-from-top duration-500">
            <div className="flex flex-col gap-1">
              <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Client</span>
              <div className="h-8 px-3 rounded bg-white dark:bg-slate-800 border border-border/50 flex items-center shadow-sm">
-                <span className="text-xs font-bold text-primary truncate max-w-[200px]">SAMSIC SÃ‰CURITÃ‰</span>
+                <span className="text-xs font-bold text-primary truncate max-w-[200px]">SAMSIC SECURITE</span>
              </div>
            </div>
            <div className="flex flex-col gap-1">
@@ -534,9 +601,9 @@ export const PlanningCalendar: React.FC = () => {
              </div>
            </div>
            <div className="flex flex-col gap-1">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">ActivitÃ©</span>
+             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Activite</span>
              <div className="h-8 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center shadow-sm">
-                <span className="text-[10px] font-black text-emerald-600 uppercase">Agent de SÃ©curitÃ©</span>
+                <span className="text-[10px] font-black text-emerald-600 uppercase">Agent de Securite</span>
              </div>
            </div>
         </div>
@@ -592,25 +659,54 @@ export const PlanningCalendar: React.FC = () => {
         <span className="sr-only">Mode compact automatique actif.</span>
       )}
 
+      <div className="pointer-events-none absolute right-4 top-2.5 z-30 max-md:relative max-md:top-0 max-md:right-0 max-md:p-2 max-md:flex max-md:justify-center max-md:pointer-events-auto">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-slate-200/80 bg-white/95 p-1 shadow-xl shadow-slate-900/10 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={zoomOut}
+            disabled={zoomIndex === 0}
+            title="Dezoomer la zone visible"
+            className="h-8 w-8 rounded-xl"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <div className="min-w-12 rounded-xl bg-slate-100 px-2 py-1 text-center text-xs font-black tabular-nums text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+            {zoomPercent}%
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={zoomIn}
+            disabled={zoomIndex === PLANNING_ZOOM_LEVELS.length - 1}
+            title="Zoomer la zone visible"
+            className="h-8 w-8 rounded-xl"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
       <FullCalendar
         ref={calendarRef}
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, resourceTimelinePlugin]}
         initialView="resourceTimelineMonth"
         schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
-        resourceAreaWidth={mode === "agent" ? (effectiveDensity === "compact" ? "470px" : "560px") : (effectiveDensity === "compact" ? "260px" : "320px")}
+        resourceAreaWidth={`${resourceAreaWidthPx}px`}
         resourceAreaColumns={mode === "agent" ? [
           {
             headerContent: () => <span className="text-[10px] font-black uppercase tracking-widest pl-2 font-mono">Effectifs Agents</span>,
             cellContent: renderResourceLabel,
-            width: effectiveDensity === "compact" ? 185 : 220
+            width: zoomedDimension(effectiveDensity === "compact" ? 185 : 220)
           },
           {
-            headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">RÃ‰ALISÃ‰</span>,
+            headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">REALISE</span>,
             cellContent: (info: CalendarResourceMetricInfo) => {
                const hours = stats.agentMonthlyHours[info.resource.id] || 0;
                return <div className="text-right pr-2 text-[10px] font-black tabular-nums">{hours.toFixed(1)}h</div>;
             },
-            width: effectiveDensity === "compact" ? 58 : 70
+            width: zoomedDimension(effectiveDensity === "compact" ? 58 : 70)
           },
           {
             headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">CONTRAT</span>,
@@ -618,7 +714,7 @@ export const PlanningCalendar: React.FC = () => {
                const chours = stats.agentContractualHours[info.resource.id] || 151.67;
                return <div className="text-right pr-2 text-[10px] font-black tabular-nums">{chours.toFixed(1)}h</div>;
             },
-            width: effectiveDensity === "compact" ? 62 : 75
+            width: zoomedDimension(effectiveDensity === "compact" ? 62 : 75)
           },
           {
             headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">DELTA</span>,
@@ -635,7 +731,7 @@ export const PlanningCalendar: React.FC = () => {
                  </div>
                );
             },
-            width: effectiveDensity === "compact" ? 55 : 65
+            width: zoomedDimension(effectiveDensity === "compact" ? 55 : 65)
           },
           {
             headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">%</span>,
@@ -645,7 +741,7 @@ export const PlanningCalendar: React.FC = () => {
                const ratio = (hours / chours) * 100;
                return <div className="text-right pr-2 text-[10px] font-black tabular-nums">{Math.round(ratio)}%</div>;
             },
-            width: effectiveDensity === "compact" ? 42 : 50
+            width: zoomedDimension(effectiveDensity === "compact" ? 42 : 50)
           },
           {
             headerContent: () => <span className="text-[9px] font-black pointer-events-none text-center opacity-60">JS</span>,
@@ -653,7 +749,7 @@ export const PlanningCalendar: React.FC = () => {
                const days = stats.agentWorkingDays[info.resource.id] || 0;
                return <div className="text-center text-[10px] font-black tabular-nums">{days}</div>;
             },
-            width: effectiveDensity === "compact" ? 38 : 45
+            width: zoomedDimension(effectiveDensity === "compact" ? 38 : 45)
           }
         ] : undefined}
         resources={calendarResources}
@@ -662,11 +758,11 @@ export const PlanningCalendar: React.FC = () => {
            <div className="flex items-center gap-2 px-2">
              <GripVertical className="h-3 w-3 opacity-30" />
              <span className="font-black tracking-widest text-[10px] uppercase">
-               SITES OPÃ‰RATIONNELS
+               SITES OPERATIONNELS
              </span>
            </div>
         ) : undefined}
-        eventMinHeight={effectiveDensity === "compact" ? 24 : 45}
+        eventMinHeight={eventMinHeightPx}
         slotLaneClassNames={(arg: SlotLaneContentArg) => {
           if (!arg.date) return [];
           const hour = arg.date.getHours();
@@ -704,7 +800,7 @@ export const PlanningCalendar: React.FC = () => {
               { weekday: "short" },
               { day: "2-digit", month: "2-digit" },
             ],
-            slotMinWidth: effectiveDensity === "compact" ? 88 : 120,
+            slotMinWidth: monthSlotMinWidth,
           },
           resourceTimelineWeek: {
             slotDuration: { days: 1 },
@@ -713,7 +809,7 @@ export const PlanningCalendar: React.FC = () => {
               { weekday: "short" },
               { day: "2-digit", month: "2-digit" },
             ],
-            slotMinWidth: effectiveDensity === "compact" ? 110 : 150,
+            slotMinWidth: weekSlotMinWidth,
           },
           resourceTimelineDay: {
             slotDuration: "01:00:00",
@@ -723,7 +819,7 @@ export const PlanningCalendar: React.FC = () => {
               minute: "2-digit",
               hour12: false,
             },
-            slotMinWidth: effectiveDensity === "compact" ? 70 : 90,
+            slotMinWidth: daySlotMinWidth,
           },
         }}
         slotLabelInterval="01:00:00"
@@ -737,7 +833,7 @@ export const PlanningCalendar: React.FC = () => {
         }}
         allDaySlot={false}
         slotDuration="00:30:00"
-        slotMinWidth={effectiveDensity === "compact" ? 48 : 60}
+        slotMinWidth={fallbackSlotMinWidth}
         snapDuration="00:15:00"
         scrollTimeReset={false}
         editable={true}
@@ -812,6 +908,18 @@ export const PlanningCalendar: React.FC = () => {
 
         .fc-license-message {
           display: none !important;
+        }
+
+        .excel-grid .fc-header-toolbar {
+          position: relative;
+          padding-top: 10px;
+          padding-bottom: 10px;
+        }
+
+        @media (min-width: 768px) {
+          .excel-grid .fc-header-toolbar {
+            padding-right: 160px !important;
+          }
         }
 
         .fc-datagrid-cell {
@@ -937,8 +1045,15 @@ export const PlanningCalendar: React.FC = () => {
         }
 
         .excel-grid .evt-filled {
-          background-color: rgb(16, 185, 129) !important;
-          color: white !important;
+          background-color: rgb(209, 250, 229) !important;
+          color: rgb(6, 78, 59) !important;
+          box-shadow: inset 3px 0 0 rgb(16, 185, 129), inset 0 0 0 1px rgba(16, 185, 129, 0.25) !important;
+        }
+
+        .excel-grid .evt-filled .fc-event-main,
+        .excel-grid .evt-filled .fc-event-main * {
+          color: rgb(6, 78, 59) !important;
+          opacity: 1 !important;
         }
 
         .dark .evt-filled {
@@ -948,8 +1063,15 @@ export const PlanningCalendar: React.FC = () => {
         }
 
         .excel-grid.dark .evt-filled {
-          background-color: rgb(5, 150, 105) !important;
-          color: white !important;
+          background-color: rgba(16, 185, 129, 0.15) !important;
+          color: rgb(52, 211, 153) !important;
+          box-shadow: inset 3px 0 0 rgb(16, 185, 129), inset 0 0 0 1px rgba(16, 185, 129, 0.3) !important;
+        }
+
+        .excel-grid.dark .evt-filled .fc-event-main,
+        .excel-grid.dark .evt-filled .fc-event-main * {
+          color: rgb(52, 211, 153) !important;
+          opacity: 1 !important;
         }
 
         .evt-partial {
@@ -959,8 +1081,15 @@ export const PlanningCalendar: React.FC = () => {
         }
 
         .excel-grid .evt-partial {
-          background-color: rgb(245, 158, 11) !important;
-          color: rgb(69, 26, 3) !important;
+          background-color: rgb(254, 243, 199) !important;
+          color: rgb(120, 53, 4) !important;
+          box-shadow: inset 3px 0 0 rgb(245, 158, 11), inset 0 0 0 1px rgba(245, 158, 11, 0.25) !important;
+        }
+
+        .excel-grid .evt-partial .fc-event-main,
+        .excel-grid .evt-partial .fc-event-main * {
+          color: rgb(120, 53, 4) !important;
+          opacity: 1 !important;
         }
 
         .dark .evt-partial {
@@ -970,8 +1099,15 @@ export const PlanningCalendar: React.FC = () => {
         }
 
         .excel-grid.dark .evt-partial {
-          background-color: rgb(217, 119, 6) !important;
-          color: white !important;
+          background-color: rgba(245, 158, 11, 0.15) !important;
+          color: rgb(251, 191, 36) !important;
+          box-shadow: inset 3px 0 0 rgb(245, 158, 11), inset 0 0 0 1px rgba(245, 158, 11, 0.3) !important;
+        }
+
+        .excel-grid.dark .evt-partial .fc-event-main,
+        .excel-grid.dark .evt-partial .fc-event-main * {
+          color: rgb(251, 191, 36) !important;
+          opacity: 1 !important;
         }
 
         .evt-uncovered {
@@ -981,8 +1117,15 @@ export const PlanningCalendar: React.FC = () => {
         }
 
         .excel-grid .evt-uncovered {
-          background-color: rgb(239, 68, 68) !important;
-          color: white !important;
+          background-color: rgb(254, 202, 202) !important;
+          color: rgb(127, 29, 29) !important;
+          box-shadow: inset 3px 0 0 rgb(220, 38, 38), inset 0 0 0 1px rgba(239, 68, 68, 0.3) !important;
+        }
+
+        .excel-grid .evt-uncovered .fc-event-main,
+        .excel-grid .evt-uncovered .fc-event-main * {
+          color: rgb(127, 29, 29) !important;
+          opacity: 1 !important;
         }
 
         .dark .evt-uncovered {
@@ -992,13 +1135,24 @@ export const PlanningCalendar: React.FC = () => {
         }
 
         .excel-grid.dark .evt-uncovered {
-          background-color: rgb(220, 38, 38) !important;
-          color: white !important;
+          background-color: rgba(239, 68, 68, 0.15) !important;
+          color: rgb(248, 113, 113) !important;
+          box-shadow: inset 3px 0 0 rgb(220, 38, 38), inset 0 0 0 1px rgba(239, 68, 68, 0.3) !important;
+        }
+
+        .excel-grid.dark .evt-uncovered .fc-event-main,
+        .excel-grid.dark .evt-uncovered .fc-event-main * {
+          color: rgb(248, 113, 113) !important;
+          opacity: 1 !important;
         }
 
         .evt-conflict {
-          background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(245, 158, 11, 0.1) 5px, rgba(245, 158, 11, 0.1) 10px) !important;
-          border-style: dashed !important;
+          border-color: rgba(239, 68, 68, 0.55) !important;
+          box-shadow: inset 0 3px 0 rgba(239, 68, 68, 0.72), 0 6px 14px -10px rgba(239, 68, 68, 0.45) !important;
+        }
+
+        .excel-grid .evt-conflict {
+          box-shadow: inset 0 3px 0 rgb(248, 113, 113) !important;
         }
 
         .evt-legal-block {
@@ -1019,7 +1173,7 @@ export const PlanningCalendar: React.FC = () => {
 
         .evt-draft {
           border-style: dashed !important;
-          box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.38), 0 4px 6px -1px rgba(0,0,0,0.05) !important;
+          box-shadow: inset 0 -2px 0 rgba(100, 116, 139, 0.38), 0 4px 6px -1px rgba(0,0,0,0.05) !important;
         }
 
         .evt-published {
@@ -1032,7 +1186,13 @@ export const PlanningCalendar: React.FC = () => {
         }
 
         .excel-grid .evt-draft {
-          background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.16) 5px, transparent 5px, transparent 10px) !important;
+          opacity: 0.94;
+          box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.45) !important;
+        }
+
+        .excel-grid .evt-uncovered.evt-draft {
+          opacity: 1;
+          box-shadow: inset 3px 0 0 rgb(220, 38, 38), inset 0 -2px 0 rgba(127, 29, 29, 0.28) !important;
         }
 
         .excel-grid .evt-published {
@@ -1098,6 +1258,16 @@ export const PlanningCalendar: React.FC = () => {
     </div>
   );
 };
+
+
+
+
+
+
+
+
+
+
 
 
 

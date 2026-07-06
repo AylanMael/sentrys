@@ -117,11 +117,11 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
       ? displayTitle
       : assignedAgentNames.length > 0
         ? assignedAgentNames.join(", ")
-        : "Ã€ affecter";
+        : "A affecter";
   const timelineMeta = [
     mode === "agent" ? secondaryTitle : null,
     v.missionType,
-    isUncovered ? "Ã€ pourvoir" : null,
+    isUncovered ? "A pourvoir" : null,
   ].filter((item): item is string => Boolean(item));
 
   const startSource = originalStart || arg.event.start;
@@ -145,8 +145,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
       ? "Annulee"
       : v.status === "closed"
         ? "Cloturee"
-        : isUncovered
-          ? "Ã€ pourvoir"
+        : isUncovered ? "A pourvoir"
           : filled < need
             ? "Partielle"
             : "Complete";
@@ -165,6 +164,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
         ? "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
         : "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200";
   const showPublicationBadge = publicationStatus === "draft" || publicationStatus === "modified";
+  const showInlinePublicationBadge = showPublicationBadge && !arg.view.type.includes("resourceTimeline");
   const legalWarningTitle = legalWarning
     ? "Vacation superieure a 12h"
     : sstWarning
@@ -217,8 +217,13 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
 
   const isTimeline = arg.view.type.includes("resourceTimeline");
   if (isTimeline) {
-    const showTimelineBadges =
-      hasConflict || violatesRest || legalWarning || sstWarning || hasComplianceIssue || showPublicationBadge;
+    const showTimelineSignals =
+      hasConflict ||
+      violatesRest ||
+      legalWarning ||
+      sstWarning ||
+      hasComplianceIssue ||
+      publicationStatus === "modified";
 
     return (
       <div
@@ -262,37 +267,47 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
           ))}
           {v.status === "cancelled" && <span>{statusLabel}</span>}
         </div>
-        {showTimelineBadges && (
-          <div className={cn("flex flex-wrap", isCompact ? "mt-0 gap-0.5" : "mt-0.5 gap-1")}>
+        {showTimelineSignals && (
+          <div className={cn("flex items-center", isCompact ? "mt-0 gap-1" : "mt-0.5 gap-1.5")}>
             {hasConflict && (
-              <MiniBadge className="border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-                Conflit
-              </MiniBadge>
+              <span
+                title={conflictMessages || "Conflit agent"}
+                className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-950/50 dark:text-red-300 dark:ring-red-900"
+              >
+                <AlertCircle className="h-2.5 w-2.5" />
+              </span>
             )}
             {violatesRest && (
-              <MiniBadge className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-                Repos
-              </MiniBadge>
+              <span
+                title="Repos minimum a controler"
+                className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-900"
+              >
+                <AlertTriangle className="h-2.5 w-2.5" />
+              </span>
             )}
-            {legalWarning && (
-              <MiniBadge className="border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-                CCN
-              </MiniBadge>
-            )}
-            {sstWarning && (
-              <MiniBadge className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-                SST
-              </MiniBadge>
+            {(legalWarning || sstWarning) && (
+              <span
+                title={legalWarningTitle}
+                className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-orange-50 text-orange-700 ring-1 ring-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:ring-orange-900"
+              >
+                <ShieldAlert className="h-2.5 w-2.5" />
+              </span>
             )}
             {hasComplianceIssue && (
-              <MiniBadge className="border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300">
-                Agent
-              </MiniBadge>
+              <span
+                title={complianceErrorMessage}
+                className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-sky-50 text-sky-700 ring-1 ring-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:ring-sky-900"
+              >
+                <ShieldAlert className="h-2.5 w-2.5" />
+              </span>
             )}
-            {showPublicationBadge && (
-              <MiniBadge className={publicationBadgeClass}>
-                {publicationLabel}
-              </MiniBadge>
+            {publicationStatus === "modified" && (
+              <span
+                title={publicationLabel}
+                className="rounded-full bg-amber-50 px-1.5 py-0 text-[7px] font-black uppercase tracking-wide text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-900"
+              >
+                Maj
+              </span>
             )}
           </div>
         )}
@@ -353,7 +368,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
         <MiniBadge className="border-white/20 bg-black/10 text-current dark:bg-white/10">
           {statusLabel}
         </MiniBadge>
-        {showPublicationBadge && (
+        {showInlinePublicationBadge && (
           <MiniBadge className={publicationBadgeClass}>
             {publicationLabel}
           </MiniBadge>
@@ -386,5 +401,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
     </div>
   );
 };
+
+
 
 

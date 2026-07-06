@@ -73,7 +73,7 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
             <div className="h-6 w-6 rounded bg-amber-500/20 flex items-center justify-center group-hover/item:bg-white/20">
               <Wand2 className="h-3.5 w-3.5" />
             </div>
-            Optimiser la sÃ©lection
+            Optimiser la selection
           </button>
         )}
 
@@ -91,7 +91,7 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
           <div className="h-6 w-6 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover/item:bg-white/20">
             <Users className="h-3.5 w-3.5" />
           </div>
-          DÃ©tails de la mission
+          Details de la mission
         </button>
 
         <button
@@ -148,7 +148,7 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
           <div className="h-6 w-6 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover/item:bg-white/20">
             <div className="h-3 w-3 border-2 border-current rounded-sm" />
           </div>
-          SÃ©lectionner
+          Selectionner
         </button>
 
         <div className="h-px bg-border/50 my-1 mx-2" />
@@ -171,6 +171,7 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
     document.body
   );
 };
+
 
 
 

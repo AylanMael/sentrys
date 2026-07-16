@@ -43,13 +43,15 @@ import {
   ShieldAlert,
   BriefcaseBusiness,
   Info,
+  ChevronLeft,
   ChevronRight,
   LayoutGrid,
   List,
+  XCircle,
 } from "lucide-react";
 
 const GRID_BATCH_SIZE = 9;
-const LIST_PAGE_SIZE_OPTIONS = [12, 25, 50] as const;
+const LIST_PAGE_SIZE_OPTIONS = [12, 25, 50, 100] as const;
 type ViewMode = "grid" | "list";
 type StatusFilter = "all" | "active" | "inactive";
 type SiteTypeFilter = "all" | Site["siteType"];
@@ -69,8 +71,8 @@ function siteTypeLabel(v: Site["siteType"]) {
     bureaux: "Bureaux",
     chantier: "Chantier",
     boutique: "Boutique",
-    evenement: "Événement",
-    hotel: "Hôtel",
+    evenement: "Evenement",
+    hotel: "Hotel",
     autre: "Autre",
   };
   return map[v] ?? "Autre";
@@ -79,10 +81,46 @@ function siteTypeLabel(v: Site["siteType"]) {
 function safeArr(v: unknown): string[] {
   return Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : [];
 }
+function hasCoordinates(site: any) {
+  return Number.isFinite(Number(site?.latitude)) && Number.isFinite(Number(site?.longitude));
+}
+
 function siteClientFilterKey(site: any) {
   const clientId = typeof site?.clientId === "string" ? site.clientId.trim() : "";
   const clientName = typeof site?.clientName === "string" ? site.clientName.trim() : "";
   return clientId || clientName || "__no_client__";
+}
+
+function SiteMetric({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
+  return (
+    <Card
+      className={cn(
+        "rounded-[1.25rem] border shadow-sm",
+        tone === "neutral" && "bg-white dark:bg-slate-950",
+        tone === "success" && "border-emerald-500/20 bg-emerald-500/10",
+        tone === "warning" && "border-amber-500/25 bg-amber-500/10",
+        tone === "danger" && "border-red-500/25 bg-red-500/10"
+      )}
+    >
+      <CardContent className="p-4">
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-1 text-3xl font-black tracking-tight text-foreground">{value}</p>
+        <p className="mt-1 text-xs font-semibold text-muted-foreground">{detail}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function SitesPage() {
@@ -262,6 +300,12 @@ export default function SitesPage() {
     (!clientIdParam && clientFilter !== "all") ||
     typeFilter !== "all" ||
     riskFilter !== "all";
+  const activeSitesCount = filtered.filter((site: any) => site?.isActive).length;
+  const inactiveSitesCount = Math.max(0, filtered.length - activeSitesCount);
+  const highRiskSitesCount = filtered.filter(
+    (site: any) => Number(site?.riskLevel ?? 3) >= 4
+  ).length;
+  const missingGpsSitesCount = filtered.filter((site: any) => !hasCoordinates(site)).length;
   const creationInitialValues = useMemo(
     () =>
       clientIdParam
@@ -276,7 +320,7 @@ export default function SitesPage() {
   async function createSite(values: SiteFormValues) {
     if (!user) {
       toast({
-        title: "Non connecté",
+        title: "Non connecte",
         description: "Veuillez vous reconnecter.",
         variant: "destructive",
       });
@@ -294,7 +338,7 @@ export default function SitesPage() {
 
     if (!canWrite) {
       toast({
-        title: "Accès refusé",
+        title: "Acces refuse",
         description: "Droits insuffisants.",
         variant: "destructive",
       });
@@ -339,14 +383,14 @@ export default function SitesPage() {
 
         toast({
           title: "Erreur",
-          description: isQuota ? res.error : (res.error ?? "Création impossible."),
+          description: isQuota ? res.error : (res.error ?? "Creation impossible."),
           variant: "destructive",
         });
         return;
       }
 
       toast({
-        title: "Site créé",
+        title: "Site cree",
         description: "Le site est enregistré.",
       });
 
@@ -360,7 +404,7 @@ export default function SitesPage() {
       }
       toast({
         title: isQuota ? "Quota de sites atteint" : "Erreur",
-        description: e?.message ?? "Création impossible.",
+        description: e?.message ?? "Creation impossible.",
         variant: "destructive",
       });
     } finally {
@@ -370,34 +414,31 @@ export default function SitesPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-10 w-full">
-      <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between bg-card p-6 md:p-8 rounded-[2rem] border shadow-sm ring-1 ring-black/5 bg-gradient-to-br from-card to-muted/20 relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-[1.75rem] border bg-white p-5 shadow-sm ring-1 ring-black/5 dark:bg-slate-950">
+        <div className="pointer-events-none absolute right-[-5rem] top-[-7rem] h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
 
-        <div className="relative z-10 flex items-center gap-5">
-          <div className="bg-primary shadow-xl shadow-primary/20 p-4 rounded-2xl">
-            <MapPin className="h-7 w-7 text-primary-foreground" />
-          </div>
-          <div>
-            <div className="flex items-center gap-3 mb-1">
+        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="rounded-2xl bg-primary/10 p-3 text-primary ring-1 ring-primary/15">
+              <MapPin className="h-6 w-6" />
+            </div>
+            <div>
               <Badge
                 variant="outline"
-                className="bg-background text-[10px] font-black uppercase tracking-widest py-1 px-3 rounded-full border-muted-foreground/30"
+                className="rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-primary"
               >
-                Lieux d'intervention
+                Lieux d intervention
               </Badge>
-            </div>
-            <h1 className="text-3xl font-black tracking-tighter text-foreground">
-              {clientIdParam ? "Sites du client" : "Sites"}
-            </h1>
-            {clientNameParam && (
-              <p className="mt-1 text-sm font-bold text-muted-foreground">
-                {clientNameParam}
+              <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground">
+                {clientIdParam ? "Sites du client" : "Sites operationnels"}
+              </h1>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                {clientNameParam || "Pilotez les sites, risques, consignes et affectations terrain."}
               </p>
-            )}
+            </div>
           </div>
-        </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 relative z-10 w-full md:w-auto">
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center lg:w-auto">
           <div className="relative w-full sm:w-[320px]">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -411,7 +452,7 @@ export default function SitesPage() {
           {canWrite && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button className="h-12 rounded-xl px-6 font-black shadow-lg shadow-primary/20 hover:translate-y-[-2px] active:scale-95 transition-all w-full sm:w-auto">
+                <Button className="h-12 w-full rounded-xl px-6 font-black shadow-sm transition-all active:scale-95 sm:w-auto">
                   <PlusCircle className="mr-2 h-5 w-5" />
                   Nouveau site
                 </Button>
@@ -419,13 +460,13 @@ export default function SitesPage() {
               <DialogContent className="max-w-2xl rounded-[2rem] p-0 overflow-hidden border-none shadow-2xl">
                 <div className="p-6 md:p-8 bg-muted/20 border-b">
                   <DialogHeader>
-                    <DialogTitle className="text-2xl font-black">Ajouter un Site</DialogTitle>
+                    <DialogTitle className="text-2xl font-black">Ajouter un site</DialogTitle>
                   </DialogHeader>
                 </div>
                 <div className="p-6 md:p-8 bg-background">
                   <SiteForm
                     initialValues={creationInitialValues}
-                    submitLabel="Créer le site"
+                    submitLabel="Creer le site"
                     onSubmit={createSite}
                     isSubmitting={saving}
                   />
@@ -435,8 +476,17 @@ export default function SitesPage() {
           )}
         </div>
       </div>
+      </div>
 
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <SiteMetric label="Sites filtres" value={filtered.length} detail="Portefeuille courant" />
+        <SiteMetric label="Actifs" value={activeSitesCount} detail={`${inactiveSitesCount} inactif(s)`} tone="success" />
+        <SiteMetric label="Risque eleve" value={highRiskSitesCount} detail="Niveaux 4 et 5" tone="warning" />
+        <SiteMetric label="GPS manquant" value={missingGpsSitesCount} detail="A completer pour le pointage" tone={missingGpsSitesCount > 0 ? "danger" : "success"} />
+      </div>
       <div className="rounded-[1.5rem] border bg-card/80 p-4 shadow-sm">
+
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-black text-foreground">Filtres exploitation</p>
@@ -458,6 +508,7 @@ export default function SitesPage() {
               }}
               className="h-10 rounded-xl font-bold"
             >
+              <XCircle className="mr-2 h-4 w-4" />
               Reinitialiser
             </Button>
           )}
@@ -577,8 +628,8 @@ export default function SitesPage() {
 
           return (
             <Link key={s.id} href={`/dashboard/sites/${s.id}`} className="group block">
-              <Card className="rounded-[2rem] border-none shadow-xl shadow-black/[0.02] bg-background ring-1 ring-black/5 hover:ring-primary/20 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 overflow-hidden h-full flex flex-col">
-                <div className="p-6 pb-4 bg-gradient-to-b from-muted/20 to-transparent border-b border-muted/50">
+              <Card className="flex h-full flex-col overflow-hidden rounded-[1.5rem] border bg-background shadow-sm ring-1 ring-black/5 transition-all duration-300 hover:-translate-y-0.5 hover:ring-primary/20 hover:shadow-md">
+                <div className="border-b border-muted/50 bg-gradient-to-b from-muted/20 to-transparent p-5 pb-4">
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20 transition-transform group-hover:scale-105 group-hover:bg-primary/20">
@@ -617,13 +668,13 @@ export default function SitesPage() {
                         variant="outline"
                         className="rounded-lg px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border-primary/30 text-primary bg-primary/5"
                       >
-                        Assigné
+                        Assigne
                       </Badge>
                     )}
                   </div>
                 </div>
 
-                <CardContent className="p-6 flex-1 flex flex-col justify-between space-y-4">
+                <CardContent className="flex flex-1 flex-col justify-between space-y-4 p-5">
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-muted/30 p-3 rounded-xl border border-muted/50">
@@ -677,7 +728,7 @@ export default function SitesPage() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground opacity-60">
-                        <Info className="h-3.5 w-3.5" /> Aucune consigne spécifique.
+                        <Info className="h-3.5 w-3.5" /> Aucune consigne specifique.
                       </div>
                     )}
                   </div>
@@ -847,7 +898,8 @@ export default function SitesPage() {
                   disabled={listPage <= 1}
                   className="h-10 rounded-xl font-bold"
                 >
-                  Precedent
+                  <ChevronLeft className="mr-2 h-4 w-4" />
+                  Prec.
                 </Button>
                 <span className="min-w-20 text-center text-sm font-black">
                   {listPage} / {listPageCount}
@@ -859,7 +911,8 @@ export default function SitesPage() {
                   disabled={listPage >= listPageCount}
                   className="h-10 rounded-xl font-bold"
                 >
-                  Suivant
+                  Suiv.
+                  <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -872,9 +925,9 @@ export default function SitesPage() {
           <div className="bg-muted p-6 rounded-full mb-4">
             <Building2 className="h-10 w-10 text-muted-foreground/50" />
           </div>
-          <h3 className="text-xl font-black text-foreground">Aucun site trouvé</h3>
+          <h3 className="text-xl font-black text-foreground">Aucun site trouve</h3>
           <p className="text-sm text-muted-foreground mt-2 max-w-sm">
-            Il semblerait qu&apos;il n&apos;y ait pas de site correspondant à votre recherche.
+            Il semblerait qu&apos;il n&apos;y ait pas de site correspondant a votre recherche.
           </p>
         </div>
       )}

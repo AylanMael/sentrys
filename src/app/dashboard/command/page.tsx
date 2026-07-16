@@ -8,20 +8,32 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   Clock3,
   Loader2,
   Map as MapIcon,
   Radar,
   RefreshCw,
+  Search,
   ShieldCheck,
   Siren,
+  XCircle,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppFeedback } from "@/hooks/use-app-feedback";
 import { apiFetch, getApiErrorMessage } from "@/lib/api/client-fetch";
@@ -79,6 +91,30 @@ type CommandResponse = {
 };
 
 type CommandView = "overview" | "map" | "alerts";
+type IncidentPriorityFilter = "all" | "high" | "medium" | "low";
+type IncidentStatusFilter = "all" | "open" | "in_progress" | "resolved";
+
+const INCIDENT_PRIORITY_OPTIONS: Array<{
+  value: IncidentPriorityFilter;
+  label: string;
+}> = [
+  { value: "all", label: "Toutes priorites" },
+  { value: "high", label: "Critiques" },
+  { value: "medium", label: "A surveiller" },
+  { value: "low", label: "Faibles" },
+];
+
+const INCIDENT_STATUS_OPTIONS: Array<{
+  value: IncidentStatusFilter;
+  label: string;
+}> = [
+  { value: "all", label: "Tous statuts" },
+  { value: "open", label: "A traiter" },
+  { value: "in_progress", label: "En cours" },
+  { value: "resolved", label: "Traites / clos" },
+];
+
+const INCIDENT_PAGE_SIZE_OPTIONS = [4, 6, 10];
 
 const COMMAND_VIEWS: Array<{
   id: CommandView;
@@ -124,6 +160,78 @@ function incidentTitle(incident: CommandIncident) {
 
 function incidentDetail(incident: CommandIncident) {
   return incident.description || "Aucun detail renseigne.";
+}
+
+function formatIncidentTime(iso: string | null | undefined) {
+  if (!iso) return "Heure non renseignee";
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "Heure non renseignee";
+
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function normalizeIncidentStatus(status: string | null | undefined) {
+  return (status || "open").toLowerCase();
+}
+
+function incidentStatusLabel(status: string | null | undefined) {
+  const normalized = normalizeIncidentStatus(status);
+  if (normalized.includes("progress") || normalized.includes("cours")) {
+    return "En cours";
+  }
+  if (
+    normalized.includes("closed") ||
+    normalized.includes("resolved") ||
+    normalized.includes("clos") ||
+    normalized.includes("traite")
+  ) {
+    return "Traite";
+  }
+
+  return "A traiter";
+}
+
+function incidentStatusClass(status: string | null | undefined) {
+  const normalized = normalizeIncidentStatus(status);
+  if (normalized.includes("progress") || normalized.includes("cours")) {
+    return "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-200";
+  }
+  if (
+    normalized.includes("closed") ||
+    normalized.includes("resolved") ||
+    normalized.includes("clos") ||
+    normalized.includes("traite")
+  ) {
+    return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200";
+  }
+
+  return "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-200";
+}
+
+function matchesIncidentStatus(
+  status: string | null | undefined,
+  filter: IncidentStatusFilter
+) {
+  if (filter === "all") return true;
+  const normalized = normalizeIncidentStatus(status);
+
+  if (filter === "in_progress") {
+    return normalized.includes("progress") || normalized.includes("cours");
+  }
+
+  const isResolved =
+    normalized.includes("closed") ||
+    normalized.includes("resolved") ||
+    normalized.includes("clos") ||
+    normalized.includes("traite");
+
+  if (filter === "resolved") return isResolved;
+  return !isResolved && !normalized.includes("progress") && !normalized.includes("cours");
 }
 
 function getSituation(data: CommandResponse | null): {
@@ -191,8 +299,15 @@ export default function CommandPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [commandView, setCommandView] = useState<CommandView>("overview");
+  const [incidentSearch, setIncidentSearch] = useState("");
+  const [priorityFilter, setPriorityFilter] =
+    useState<IncidentPriorityFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<IncidentStatusFilter>("all");
+  const [incidentPage, setIncidentPage] = useState(1);
+  const [incidentPageSize, setIncidentPageSize] = useState(6);
 
   const situation = useMemo(() => getSituation(data), [data]);
+  const incidents = useMemo(() => data?.incidents ?? [], [data]);
   const highIncidentCount = useMemo(
     () => data?.incidents?.filter((incident) => incident.priority === "high").length ?? 0,
     [data]
@@ -204,6 +319,37 @@ export default function CommandPage() {
   );
   const situationHref =
     situation.tone === "alert" ? "/dashboard/incidents" : "/dashboard/conduite";
+  const filteredIncidents = useMemo(() => {
+    const query = incidentSearch.trim().toLowerCase();
+
+    return incidents.filter((incident) => {
+      const matchesPriority =
+        priorityFilter === "all" || incident.priority === priorityFilter;
+      const matchesStatus = matchesIncidentStatus(incident.status, statusFilter);
+      const searchable = [
+        incidentTitle(incident),
+        incidentDetail(incident),
+        incident.status,
+        incident.priority,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return matchesPriority && matchesStatus && (!query || searchable.includes(query));
+    });
+  }, [incidents, incidentSearch, priorityFilter, statusFilter]);
+  const totalIncidentPages = Math.max(
+    1,
+    Math.ceil(filteredIncidents.length / incidentPageSize)
+  );
+  const incidentStartIndex = (incidentPage - 1) * incidentPageSize;
+  const paginatedIncidents = filteredIncidents.slice(
+    incidentStartIndex,
+    incidentStartIndex + incidentPageSize
+  );
+  const hasIncidentFilters =
+    incidentSearch.trim() !== "" || priorityFilter !== "all" || statusFilter !== "all";
 
   const fetchStats = useCallback(
     async (options: { quiet?: boolean; refresh?: boolean } = {}) => {
@@ -249,28 +395,37 @@ export default function CommandPage() {
     return () => window.clearInterval(interval);
   }, [fetchStats]);
 
+  useEffect(() => {
+    setIncidentPage(1);
+  }, [incidentSearch, priorityFilter, statusFilter, incidentPageSize]);
+
+  useEffect(() => {
+    if (incidentPage > totalIncidentPages) {
+      setIncidentPage(totalIncidentPages);
+    }
+  }, [incidentPage, totalIncidentPages]);
+
   if (loading && !data) {
     return <CommandSkeleton />;
   }
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 pb-8">
-      <section className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-4 text-white shadow-xl dark:border-white/10">
-        <div className="pointer-events-none absolute right-[-6rem] top-[-7rem] h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
+      <section className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white p-4 text-slate-950 shadow-sm dark:border-white/10 dark:bg-slate-950 dark:text-white">
+        <div className="pointer-events-none absolute right-[-6rem] top-[-7rem] h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" />
 
         <div className="relative z-10 grid gap-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
           <div>
-            <Badge className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100">
-              Supervision temps reel
+            <Badge className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-100">
+              Supervision live 30s
             </Badge>
             <h1 className="mt-2 flex items-center gap-3 text-2xl font-black tracking-tight md:text-3xl">
-              <Radar className="h-7 w-7 text-cyan-200" />
-              Command Center
+              <Radar className="h-7 w-7 text-cyan-600 dark:text-cyan-200" />
+              Poste de commandement
             </h1>
-            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-300">
-              Vue courte pour savoir ce qui se passe maintenant : sites, rondes,
-              incidents recents et priorites terrain. La conduite garde ensuite
-              la trace des decisions prises.
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
+              Une lecture courte et calme du terrain : ce qui va bien, ce qui
+              demande attention, et l'action a lancer sans chercher dans les menus.
             </p>
           </div>
 
@@ -401,7 +556,7 @@ export default function CommandPage() {
         <EmptyState
           icon={AlertTriangle}
           tone="danger"
-          title="Command Center indisponible"
+          title="Poste de commandement indisponible"
           description={error}
           action={
             <Button
@@ -446,7 +601,7 @@ export default function CommandPage() {
       <div className="grid gap-5">
         {commandView === "map" && (
         <Card className="overflow-hidden rounded-[1.5rem] border-border/60 shadow-sm">
-          <CardHeader className="border-b bg-muted/20">
+          <CardHeader className="border-b bg-sky-50/80 dark:bg-slate-900/40">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 text-xl font-black">
@@ -464,8 +619,8 @@ export default function CommandPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-3">
-            <div className="h-[560px] min-h-[420px] overflow-hidden rounded-2xl border bg-slate-950">
+          <CardContent className="p-4">
+            <div className="h-[min(62vh,560px)] min-h-[420px] overflow-hidden rounded-2xl border bg-slate-950">
               <TacticalMap
                 sites={data?.sites ?? []}
                 incidents={data?.incidents ?? []}
@@ -478,14 +633,103 @@ export default function CommandPage() {
 
         <div className="space-y-5">
           <Card className={cn("rounded-[1.5rem] border-border/60 shadow-sm", commandView !== "alerts" && commandView !== "overview" && "hidden")}>
-            <CardHeader className="border-b bg-muted/20">
-              <CardTitle className="flex items-center gap-2 text-xl font-black">
-                <Siren className="h-5 w-5 text-primary" />
-                A traiter maintenant
-              </CardTitle>
+            <CardHeader className="border-b bg-slate-50/80 p-4 dark:bg-slate-900/40">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-xl font-black">
+                    <Siren className="h-5 w-5 text-primary" />
+                    A traiter maintenant
+                  </CardTitle>
+                  <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                    Les signaux recents sont filtres pour agir vite, sans bruit.
+                  </p>
+                </div>
+                <Badge variant="outline" className="w-fit rounded-full px-3 py-1 font-black">
+                  {filteredIncidents.length}/{incidents.length} signal(s)
+                </Badge>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-3 p-4">
-              {(data?.incidents?.length ?? 0) === 0 ? (
+            <CardContent className="space-y-4 p-4">
+              <div className="grid gap-2 xl:grid-cols-[minmax(220px,1fr)_180px_180px_140px_auto]">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={incidentSearch}
+                    onChange={(event) => setIncidentSearch(event.target.value)}
+                    placeholder="Rechercher un signal..."
+                    className="h-10 rounded-xl pl-9 font-semibold"
+                  />
+                </div>
+
+                <Select
+                  value={priorityFilter}
+                  onValueChange={(value) =>
+                    setPriorityFilter(value as IncidentPriorityFilter)
+                  }
+                >
+                  <SelectTrigger className="h-10 rounded-xl font-black">
+                    <SelectValue placeholder="Priorite" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INCIDENT_PRIORITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) =>
+                    setStatusFilter(value as IncidentStatusFilter)
+                  }
+                >
+                  <SelectTrigger className="h-10 rounded-xl font-black">
+                    <SelectValue placeholder="Statut" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INCIDENT_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={String(incidentPageSize)}
+                  onValueChange={(value) => setIncidentPageSize(Number(value))}
+                >
+                  <SelectTrigger className="h-10 rounded-xl font-black">
+                    <SelectValue placeholder="Lignes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INCIDENT_PAGE_SIZE_OPTIONS.map((size) => (
+                      <SelectItem key={size} value={String(size)}>
+                        {size} lignes
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={!hasIncidentFilters}
+                  onClick={() => {
+                    setIncidentSearch("");
+                    setPriorityFilter("all");
+                    setStatusFilter("all");
+                  }}
+                  className="h-10 rounded-xl font-black"
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Effacer
+                </Button>
+              </div>
+
+              {incidents.length === 0 ? (
                 <EmptyState
                   icon={CheckCircle2}
                   tone="success"
@@ -493,36 +737,110 @@ export default function CommandPage() {
                   title="Aucune alerte recente"
                   description="La supervision reste active en arriere-plan."
                 />
+              ) : filteredIncidents.length === 0 ? (
+                <EmptyState
+                  icon={Search}
+                  compact
+                  title="Aucun signal trouve"
+                  description="Modifiez la recherche ou retirez un filtre."
+                />
               ) : (
-                data?.incidents.slice(0, 6).map((incident) => (
-                  <div
-                    key={incident.id}
-                    className="rounded-2xl border bg-background p-4 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em]",
-                          priorityClass(incident.priority)
-                        )}
-                      >
-                        {priorityLabel(incident.priority)}
-                      </Badge>
-                      <Clock3 className="h-4 w-4 text-muted-foreground" />
+                <div className="space-y-2">
+                  {paginatedIncidents.map((incident) => (
+                    <div
+                      key={incident.id}
+                      className="rounded-2xl border bg-background p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em]",
+                                priorityClass(incident.priority)
+                              )}
+                            >
+                              {priorityLabel(incident.priority)}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em]",
+                                incidentStatusClass(incident.status)
+                              )}
+                            >
+                              {incidentStatusLabel(incident.status)}
+                            </Badge>
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-muted-foreground">
+                              <Clock3 className="h-3.5 w-3.5" />
+                              {formatIncidentTime(incident.createdAtIso)}
+                            </span>
+                          </div>
+                          <p className="mt-3 truncate font-black text-foreground">
+                            {incidentTitle(incident)}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-sm font-medium leading-6 text-muted-foreground">
+                            {incidentDetail(incident)}
+                          </p>
+                        </div>
+                        <Button
+                          asChild
+                          variant="outline"
+                          className="h-9 shrink-0 rounded-xl font-black"
+                        >
+                          <Link href="/dashboard/incidents">
+                            Ouvrir <ArrowRight className="ml-2 h-4 w-4" />
+                          </Link>
+                        </Button>
+                      </div>
                     </div>
-                    <p className="mt-3 font-black text-foreground">
-                      {incidentTitle(incident)}
-                    </p>
-                    <p className="mt-1 line-clamp-2 text-sm font-medium leading-6 text-muted-foreground">
-                      {incidentDetail(incident)}
-                    </p>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
+
+              {filteredIncidents.length > 0 ? (
+                <div className="flex flex-col gap-3 border-t pt-3 text-sm font-semibold text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    Affichage {incidentStartIndex + 1}-
+                    {Math.min(incidentStartIndex + incidentPageSize, filteredIncidents.length)} sur{" "}
+                    {filteredIncidents.length}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={incidentPage <= 1}
+                      onClick={() => setIncidentPage((page) => Math.max(1, page - 1))}
+                      className="rounded-xl font-black"
+                    >
+                      <ChevronLeft className="mr-1 h-4 w-4" />
+                      Prec.
+                    </Button>
+                    <Badge variant="outline" className="rounded-full px-3 py-1 font-black">
+                      {incidentPage}/{totalIncidentPages}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={incidentPage >= totalIncidentPages}
+                      onClick={() =>
+                        setIncidentPage((page) =>
+                          Math.min(totalIncidentPages, page + 1)
+                        )
+                      }
+                      className="rounded-xl font-black"
+                    >
+                      Suiv.
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
-
           <Card className={cn("rounded-[1.5rem] border-cyan-500/20 bg-cyan-500/5 shadow-sm", commandView !== "overview" && "hidden")}>
             <CardContent className="space-y-4 p-5">
               <div className="flex items-start gap-3">

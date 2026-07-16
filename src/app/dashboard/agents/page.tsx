@@ -38,6 +38,7 @@ import {
   Search,
   ShieldCheck,
   Users,
+  XCircle,
 } from "lucide-react";
 
 type Agent = {
@@ -63,7 +64,7 @@ type AuthUserLike = {
 
 type ViewMode = "grid" | "list";
 
-const PAGE_SIZE_OPTIONS = [12, 25, 50];
+const PAGE_SIZE_OPTIONS = [12, 25, 50, 100];
 
 function agentName(agent: Agent) {
   const name = `${agent.firstName ?? ""} ${agent.lastName ?? ""}`.trim();
@@ -105,6 +106,38 @@ function complianceIcon(status: string) {
   if (status === "blocking") return <AlertTriangle className="h-3 w-3" />;
   if (status === "warning") return <Clock3 className="h-3 w-3" />;
   return <CheckCircle2 className="h-3 w-3" />;
+}
+
+function AgentMetric({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
+  return (
+    <Card
+      className={cn(
+        "rounded-[1.25rem] border shadow-sm",
+        tone === "neutral" && "bg-white dark:bg-slate-950",
+        tone === "success" && "border-emerald-500/20 bg-emerald-500/10",
+        tone === "warning" && "border-amber-500/25 bg-amber-500/10",
+        tone === "danger" && "border-red-500/25 bg-red-500/10"
+      )}
+    >
+      <CardContent className="p-4">
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-1 text-3xl font-black tracking-tight text-foreground">{value}</p>
+        <p className="mt-1 text-xs font-semibold text-muted-foreground">{detail}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function AgentsPage() {
@@ -167,6 +200,7 @@ export default function AgentsPage() {
     () => agents.filter((a) => a.status === "active").length,
     [agents]
   );
+  const countInactive = Math.max(0, agents.length - countActive);
 
   const complianceSummary = useMemo(() => {
     return agents.reduce(
@@ -181,6 +215,7 @@ export default function AgentsPage() {
     );
   }, [agents]);
 
+  const hasFilters = Boolean(q.trim()) || status !== "all";
   const totalPages = Math.max(1, Math.ceil(agents.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const pageStart = agents.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
@@ -197,66 +232,34 @@ export default function AgentsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-10 w-full">
-      <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between bg-card p-6 md:p-8 rounded-[2rem] border shadow-sm ring-1 ring-black/5 bg-gradient-to-br from-card to-muted/20 relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-[1.75rem] border bg-white p-5 shadow-sm ring-1 ring-black/5 dark:bg-slate-950">
+        <div className="pointer-events-none absolute right-[-5rem] top-[-7rem] h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
 
-        <div className="relative z-10 flex items-center gap-5">
-          <div className="bg-primary shadow-xl shadow-primary/20 p-4 rounded-2xl">
-            <ShieldCheck className="h-7 w-7 text-primary-foreground" />
-          </div>
-          <div>
-            <div className="flex items-center gap-3 mb-1">
+        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="rounded-2xl bg-primary/10 p-3 text-primary ring-1 ring-primary/15">
+              <ShieldCheck className="h-6 w-6" />
+            </div>
+            <div>
               <Badge
                 variant="outline"
-                className="bg-background text-[10px] font-medium uppercase tracking-widest py-1 px-3 rounded-full border-muted-foreground/30"
+                className="rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-primary"
               >
-                Equipe terrain
+                Vivier terrain
               </Badge>
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tighter text-foreground">
-              Agents
-            </h1>
-            <p className="mt-1 text-sm font-medium text-muted-foreground">
-              Grille pour visualiser, liste paginee pour piloter un gros vivier.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 relative z-10 w-full md:w-auto">
-          <div className="flex items-center bg-background rounded-xl p-1 border shadow-inner">
-            <div className="px-4 py-2 flex flex-col items-center justify-center">
-              <span className="text-lg font-bold leading-none">{agents.length}</span>
-              <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest mt-1">
-                Total
-              </span>
-            </div>
-            <div className="w-px h-8 bg-border mx-2" />
-            <div className="px-4 py-2 flex flex-col items-center justify-center">
-              <span className="text-lg font-bold leading-none text-green-600">
-                {countActive}
-              </span>
-              <span className="text-[9px] font-semibold text-green-600/70 uppercase tracking-widest mt-1">
-                Actifs
-              </span>
-            </div>
-            <div className="w-px h-8 bg-border mx-2" />
-            <div className="px-4 py-2 flex flex-col items-center justify-center">
-              <span className="text-lg font-bold leading-none text-amber-600">
-                {complianceSummary.warning + complianceSummary.blocking}
-              </span>
-              <span className="text-[9px] font-semibold text-amber-600/70 uppercase tracking-widest mt-1">
-                A traiter
-              </span>
+              <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground">
+                Agents
+              </h1>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                Visualisez les agents, leur conformite, leurs contacts et les dossiers a traiter.
+              </p>
             </div>
           </div>
 
           {canWrite && (
-            <Button
-              asChild
-              className="h-12 rounded-xl px-6 font-semibold shadow-lg shadow-primary/20 hover:translate-y-[-2px] active:scale-95 transition-all w-full sm:w-auto"
-            >
+            <Button asChild className="h-11 rounded-xl px-5 font-black shadow-sm">
               <Link href="/dashboard/agents/new">
-                <Plus className="h-5 w-5 mr-2" />
+                <Plus className="mr-2 h-5 w-5" />
                 Ajouter un agent
               </Link>
             </Button>
@@ -264,8 +267,15 @@ export default function AgentsPage() {
         </div>
       </div>
 
-      <Card className="rounded-[2.5rem] border-none shadow-2xl shadow-black/[0.03] overflow-hidden bg-background ring-1 ring-black/5">
-        <div className="p-6 md:p-8 border-b border-border/50 bg-muted/10 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <AgentMetric label="Agents filtres" value={agents.length} detail="Vivier courant" />
+        <AgentMetric label="Actifs" value={countActive} detail={`${countInactive} inactif(s)`} tone="success" />
+        <AgentMetric label="A completer" value={complianceSummary.warning} detail="Dossiers a surveiller" tone="warning" />
+        <AgentMetric label="Bloquants" value={complianceSummary.blocking} detail="Non affectables" tone={complianceSummary.blocking > 0 ? "danger" : "success"} />
+      </div>
+
+      <Card className="overflow-hidden rounded-[1.5rem] border bg-background shadow-sm ring-1 ring-black/5">
+        <div className="flex flex-col gap-4 border-b border-border/50 bg-muted/10 p-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="relative w-full xl:max-w-md">
             <Search className="h-5 w-5 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -277,6 +287,21 @@ export default function AgentsPage() {
           </div>
 
           <div className="flex w-full flex-col gap-3 xl:w-auto xl:flex-row xl:items-center">
+            {hasFilters && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setQ("");
+                  setQDebounced("");
+                  setStatus("all");
+                }}
+                className="h-10 rounded-xl font-black"
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Reinitialiser
+              </Button>
+            )}
             <div className="flex p-1 bg-muted/50 rounded-xl border">
               <Button
                 variant="ghost"
@@ -350,7 +375,7 @@ export default function AgentsPage() {
           </div>
         </div>
 
-        <CardContent className="p-6 md:p-8">
+        <CardContent className="p-4 md:p-5">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
@@ -414,7 +439,7 @@ export default function AgentsPage() {
 
                     return (
                       <Link key={a.id} href={`/dashboard/agents/${a.id}`} className="group block">
-                        <div className="h-full flex flex-col p-5 rounded-[1.5rem] border border-border/50 bg-card hover:bg-muted/30 hover:border-primary/30 transition-all duration-300 hover:shadow-lg hover:shadow-black/5 hover:-translate-y-0.5">
+                        <div className="flex h-full flex-col rounded-[1.35rem] border border-border/60 bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20 hover:shadow-md">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center gap-4">
                               <div
@@ -460,7 +485,7 @@ export default function AgentsPage() {
                             </div>
                           </div>
 
-                          <div className="mb-4 rounded-2xl border bg-muted/20 p-3">
+                          <div className="mb-4 rounded-2xl border bg-muted/15 p-3">
                             <div className="flex items-center justify-between gap-2">
                               <Badge
                                 variant="outline"
@@ -499,7 +524,7 @@ export default function AgentsPage() {
                   })}
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-[1.75rem] border bg-card">
+                <div className="overflow-hidden rounded-[1.35rem] border bg-card">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/35 hover:bg-muted/35">

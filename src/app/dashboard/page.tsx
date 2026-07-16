@@ -125,19 +125,19 @@ const DASHBOARD_VIEWS: {
   {
     id: "realtime",
     label: "Temps r\u00e9el",
-    description: "Urgences, conduite, couverture terrain.",
+    description: "Urgences et actions du jour.",
     icon: Gauge,
   },
   {
     id: "analytics",
     label: "Analyses",
-    description: "Tendances, historique, activit\u00e9.",
+    description: "Tendances et historique.",
     icon: BarChart3,
   },
   {
     id: "account",
     label: "Compte",
-    description: "Quotas, abonnement, limites.",
+    description: "Abonnement et quotas.",
     icon: WalletCards,
   },
 ];
@@ -150,7 +150,7 @@ function DashboardControlTower({
   const metrics = [
     {
       label: "Postes \u00e0 couvrir",
-      value: snapshot ? snapshot.uncoveredPosts : "â€”",
+      value: snapshot ? snapshot.uncoveredPosts : "-",
       icon: CalendarClock,
       href: "/dashboard/planning",
       tone:
@@ -160,7 +160,7 @@ function DashboardControlTower({
     },
     {
       label: "Incidents ouverts",
-      value: snapshot ? snapshot.openIncidents : "â€”",
+      value: snapshot ? snapshot.openIncidents : "-",
       icon: Siren,
       href: "/dashboard/incidents",
       tone:
@@ -170,7 +170,7 @@ function DashboardControlTower({
     },
     {
       label: "Prises < 2h",
-      value: snapshot ? snapshot.startsNextTwoHours : "â€”",
+      value: snapshot ? snapshot.startsNextTwoHours : "-",
       icon: Clock3,
       href: "/dashboard/planning",
       tone: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
@@ -178,7 +178,7 @@ function DashboardControlTower({
   ];
 
   return (
-    <div className="grid gap-2 md:grid-cols-4">
+    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
       {metrics.map((metric) => {
         const Icon = metric.icon;
 
@@ -187,7 +187,7 @@ function DashboardControlTower({
             key={metric.label}
             href={metric.href}
             className={cn(
-              "flex min-h-20 items-center justify-between rounded-2xl border px-4 py-3 transition hover:-translate-y-0.5",
+              "flex min-h-[72px] items-center justify-between rounded-2xl border px-4 py-3 transition hover:-translate-y-0.5 hover:shadow-sm",
               metric.tone
             )}
           >
@@ -195,7 +195,7 @@ function DashboardControlTower({
               <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
                 {metric.label}
               </p>
-              <p className="mt-1 text-2xl font-black leading-none">
+              <p className="mt-1 text-xl font-black leading-none">
                 {metric.value}
               </p>
             </div>
@@ -207,7 +207,7 @@ function DashboardControlTower({
       <Link
         href={snapshot?.actionHref ?? "/dashboard/planning"}
         className={cn(
-          "group flex min-h-20 items-center justify-between rounded-2xl border px-4 py-3 transition hover:-translate-y-0.5",
+          "group flex min-h-[72px] items-center justify-between rounded-2xl border px-4 py-3 transition hover:-translate-y-0.5 hover:shadow-sm",
           snapshot?.verdict === "critical"
             ? "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300"
             : snapshot?.verdict === "warning"
@@ -220,10 +220,10 @@ function DashboardControlTower({
             Action prioritaire
           </p>
           <p className="mt-1 truncate text-sm font-black">
-            {snapshot?.actionTitle ?? "Chargement du cockpit"}
+            {snapshot?.actionTitle ?? "Lecture en cours"}
           </p>
           <p className="mt-0.5 text-xs font-semibold opacity-70">
-            {snapshot?.actionLabel ?? "Synchronisation..."}
+            {snapshot?.actionLabel ?? "Encore quelques secondes"}
           </p>
         </div>
         <ArrowRight className="h-5 w-5 shrink-0 transition group-hover:translate-x-1" />
@@ -392,19 +392,32 @@ export default function DashboardPage() {
   const atLimitList = useMemo(() => toAtLimitList(billing), [billing]);
 
   return (
-    <div className="mx-auto max-w-[1600px] animate-in space-y-4 fade-in duration-700 pb-8">
-      <section className="rounded-[1.5rem] border border-border/60 bg-background/90 p-3 shadow-sm backdrop-blur">
-        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className="mx-auto max-w-[1500px] animate-in space-y-3 fade-in duration-500 pb-8">
+      <section className="overflow-hidden rounded-[1.5rem] border border-border/60 bg-gradient-to-br from-background via-background to-primary/5 p-4 shadow-sm backdrop-blur">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <Badge
-              variant="outline"
-              className="rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-primary"
-            >
-              {"Tour de contr\u00f4le du jour"}
-            </Badge>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-foreground">
-              {"Ce qui n\u00e9cessite votre attention maintenant"}
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant="outline"
+                className="rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-primary"
+              >
+                Vue d&apos;ensemble
+              </Badge>
+              <Badge
+                variant="outline"
+                className="rounded-full border-emerald-500/20 bg-emerald-500/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300"
+              >
+                Exploitation du jour
+              </Badge>
+            </div>
+            <h1 className="mt-3 text-2xl font-black tracking-tight text-foreground md:text-3xl">
+              Votre journ&eacute;e, sans bruit.
             </h1>
+            <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
+              Une lecture simple pour couvrir les postes, traiter les urgences
+              et diffuser les informations. Les d&eacute;tails restent accessibles,
+              jamais impos&eacute;s.
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -429,7 +442,11 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {!isAgent ? <DashboardControlTower snapshot={cockpitSnapshot} /> : null}
+        {!isAgent ? (
+          <div className="mt-4">
+            <DashboardControlTower snapshot={cockpitSnapshot} />
+          </div>
+        ) : null}
       </section>
 
       {!isAgent && (
@@ -509,7 +526,7 @@ export default function DashboardPage() {
 
       {!isAgent && dashboardView === "realtime" && (
         <div className="relative z-10 animate-in slide-in-from-top-6 duration-700">
-          <ExploitationCockpit onSnapshot={handleCockpitSnapshot} />
+          <ExploitationCockpit onSnapshot={handleCockpitSnapshot} variant="compact" />
         </div>
       )}
 
@@ -523,7 +540,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {!isAgent && dashboardView === "realtime" && (
+      {!isAgent && dashboardView === "realtime" && !calmMode && (
         <section className="relative z-10 animate-in slide-in-from-top-4 duration-700">
           <div className="mb-3 flex flex-col gap-1 px-1 md:flex-row md:items-end md:justify-between">
             <div>
@@ -624,15 +641,15 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid items-start gap-6 lg:grid-cols-3">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         {((!isAgent && dashboardView === "realtime") || isAgent) && (
-          <div className="glass-card overflow-hidden rounded-[1.75rem] border-none lg:col-span-1">
+          <div className="overflow-hidden rounded-[1.5rem] border border-border/60 bg-background/85 shadow-sm backdrop-blur">
             <RecentIncidentsCard />
           </div>
         )}
 
         {!isAgent && dashboardView === "analytics" && (
-          <div className="glass-card overflow-hidden rounded-[1.75rem] border-none lg:col-span-1">
+          <div className="overflow-hidden rounded-[1.5rem] border border-border/60 bg-background/85 shadow-sm backdrop-blur">
             <RecentActivityCard />
           </div>
         )}
@@ -744,7 +761,7 @@ export default function DashboardPage() {
                           {billing.usage?.agents ?? 0}
                         </span>
                         <span className="text-xs font-bold text-muted-foreground/30">
-                          / {billing.limits?.agents ?? "∞"}
+                          / {billing.limits?.agents ?? "illimit\u00e9"}
                         </span>
                       </div>
                     </div>
@@ -775,7 +792,7 @@ export default function DashboardPage() {
                           {billing.usage?.sites ?? 0}
                         </span>
                         <span className="text-xs font-bold text-muted-foreground/30">
-                          / {billing.limits?.sites ?? "∞"}
+                          / {billing.limits?.sites ?? "illimit\u00e9"}
                         </span>
                       </div>
                     </div>
@@ -791,7 +808,7 @@ export default function DashboardPage() {
                       <div className="mb-3 flex items-center gap-2">
                         <Building2 className="h-3.5 w-3.5 text-muted-foreground/50" />
                         <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">
-                          Unités opérationnelles
+                          Unit&eacute;s op&eacute;rationnelles
                         </span>
                       </div>
                       <div className="flex items-baseline gap-2">
@@ -806,7 +823,7 @@ export default function DashboardPage() {
                           {usedTenants}
                         </span>
                         <span className="text-xs font-bold text-muted-foreground/30">
-                          / {billing.limits?.tenants ?? "∞"}
+                          / {billing.limits?.tenants ?? "illimit\u00e9"}
                         </span>
                       </div>
                     </div>
@@ -817,18 +834,18 @@ export default function DashboardPage() {
                       <AlertCircle className="h-6 w-6 shrink-0 text-destructive" />
                       <div>
                         <p className="text-sm font-black uppercase tracking-tight text-destructive">
-                          Capacité maximale atteinte
+                          Capacit&eacute; maximale atteinte
                         </p>
                         <p className="mt-1 text-[11px] font-bold leading-relaxed text-destructive/70">
-                          La plateforme tourne à flux tendu. Un passage au plan
-                          supérieur est requis pour ajouter de nouveaux actifs.
+                          La plateforme tourne &agrave; flux tendu. Un passage au plan
+                          sup&eacute;rieur est requis pour ajouter de nouveaux actifs.
                         </p>
                         <Button
                           asChild
                           variant="link"
                           className="mt-3 h-auto p-0 text-[11px] font-black uppercase tracking-widest text-destructive hover:text-destructive/80"
                         >
-                          <Link href="/dashboard/billing">Élargir le quota</Link>
+                          <Link href="/dashboard/billing">&Eacute;largir le quota</Link>
                         </Button>
                       </div>
                     </div>
@@ -836,7 +853,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/30">
-                  Aucune donnée d&apos;abonnement.
+                  Aucune donn&eacute;e d&apos;abonnement.
                 </div>
               )}
             </div>

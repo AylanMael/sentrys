@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   Clock3,
   Download,
@@ -16,6 +18,7 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  XCircle,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +60,8 @@ import {
 import { cn } from "@/lib/utils";
 
 type SignalStatusFilter = OperationSignalStatus | "all";
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 type RegistryResponse = {
   ok: boolean;
@@ -157,6 +162,13 @@ function statusClass(status: OperationSignalStatus) {
   return STATUS_META[status]?.className ?? STATUS_META.new.className;
 }
 
+function nextSignalActions(status: OperationSignalStatus): OperationSignalStatus[] {
+  if (status === "new") return ["seen", "in_progress"];
+  if (status === "seen") return ["in_progress", "done"];
+  if (status === "in_progress") return ["done"];
+  return [];
+}
+
 function csvCell(value: unknown) {
   const text = String(value ?? "").replace(/"/g, '""');
   return `"${text}"`;
@@ -250,6 +262,8 @@ export default function ConduitePage() {
   const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
   const [observation, setObservation] = useState("");
   const [observationSaving, setObservationSaving] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -269,6 +283,15 @@ export default function ConduitePage() {
   const printHref = useMemo(() => {
     return `/conduite/print?${query}`;
   }, [query]);
+  const totalPages = Math.max(1, Math.ceil(states.length / pageSize));
+  const startIndex = (page - 1) * pageSize;
+  const paginatedStates = states.slice(startIndex, startIndex + pageSize);
+  const hasFilters =
+    status !== "all" ||
+    search.trim() !== "" ||
+    actor.trim() !== "" ||
+    from !== defaultFromDate() ||
+    to !== toDateInput(new Date());
 
   async function load(isRefresh = false, quiet = false) {
     if (isRefresh) setRefreshing(true);
@@ -455,32 +478,41 @@ export default function ConduitePage() {
     void load(false);
   }, [query]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [query, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   const activeCount = summary.seen + summary.in_progress;
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-6 pb-10">
-      <section className="relative overflow-hidden rounded-[2.5rem] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 p-8 text-white shadow-2xl">
-        <div className="pointer-events-none absolute right-[-10%] top-[-40%] h-96 w-96 rounded-full bg-cyan-300/20 blur-3xl" />
-        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      <section className="relative overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-5 text-slate-950 shadow-sm dark:border-white/10 dark:bg-slate-950 dark:text-white">
+        <div className="pointer-events-none absolute right-[-10%] top-[-50%] h-96 w-96 rounded-full bg-cyan-300/10 blur-3xl" />
+        <div className="relative z-10 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <Badge className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">
-              Registre exploitation
+            <Badge className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-100">
+              Main courante exploitation
             </Badge>
-            <h1 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
+            <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">
               Conduite operationnelle
             </h1>
-            <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-slate-300">
-              Retrouvez les signaux du cockpit qui ont ete vus, pris en charge
-              ou traites. L'objectif est simple : savoir qui a fait quoi, quand,
-              et rouvrir le bon dossier sans fouiller.
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
+              Le journal de bord du responsable exploitation : chaque signal vu,
+              pris en charge ou traite reste trace, avec responsable, heure et observation.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               onClick={() => setManualOpen(true)}
-              className="h-12 rounded-2xl bg-white px-5 font-black text-slate-950 hover:bg-slate-100"
+              className="h-10 rounded-xl bg-slate-950 px-4 font-black text-white hover:bg-slate-800"
             >
               <PlusCircle className="mr-2 h-4 w-4" />
               Nouvelle note
@@ -489,7 +521,7 @@ export default function ConduitePage() {
               type="button"
               onClick={() => void load(true)}
               variant="outline"
-              className="h-12 rounded-2xl border-white/15 bg-white/10 px-5 font-black text-white hover:bg-white/20"
+              className="h-10 rounded-xl px-4 font-black"
             >
               <RefreshCw
                 className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")}
@@ -500,28 +532,20 @@ export default function ConduitePage() {
               type="button"
               onClick={downloadCsv}
               variant="outline"
-              className="h-12 rounded-2xl border-white/15 bg-white/10 px-5 font-black text-white hover:bg-white/20"
+              className="h-10 rounded-xl px-4 font-black"
             >
               <Download className="mr-2 h-4 w-4" />
-              CSV Excel
+              CSV
             </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="h-12 rounded-2xl border-white/15 bg-white/10 px-5 font-black text-white hover:bg-white/20"
-            >
+            <Button asChild variant="outline" className="h-10 rounded-xl px-4 font-black">
               <Link href={printHref} target="_blank" rel="noreferrer">
                 <Printer className="mr-2 h-4 w-4" />
                 PDF
               </Link>
             </Button>
-            <Button
-              asChild
-              className="h-12 rounded-2xl bg-cyan-300 px-5 font-black text-slate-950 hover:bg-cyan-200"
-            >
+            <Button asChild variant="ghost" className="h-10 rounded-xl px-4 font-black">
               <Link href="/dashboard">
-                Retour cockpit
-                <ArrowRight className="ml-2 h-4 w-4" />
+                Cockpit <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           </div>
@@ -561,9 +585,39 @@ export default function ConduitePage() {
         />
       </div>
 
-      <Card className="rounded-[2rem] border-border/60 shadow-sm">
-        <CardContent className="space-y-4 p-5">
-          <div className="grid gap-3 xl:grid-cols-[1.2fr_0.8fr_0.6fr_0.6fr_0.7fr]">
+      <Card className="rounded-[1.5rem] border-border/60 shadow-sm">
+        <CardContent className="space-y-4 p-4">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-black text-foreground">Filtres du registre</p>
+              <p className="text-xs font-semibold text-muted-foreground">
+                Affinez la main courante sans perdre le contexte de la journee.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="rounded-full px-3 py-1 font-black">
+                {states.length} resultat(s)
+              </Badge>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={!hasFilters}
+                onClick={() => {
+                  setSearch("");
+                  setActor("");
+                  setStatus("all");
+                  setFrom(defaultFromDate());
+                  setTo(toDateInput(new Date()));
+                }}
+                className="h-9 rounded-xl font-black"
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Reinitialiser
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-[1.2fr_0.8fr_0.6fr_0.6fr_0.7fr_0.45fr]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -610,6 +664,22 @@ export default function ConduitePage() {
               onChange={(event) => setTo(event.target.value)}
               className="h-11 rounded-2xl font-semibold"
             />
+
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => setPageSize(Number(value))}
+            >
+              <SelectTrigger className="h-11 rounded-2xl font-semibold">
+                <SelectValue placeholder="Lignes" />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {error ? (
@@ -625,7 +695,7 @@ export default function ConduitePage() {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden rounded-[2rem] border-border/60 shadow-sm">
+      <Card className="overflow-hidden rounded-[1.5rem] border-border/60 shadow-sm">
         <CardContent className="p-0">
           {loading ? (
             <div className="flex min-h-[360px] items-center justify-center gap-3 text-sm font-black uppercase tracking-[0.18em] text-muted-foreground">
@@ -676,7 +746,7 @@ export default function ConduitePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {states.map((state) => (
+                {paginatedStates.map((state) => (
                   <TableRow key={state.id} className="hover:bg-muted/30">
                     <TableCell>
                       <div className="space-y-2">
@@ -742,27 +812,26 @@ export default function ConduitePage() {
                           <History className="mr-1 h-3 w-3" />
                           Detail
                         </Button>
-                        {(["seen", "in_progress", "done"] as const).map(
-                          (nextStatus) => (
-                            <Button
-                              key={nextStatus}
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={
-                                state.status === nextStatus ||
-                                updatingId === `${state.signalId}:${nextStatus}`
-                              }
-                              onClick={() => void updateStatus(state, nextStatus)}
-                              className="rounded-xl text-[11px] font-black"
-                            >
-                              {updatingId === `${state.signalId}:${nextStatus}` ? (
-                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                              ) : null}
-                              {operationSignalStatusLabel(nextStatus)}
-                            </Button>
-                          )
-                        )}
+                        {nextSignalActions(state.status).map((nextStatus) => (
+                          <Button
+                            key={nextStatus}
+                            type="button"
+                            size="sm"
+                            variant={nextStatus === "done" ? "default" : "outline"}
+                            disabled={updatingId === `${state.signalId}:${nextStatus}`}
+                            onClick={() => void updateStatus(state, nextStatus)}
+                            className={cn(
+                              "rounded-xl text-[11px] font-black",
+                              nextStatus === "done" &&
+                                "bg-emerald-600 text-white hover:bg-emerald-700"
+                            )}
+                          >
+                            {updatingId === `${state.signalId}:${nextStatus}` ? (
+                              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                            ) : null}
+                            {operationSignalStatusLabel(nextStatus)}
+                          </Button>
+                        ))}
                         {state.href ? (
                           <Button
                             asChild
@@ -782,6 +851,43 @@ export default function ConduitePage() {
             </Table>
           )}
         </CardContent>
+        {!loading && states.length > 0 ? (
+          <div className="flex flex-col gap-3 border-t bg-slate-50/70 px-4 py-3 text-sm font-semibold text-muted-foreground dark:bg-slate-900/40 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Affichage {startIndex + 1}-
+              {Math.min(startIndex + pageSize, states.length)} sur {states.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                className="rounded-xl font-black"
+              >
+                <ChevronLeft className="mr-1 h-4 w-4" />
+                Prec.
+              </Button>
+              <Badge variant="outline" className="rounded-full px-3 py-1 font-black">
+                {page}/{totalPages}
+              </Badge>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() =>
+                  setPage((current) => Math.min(totalPages, current + 1))
+                }
+                className="rounded-xl font-black"
+              >
+                Suiv.
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </Card>
 
       <Dialog
@@ -1057,14 +1163,14 @@ function RegistryKpi({
   className: string;
 }) {
   return (
-    <Card className={cn("rounded-[1.75rem] shadow-sm", className)}>
-      <CardContent className="p-5">
+    <Card className={cn("rounded-[1.35rem] shadow-sm", className)}>
+      <CardContent className="p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
               {label}
             </p>
-            <p className="mt-2 text-4xl font-black tracking-tight">{value}</p>
+            <p className="mt-1 text-3xl font-black tracking-tight">{value}</p>
           </div>
           <div className="rounded-2xl bg-background/80 p-3">
             <Icon className="h-5 w-5 text-primary" />

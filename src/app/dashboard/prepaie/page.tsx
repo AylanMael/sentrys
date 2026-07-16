@@ -793,122 +793,196 @@ export default function PrepaiePage() {
   ];
 
   return (
-    <div className="space-y-5">
-      <div className="overflow-hidden rounded-[1.5rem] border border-slate-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-4 text-white shadow-xl">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">
-              Module gestion sociale
+    <div className="mx-auto max-w-[1500px] space-y-4 pb-8">
+      <section className="overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-gradient-to-br from-white via-emerald-50/70 to-sky-50/70 p-4 shadow-sm dark:border-white/10 dark:from-slate-950 dark:via-slate-950 dark:to-emerald-950/60">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_520px] xl:items-stretch">
+          <div className="flex min-h-[220px] flex-col justify-between rounded-[1.25rem] border border-white/80 bg-white/75 p-5 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="rounded-full border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-100"
+                >
+                  Module gestion sociale
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em]", preflightMeta.tone)}
+                >
+                  {preflightMeta.label}
+                </Badge>
+              </div>
+
+              <h1 className="mt-4 text-2xl font-black tracking-tight text-slate-950 md:text-3xl dark:text-white">
+                Pr&eacute;-paie claire, pr&ecirc;te &agrave; transmettre.
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
+                Une lecture simple des variables de paie : heures payables,
+                nuit, dimanche, jours f&eacute;ri&eacute;s, absences, anomalies
+                et fichiers &agrave; envoyer au cabinet.
+              </p>
             </div>
-            <h1 className="mt-2 text-2xl font-black tracking-tight lg:text-3xl">
-              Pre-paie exploitation
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200">
-              Transforme les vacations validees en variables de paie :
-              heures, nuit, dimanche, jours feries, absences et anomalies
-              avant export.
-            </p>
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white/85 p-3 dark:border-white/10 dark:bg-white/5">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                  P&eacute;riode
+                </p>
+                <p className="mt-1 whitespace-nowrap text-sm font-black text-slate-950 dark:text-white">
+                  {from.slice(8, 10)}/{from.slice(5, 7)} &rarr; {to.slice(8, 10)}/{to.slice(5, 7)}
+                </p>
+                <p className="mt-0.5 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                  {from.slice(0, 4)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white/85 p-3 dark:border-white/10 dark:bg-white/5">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                  Statut
+                </p>
+                <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">
+                  {currentPeriodMeta.label}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white/85 p-3 dark:border-white/10 dark:bg-white/5">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                  Volume
+                </p>
+                <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">
+                  {report?.summary.agentCount ?? "-"} agent(s)
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="grid gap-2 rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur md:grid-cols-2 xl:grid-cols-[130px_130px_auto_auto_auto_auto]">
-            <div>
-              <Label className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">
-                Du
-              </Label>
-              <Input
-                type="date"
-                value={from}
-                onChange={(event) => setFrom(event.target.value)}
-                className="mt-1 h-10 border-white/10 bg-white text-slate-950"
-              />
+          <div className="rounded-[1.25rem] border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-950/75">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                  P&eacute;riode &amp; exports
+                </p>
+                <p className="mt-1 text-sm font-bold text-slate-600 dark:text-slate-300">
+                  Calculez, contr&ocirc;lez, puis transmettez seulement quand
+                  la p&eacute;riode est propre.
+                </p>
+              </div>
+              <CalendarRange className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
             </div>
-            <div>
-              <Label className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">
-                Au
-              </Label>
-              <Input
-                type="date"
-                value={to}
-                onChange={(event) => setTo(event.target.value)}
-                className="mt-1 h-10 border-white/10 bg-white text-slate-950"
-              />
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Du
+                </Label>
+                <Input
+                  type="date"
+                  value={from}
+                  onChange={(event) => setFrom(event.target.value)}
+                  className="mt-1 h-11 rounded-xl border-slate-200 bg-white text-slate-950 dark:border-white/10 dark:bg-slate-950 dark:text-white"
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Au
+                </Label>
+                <Input
+                  type="date"
+                  value={to}
+                  onChange={(event) => setTo(event.target.value)}
+                  className="mt-1 h-11 rounded-xl border-slate-200 bg-white text-slate-950 dark:border-white/10 dark:bg-slate-950 dark:text-white"
+                />
+              </div>
             </div>
+
             <Button
               type="button"
               onClick={() => void loadReport()}
               disabled={loading}
-              className="h-10 self-end rounded-xl bg-emerald-400 px-4 font-black text-slate-950 hover:bg-emerald-300"
+              className="mt-4 h-11 w-full rounded-xl bg-emerald-600 font-black text-white shadow-sm shadow-emerald-600/20 hover:bg-emerald-700"
             >
               <RefreshCw
                 className={cn("mr-2 h-4 w-4", loading && "animate-spin")}
               />
-              Calculer
+              Calculer la p&eacute;riode
             </Button>
-            <Button
-              asChild
-              variant="outline"
-              className={cn(
-                "h-10 self-end rounded-xl border-white/20 bg-white/10 px-4 font-black text-white hover:bg-white/20",
-                (!csvHref || loading) && "pointer-events-none opacity-50"
-              )}
-            >
-              <a
-                href={csvHref ?? "#"}
-                download={report ? prepayCsvFilename(report) : undefined}
-                aria-disabled={!csvHref || loading}
-                onClick={(event) => {
-                  if (!csvHref || loading) event.preventDefault();
-                }}
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <Button
+                asChild
+                variant="outline"
+                className={cn(
+                  "h-10 rounded-xl border-slate-200 bg-white/80 px-3 font-black text-slate-700 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10",
+                  (!cabinetCsvHref || loading) && "pointer-events-none opacity-50"
+                )}
               >
-                <Download className="mr-2 h-4 w-4" />
-                CSV detail
-              </a>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className={cn(
-                "h-10 self-end rounded-xl border-white/20 bg-white/10 px-4 font-black text-white hover:bg-white/20",
-                (!cabinetCsvHref || loading) && "pointer-events-none opacity-50"
-              )}
-            >
-              <a
-                href={cabinetCsvHref ?? "#"}
-                download={report ? prepayCabinetCsvFilename(report) : undefined}
-                aria-disabled={!cabinetCsvHref || loading}
-                onClick={(event) => {
-                  if (!cabinetCsvHref || loading) event.preventDefault();
-                }}
+                <a
+                  href={cabinetCsvHref ?? "#"}
+                  download={report ? prepayCabinetCsvFilename(report) : undefined}
+                  aria-disabled={!cabinetCsvHref || loading}
+                  onClick={(event) => {
+                    if (!cabinetCsvHref || loading) event.preventDefault();
+                  }}
+                >
+                  <FileCheck2 className="mr-2 h-4 w-4" />
+                  Cabinet
+                </a>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className={cn(
+                  "h-10 rounded-xl border-slate-200 bg-white/80 px-3 font-black text-slate-700 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10",
+                  (!report || loading) && "pointer-events-none opacity-50"
+                )}
               >
-                <FileCheck2 className="mr-2 h-4 w-4" />
-                CSV cabinet
-              </a>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className={cn(
-                "h-10 self-end rounded-xl border-white/20 bg-white/10 px-4 font-black text-white hover:bg-white/20",
-                (!report || loading) && "pointer-events-none opacity-50"
-              )}
-            >
-              <a
-                href={prepaySummaryPrintUrl(report)}
-                target="_blank"
-                rel="noreferrer"
-                aria-disabled={!report || loading}
-                onClick={(event) => {
-                  if (!report || loading) event.preventDefault();
-                }}
+                <a
+                  href={prepaySummaryPrintUrl(report)}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-disabled={!report || loading}
+                  onClick={(event) => {
+                    if (!report || loading) event.preventDefault();
+                  }}
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  PDF
+                </a>
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
+                className={cn(
+                  "h-10 rounded-xl px-3 font-black text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10",
+                  (!csvHref || loading) && "pointer-events-none opacity-50"
+                )}
               >
-                <Printer className="mr-2 h-4 w-4" />
-                PDF synthese
-              </a>
-            </Button>
+                <a
+                  href={csvHref ?? "#"}
+                  download={report ? prepayCsvFilename(report) : undefined}
+                  aria-disabled={!csvHref || loading}
+                  onClick={(event) => {
+                    if (!csvHref || loading) event.preventDefault();
+                  }}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  D&eacute;tail
+                </a>
+              </Button>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                Prochaine action
+              </p>
+              <p className="mt-1 line-clamp-2 text-sm font-black text-slate-950 dark:text-white">
+                {priorityItem?.title ?? preflightMeta.title}
+              </p>
+              <p className="mt-1 line-clamp-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                {priorityAction}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-
+      </section>
       {error && (
         <EmptyState
           icon={AlertTriangle}
@@ -921,7 +995,7 @@ export default function PrepaiePage() {
       )}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className={cn("rounded-2xl border p-4", currentPeriodMeta.tone)}>
+        <div className={cn("rounded-[1.25rem] border p-4 shadow-sm", currentPeriodMeta.tone)}>
           <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
             Statut periode
           </p>
@@ -932,7 +1006,7 @@ export default function PrepaiePage() {
         </div>
         <div
           className={cn(
-            "rounded-2xl border p-4",
+            "rounded-[1.25rem] border p-4 shadow-sm",
             preflight.blockingCount > 0
               ? "border-red-500/25 bg-red-500/10 text-red-800 dark:text-red-100"
               : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-100"
@@ -946,7 +1020,7 @@ export default function PrepaiePage() {
             {preflight.warningCount} avertissement(s)
           </p>
         </div>
-        <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4 text-sky-800 dark:text-sky-100">
+        <div className="rounded-[1.25rem] border border-sky-200 bg-sky-50 p-4 text-sky-800 shadow-sm dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-100">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
             Volume traite
           </p>
@@ -959,7 +1033,7 @@ export default function PrepaiePage() {
         </div>
         <div
           className={cn(
-            "rounded-2xl border p-4",
+            "rounded-[1.25rem] border p-4 shadow-sm",
             preflight.verdict === "blocking"
               ? "border-red-500/25 bg-red-500/10 text-red-800 dark:text-red-100"
               : preflight.verdict === "warning"
@@ -994,7 +1068,7 @@ export default function PrepaiePage() {
                   "flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-black transition",
                   active
                     ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 shadow-sm dark:text-emerald-100"
-                    : "border-transparent bg-muted/35 text-muted-foreground hover:border-border hover:bg-background"
+                    : "border-transparent bg-transparent text-muted-foreground hover:border-border hover:bg-muted/50"
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -1009,7 +1083,7 @@ export default function PrepaiePage() {
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
-            <Card key={card.label} className={cn("border", card.tone)}>
+            <Card key={card.label} className={cn("rounded-[1.25rem] border shadow-sm", card.tone)}>
               <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-70">
@@ -1132,7 +1206,7 @@ export default function PrepaiePage() {
               </div>
               {report && (
                 <Badge variant="outline" className="w-fit rounded-full px-3 py-1 font-black">
-                  {report.summary.agentCount} agent(s) · {report.summary.vacationCount} vacation(s)
+                  {report.summary.agentCount} agent(s) &middot; {report.summary.vacationCount} vacation(s)
                 </Badge>
               )}
             </div>
@@ -1174,7 +1248,7 @@ export default function PrepaiePage() {
                             {row.agentName}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {row.vacationCount} vacation(s) · {row.siteNames.join(", ") || "Site non renseigne"}
+                            {row.vacationCount} vacation(s) &middot; {row.siteNames.join(", ") || "Site non renseigne"}
                           </p>
                         </div>
                       </TableCell>

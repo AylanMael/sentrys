@@ -12,11 +12,13 @@ import {
   BriefcaseBusiness,
   Mail,
   Phone,
+  ChevronLeft,
   ChevronRight,
   RefreshCw,
   AlertCircle,
   LayoutGrid,
   List,
+  XCircle,
 } from "lucide-react";
 
 import { useClients } from "@/hooks/use-clients";
@@ -46,7 +48,7 @@ import { cn } from "@/lib/utils";
 
 const GRID_BATCH_SIZE = 9;
 const CLIENTS_SERVER_PAGE_SIZE = 20;
-const LIST_PAGE_SIZE_OPTIONS = [12, 25, 50] as const;
+const LIST_PAGE_SIZE_OPTIONS = [12, 25, 50, 100] as const;
 
 type ViewMode = "grid" | "list";
 type ClientStatusFilter = "all" | "active" | "inactive";
@@ -73,6 +75,37 @@ function clientStatusBadge(status?: string) {
   );
 }
 
+function ClientMetric({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
+  return (
+    <Card
+      className={cn(
+        "rounded-[1.25rem] border shadow-sm",
+        tone === "neutral" && "bg-white dark:bg-slate-950",
+        tone === "success" && "border-emerald-500/20 bg-emerald-500/10",
+        tone === "warning" && "border-amber-500/25 bg-amber-500/10",
+        tone === "danger" && "border-red-500/25 bg-red-500/10"
+      )}
+    >
+      <CardContent className="p-4">
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-1 text-3xl font-black tracking-tight text-foreground">{value}</p>
+        <p className="mt-1 text-xs font-semibold text-muted-foreground">{detail}</p>
+      </CardContent>
+    </Card>
+  );
+}
 export default function ClientsPage() {
   const router = useRouter();
   const { loading: authLoading, user } = useAuth();
@@ -144,6 +177,13 @@ export default function ClientsPage() {
   const canLoadMoreGrid = visibleGridCount < items.length || Boolean(nextCursor);
   const listHasNextLocalPage = safeListPage < listTotalPages;
   const canGoNextList = listHasNextLocalPage || Boolean(nextCursor);
+  const activeClientsCount = items.filter((client: any) => client.status === "active").length;
+  const inactiveClientsCount = Math.max(0, items.length - activeClientsCount);
+  const missingContactCount = items.filter(
+    (client: any) => !client.email || !client.phone
+  ).length;
+  const missingSiretCount = items.filter((client: any) => !client.siret).length;
+  const hasFilters = Boolean(q.trim()) || status !== "all";
 
   async function handleGridLoadMore() {
     if (visibleGridCount < items.length) {
@@ -197,55 +237,62 @@ export default function ClientsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-10 w-full">
-      <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between bg-card p-6 md:p-8 rounded-[2rem] border shadow-sm ring-1 ring-black/5 bg-gradient-to-br from-card to-muted/20 relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-[1.75rem] border bg-white p-5 shadow-sm ring-1 ring-black/5 dark:bg-slate-950">
+        <div className="pointer-events-none absolute right-[-5rem] top-[-7rem] h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
 
-        <div className="relative z-10 flex items-center gap-5">
-          <div className="bg-primary shadow-xl shadow-primary/20 p-4 rounded-2xl">
-            <BriefcaseBusiness className="h-7 w-7 text-primary-foreground" />
-          </div>
-          <div>
-            <div className="flex items-center gap-3 mb-1">
+        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="rounded-2xl bg-primary/10 p-3 text-primary ring-1 ring-primary/15">
+              <BriefcaseBusiness className="h-6 w-6" />
+            </div>
+            <div>
               <Badge
                 variant="outline"
-                className="bg-background text-[10px] font-black uppercase tracking-widest py-1 px-3 rounded-full border-muted-foreground/30"
+                className="rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-primary"
               >
                 Donneurs d&apos;ordre
               </Badge>
+              <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground">
+                Clients
+              </h1>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                Retrouvez rapidement les clients, contacts, SIRET et sites rattaches.
+              </p>
             </div>
-            <h1 className="text-3xl font-black tracking-tighter text-foreground">
-              Clients
-            </h1>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-3 relative z-10">
-          <Button
-            variant="outline"
-            onClick={() => reload?.()}
-            disabled={loading}
-            className="h-12 rounded-xl px-5 font-bold border-muted-foreground/20 hover:bg-muted transition-all"
-          >
-            <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
-            Actualiser
-          </Button>
-
-          {canWrite && (
+          <div className="flex flex-wrap items-center gap-2">
             <Button
-              asChild
-              className="h-12 rounded-xl px-6 font-black shadow-lg shadow-primary/20 hover:translate-y-[-2px] active:scale-95 transition-all"
+              variant="outline"
+              onClick={() => reload?.()}
+              disabled={loading}
+              className="h-11 rounded-xl px-4 font-black"
             >
-              <Link href="/dashboard/clients/new">
-                <Plus className="h-5 w-5 mr-2" />
-                Nouveau client
-              </Link>
+              <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
+              Actualiser
             </Button>
-          )}
+
+            {canWrite && (
+              <Button asChild className="h-11 rounded-xl px-5 font-black shadow-sm">
+                <Link href="/dashboard/clients/new">
+                  <Plus className="mr-2 h-5 w-5" />
+                  Nouveau client
+                </Link>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
-      <Card className="rounded-[2.5rem] border-none shadow-2xl shadow-black/[0.03] overflow-hidden bg-background/50 backdrop-blur-xl ring-1 ring-black/5">
-        <div className="p-6 md:p-8 border-b bg-card/50 flex flex-col gap-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <ClientMetric label="Clients charges" value={items.length} detail={nextCursor ? "D autres resultats disponibles" : "Portefeuille courant"} />
+        <ClientMetric label="Actifs" value={activeClientsCount} detail={`${inactiveClientsCount} inactif(s)`} tone="success" />
+        <ClientMetric label="Contact incomplet" value={missingContactCount} detail="Email ou telephone absent" tone={missingContactCount > 0 ? "warning" : "success"} />
+        <ClientMetric label="SIRET manquant" value={missingSiretCount} detail="A completer pour facturation" tone={missingSiretCount > 0 ? "warning" : "success"} />
+      </div>
+
+      <Card className="overflow-hidden rounded-[1.5rem] border bg-background shadow-sm ring-1 ring-black/5">
+        <div className="flex flex-col gap-4 border-b bg-card/50 p-4">
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
             <div className="relative w-full md:max-w-md">
               <Search className="h-5 w-5 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -258,6 +305,22 @@ export default function ClientsPage() {
             </div>
 
             <div className="w-full md:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {hasFilters && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setQ("");
+                    setQDebounced("");
+                    setStatus("all");
+                  }}
+                  className="h-12 rounded-2xl font-black"
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Reinitialiser
+                </Button>
+              )}
+
               <Select
                 value={status}
                 onValueChange={(v) => setStatus(v as ClientStatusFilter)}
@@ -353,7 +416,7 @@ export default function ClientsPage() {
                   <Link
                     key={c.id}
                     href={`/dashboard/clients/${c.id}`}
-                    className="group rounded-[1.75rem] border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-xl"
+                    className="group rounded-[1.35rem] border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex min-w-0 items-center gap-4">
@@ -546,7 +609,8 @@ export default function ClientsPage() {
                       disabled={safeListPage <= 1 || loading}
                       className="h-10 rounded-xl px-4 font-bold"
                     >
-                      Precedent
+                      <ChevronLeft className="mr-2 h-4 w-4" />
+                      Prec.
                     </Button>
                     <Button
                       variant="outline"
@@ -554,7 +618,8 @@ export default function ClientsPage() {
                       disabled={!canGoNextList || loading}
                       className="h-10 rounded-xl px-4 font-bold"
                     >
-                      {nextCursor && !listHasNextLocalPage ? "Charger suite" : "Suivant"}
+                      {nextCursor && !listHasNextLocalPage ? "Charger suite" : "Suiv."}
+                      <ChevronRight className="ml-2 h-4 w-4" />
                     </Button>
                   </div>
                 </div>

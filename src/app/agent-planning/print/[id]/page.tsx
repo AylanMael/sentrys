@@ -57,7 +57,7 @@ type AgentDispatchRow = {
   agencyProfile?: AgencyDocumentProfile;
 };
 
-type AgentDispatchDetailResponse = {
+type AgentDispatchDétailResponse = {
   ok: boolean;
   dispatch: AgentDispatchRow;
 };
@@ -167,7 +167,7 @@ function getDispatchTarget(dispatch: AgentDispatchRow) {
 }
 
 function getDispatchStatusLabel(dispatch: AgentDispatchRow) {
-  if (dispatch.deliveryStatus === "blocked") return "Diffusion bloquee";
+  if (dispatch.deliveryStatus === "blocked") return "Diffusion bloquée";
 
   if (dispatch.channel === "portal") {
     return dispatch.acknowledgedAtIso
@@ -175,25 +175,25 @@ function getDispatchStatusLabel(dispatch: AgentDispatchRow) {
       : "Reception en attente agent";
   }
 
-  if (dispatch.channel === "email") return "Simulation email preparee";
-  if (dispatch.channel === "whatsapp") return "Simulation WhatsApp preparee";
+  if (dispatch.channel === "email") return "Simulation email préparée";
+  if (dispatch.channel === "whatsapp") return "Simulation WhatsApp préparée";
 
   return "Journalise en interne";
 }
 
 function getDispatchInstruction(dispatch: AgentDispatchRow) {
   if (dispatch.deliveryStatus === "blocked") {
-    return dispatch.deliveryNote || "Diffusion non realisee : coordonnees manquantes.";
+    return dispatch.deliveryNote || "Diffusion non realisee : coordonnées manquantes.";
   }
 
   if (dispatch.channel === "email" || dispatch.channel === "whatsapp") {
-    return dispatch.deliveryNote || "Simulation uniquement : aucun message reel n'a ete envoye.";
+    return dispatch.deliveryNote || "Simulation uniquement : aucun message réel n'a été envoyé.";
   }
 
   if (dispatch.channel === "portal") {
     return dispatch.acknowledgedAtIso
       ? "Planning confirme par l'agent."
-      : "Planning publie dans le portail agent, confirmation en attente.";
+      : "Planning publié dans le portail agent, confirmation en attente.";
   }
 
   return dispatch.deliveryNote || "Document journalise pour remise interne ou impression.";
@@ -654,7 +654,7 @@ export default function AgentPlanningPrintPage() {
             : current
         );
       } catch {
-        // La trace est utile mais ne doit jamais bloquer la lecture du PDF.
+        // La tracé est utile mais ne doit jamais bloquér la lecture du PDF.
       }
     },
     [dispatch?.id, firebaseUser]
@@ -704,7 +704,7 @@ export default function AgentPlanningPrintPage() {
       setError(null);
 
       try {
-        const response = await apiFetch<AgentDispatchDetailResponse>(
+        const response = await apiFetch<AgentDispatchDétailResponse>(
           `/api/agent-dispatches/${params.id}`
         );
         if (!mounted) return;
@@ -846,14 +846,14 @@ export default function AgentPlanningPrintPage() {
               ].join(" ")}
             >
               <p className="font-black uppercase tracking-[0.14em] opacity-70">
-                Controle terrain
+                Contrôle terrain
               </p>
               <p className="mt-1 font-bold">
                 {conflictDayCount > 0
-                  ? `${conflictDayCount} conflit(s) a verifier`
+                  ? `${conflictDayCount} conflit(s) à vérifier`
                   : hasWorkloadAlert
                     ? `${formatHourQuantity(dispatchTotalHours)} - volume eleve`
-                  : "Lisibilite prete"}
+                  : "Lisibilite prête"}
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
@@ -939,7 +939,7 @@ export default function AgentPlanningPrintPage() {
 
                     <div className="text-center">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-                        Planning mensuel detaille
+                        Planning mensuel détaillé
                       </p>
                       <h1 className="mt-1 text-2xl font-black capitalize leading-tight text-slate-950">
                         {month.label}
@@ -960,7 +960,7 @@ export default function AgentPlanningPrintPage() {
                         {dispatch.agentName}
                       </p>
                       <p className="mt-1 text-[10px] font-semibold leading-tight text-slate-600">
-                        {dispatch.agentEmail || "Email agent non renseigne"}
+                        {dispatch.agentEmail || "Email agent non renseigné"}
                       </p>
                       {dispatch.agentPhone && (
                         <p className="text-[10px] font-semibold leading-tight text-slate-600">
@@ -1210,7 +1210,7 @@ export default function AgentPlanningPrintPage() {
                     <div className="leading-tight">
                       <p>
                         {agencyProfile.footerNote ||
-                          "Document operationnel - seule la derniere version diffusee fait foi."}
+                          "Document opérationnel - seule la derniere version diffusée fait foi."}
                       </p>
                       <p className="mt-0.5 text-slate-600">{dispatchInstruction}</p>
                     </div>

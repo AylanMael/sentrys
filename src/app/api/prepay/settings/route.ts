@@ -78,7 +78,7 @@ export async function PATCH(req: NextRequest) {
     action: "prepay.settings_updated",
     entityType: "billing",
     entityId: auth.tenantId,
-    message: "Parametres pre-paie mis a jour",
+    message: "Paramètres pré-paie mis à jour",
     severity: "info",
     meta: {
       conventionLabel: settings.conventionLabel,

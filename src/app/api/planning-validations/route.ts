@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
     action: "planning.validation_recorded",
     entityType: "assignment",
     entityId: `${payload.fromIso}_${payload.toIso}`,
-    message: `Controle planning journalise (${verdict}, score ${score})`,
+    message: `Contrôle planning journalise (${verdict}, score ${score})`,
     severity: verdict === "blocking" ? "warning" : "info",
     meta: {
       action,

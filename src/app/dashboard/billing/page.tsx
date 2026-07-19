@@ -114,7 +114,7 @@ const ADDON_OFFERS = [
     id: "sites-pack",
     title: "+2 sites",
     price: "3 EUR / mois",
-    detail: "Ajouter quelques sites client sans changer immediatement de plan.",
+    detail: "Ajouter quelques sites client sans changer immédiatement de plan.",
   },
   {
     id: "support-pack",
@@ -131,7 +131,7 @@ const FEATURE_GATES: Array<{
   href?: string;
 }> = [
   {
-    label: "Exports pre-paie CSV / Excel",
+    label: "Exports pré-paie CSV / Excel",
     detail: "Fichiers exploitables par le cabinet de paie.",
     minPlan: "pro",
     href: "/dashboard/prepaie",
@@ -144,7 +144,7 @@ const FEATURE_GATES: Array<{
   },
   {
     label: "Multi-societes / filiales",
-    detail: "Separations operationnelles pour agences regionales.",
+    detail: "Séparations opérationnelles pour agences regionales.",
     minPlan: "growth",
     href: "/platform",
   },
@@ -318,7 +318,7 @@ export default function BillingPage() {
                     Limite atteinte sur : {limitsReached.join(", ")}. Vos collaborateurs ne pourront plus ajouter de nouvelles données.
                   </p>
                   <Button asChild size="sm" variant="destructive" className="mt-4 rounded-lg font-black uppercase text-[10px] tracking-widest h-8 px-4">
-                    <Link href="#plans">Débloquer</Link>
+                    <Link href="#plans">Débloquér</Link>
                   </Button>
                 </div>
               ) : (
@@ -406,7 +406,7 @@ export default function BillingPage() {
                     Historique des factures
                   </CardTitle>
                   <CardDescription className="font-medium">
-                    Pret pour Stripe Billing: recus, statuts et PDF centralises.
+                    Pret pour Stripe Billing: reçus, statuts et PDF centralises.
                   </CardDescription>
                 </div>
               </div>
@@ -428,7 +428,7 @@ export default function BillingPage() {
                 <div>
                   <p className="font-black text-foreground">Aucune facture synchronisee</p>
                   <p className="mt-1 text-xs font-medium text-muted-foreground">
-                    Les factures apparaitront ici apres connexion du compte Stripe.
+                    Les factures apparaîtront ici après connexion du compte Stripe.
                   </p>
                 </div>
                 <span className="font-bold text-muted-foreground">--</span>
@@ -455,7 +455,7 @@ export default function BillingPage() {
                   Fonctions selon forfait
                 </CardTitle>
                 <CardDescription className="font-medium">
-                  Ce que l'agence peut utiliser aujourd'hui, sans surprise.
+                  Ce que l'agence peut utilisér aujourd'hui, sans surprise.
                 </CardDescription>
               </div>
             </div>
@@ -503,7 +503,7 @@ export default function BillingPage() {
                     </Button>
                   ) : (
                     <Button asChild variant="outline" size="sm" className="rounded-xl font-bold shrink-0">
-                      <Link href="#plans">Debloquer</Link>
+                      <Link href="#plans">Debloquér</Link>
                     </Button>
                   )}
                 </div>
@@ -549,7 +549,7 @@ export default function BillingPage() {
                 variant="outline"
                 className="rounded-xl font-bold"
                 onClick={() =>
-                  alert("Les add-ons seront actives via Stripe Billing apres configuration du paiement.")
+                  alert("Les add-ons seront actives via Stripe Billing après configuration du paiement.")
                 }
               >
                 Preparer l'option

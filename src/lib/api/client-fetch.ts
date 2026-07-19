@@ -83,7 +83,7 @@ function isFriendlyBusinessMessage(message: string) {
   const lower = value.toLowerCase();
   if (
     lower.includes("quota atteint") ||
-    lower.includes("periode est verrouillee") ||
+    lower.includes("période est verrouillée") ||
     lower.includes("controle requis") ||
     lower.includes("impossible de") ||
     lower.includes("deja") ||
@@ -119,12 +119,12 @@ function messageForStatus(status: number | null, rawMessage: string) {
   }
 
   if (/from\/to are required/i.test(rawMessage)) {
-    return "La periode demandee est incomplete. Rafraichissez la page puis reessayez.";
+    return "La période demandee est incomplète. Rafraichissez la page puis reessayez.";
   }
 
   if (status === 400) {
     return isTechnicalMessage(rawMessage)
-      ? "La demande est incomplete ou invalide. Verifiez les champs puis reessayez."
+      ? "La demande est incomplète ou invalide. Vérifiez les champs puis reessayez."
       : rawMessage;
   }
 
@@ -133,7 +133,7 @@ function messageForStatus(status: number | null, rawMessage: string) {
   }
 
   if (status === 403) {
-    return "Action non autorisee avec votre role. Demandez l'acces a un administrateur.";
+    return "Action non autorisée avec votre role. Demandez l'accès a un administrateur.";
   }
 
   if (status === 404) {
@@ -141,11 +141,11 @@ function messageForStatus(status: number | null, rawMessage: string) {
   }
 
   if (status === 405) {
-    return "Cette action n'est pas disponible depuis cet ecran. Rafraichissez puis reessayez.";
+    return "Cette action n'est pas disponible depuis cet écran. Rafraichissez puis reessayez.";
   }
 
   if (status === 409) {
-    return "Conflit detecte. Verifiez les donnees puis relancez l'action.";
+    return "Conflit détecté. Vérifiez les données puis relancéez l'action.";
   }
 
   if (status === 413) {
@@ -157,7 +157,7 @@ function messageForStatus(status: number | null, rawMessage: string) {
   }
 
   if (status && status >= 500) {
-    return "Le service a rencontre une erreur. Vos donnees ne sont pas perdues, reessayez dans quelques instants.";
+    return "Le service a rencontre une erreur. Vos données ne sont pas perdues, reessayez dans quelques instants.";
   }
 
   if (!rawMessage || isTechnicalMessage(rawMessage)) {

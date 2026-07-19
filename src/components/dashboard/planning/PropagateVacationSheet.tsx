@@ -111,13 +111,13 @@ export const PropagateVacationSheet: React.FC = () => {
 
           {frequency === "weekdays" ? (
             <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-4 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-100">
-              Cette option cree automatiquement la meme vacation sur tous les jours
+              Cette option créé automatiquement la meme vacation sur tous les jours
               ouvres de la semaine source, du lundi au vendredi, en sautant le
               week-end et le jour deja existant.
             </div>
           ) : (
             <div className="space-y-2">
-              <Label>Nombre d&apos;occurrences a creer</Label>
+              <Label>Nombre d&apos;occurrences a créer</Label>
               <Input
                 type="number"
                 min="1"
@@ -178,8 +178,8 @@ export const PropagateVacationSheet: React.FC = () => {
                   Ignorer les doublons
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Evite de recreer une vacation identique si elle existe deja sur
-                  la periode cible.
+                  Evite de recréer une vacation identique si elle existe deja sur
+                  la période cible.
                 </p>
               </div>
             </div>

@@ -158,14 +158,14 @@ function incidentTitle(incident: CommandIncident) {
   return incident.type || "Signal terrain";
 }
 
-function incidentDetail(incident: CommandIncident) {
-  return incident.description || "Aucun detail renseigne.";
+function incidentDétail(incident: CommandIncident) {
+  return incident.description || "Aucun detail renseigné.";
 }
 
 function formatIncidentTime(iso: string | null | undefined) {
-  if (!iso) return "Heure non renseignee";
+  if (!iso) return "Heure non renseignée";
   const date = new Date(iso);
-  if (!Number.isFinite(date.getTime())) return "Heure non renseignee";
+  if (!Number.isFinite(date.getTime())) return "Heure non renseignée";
 
   return new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
@@ -249,7 +249,7 @@ function getSituation(data: CommandResponse | null): {
     return {
       tone: "alert",
       title: "Priorite terrain",
-      detail: `${highIncidents} incident(s) critique(s) a traiter en premier.`,
+      detail: `${highIncidents} incident(s) critique(s) à traiter en premier.`,
       action: "Ouvrir les incidents",
     };
   }
@@ -266,7 +266,7 @@ function getSituation(data: CommandResponse | null): {
   return {
     tone: "clear",
     title: "Situation calme",
-    detail: "Aucune alerte critique remontee sur le perimetre charge.",
+    detail: "Aucune alerte critique remontee sur le périmètre charge.",
     action: "Voir la conduite",
   };
 }
@@ -328,7 +328,7 @@ export default function CommandPage() {
       const matchesStatus = matchesIncidentStatus(incident.status, statusFilter);
       const searchable = [
         incidentTitle(incident),
-        incidentDetail(incident),
+        incidentDétail(incident),
         incident.status,
         incident.priority,
       ]
@@ -433,7 +433,7 @@ export default function CommandPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-75">
-                  Etat operationnel
+                  État opérationnel
                 </p>
                 <p className="mt-2 text-xl font-black">{situation.title}</p>
                 <p className="mt-1 text-sm font-semibold opacity-85">
@@ -540,7 +540,7 @@ export default function CommandPage() {
               className="h-10 rounded-xl font-black"
             >
               <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
-              Rafraichir
+              Rafraîchir
             </Button>
             <Button asChild variant="outline" className="h-10 rounded-xl font-black">
               <Link href="/dashboard/conduite">Conduite</Link>
@@ -574,7 +574,7 @@ export default function CommandPage() {
         <CommandKpi
           label="Sites suivis"
           value={data?.stats.totalSites ?? 0}
-          detail="Perimetre operationnel charge"
+          detail="Périmètre opérationnel charge"
           icon={ShieldCheck}
           tone="success"
         />
@@ -590,8 +590,8 @@ export default function CommandPage() {
           value={data?.stats.recentIncidentsCount ?? 0}
           detail={
             highIncidentCount > 0
-              ? `${highIncidentCount} critique(s) a traiter`
-              : "Aucun critique detecte"
+              ? `${highIncidentCount} critique(s) à traiter`
+              : "Aucun critique détecté"
           }
           icon={Siren}
           tone={highIncidentCount > 0 ? "danger" : "warning"}
@@ -781,7 +781,7 @@ export default function CommandPage() {
                             {incidentTitle(incident)}
                           </p>
                           <p className="mt-1 line-clamp-2 text-sm font-medium leading-6 text-muted-foreground">
-                            {incidentDetail(incident)}
+                            {incidentDétail(incident)}
                           </p>
                         </div>
                         <Button
@@ -850,14 +850,14 @@ export default function CommandPage() {
                 <div>
                   <p className="font-black text-foreground">Utilite du module</p>
                   <p className="mt-1 text-sm font-medium leading-6 text-muted-foreground">
-                    Le Command Center sert a detecter vite. Si une action est
-                    prise, elle doit ensuite etre tracee dans la conduite.
+                    Le Command Center sert a détectér vite. Si une action est
+                    prise, elle doit ensuite être tracée dans la conduite.
                   </p>
                 </div>
               </div>
               <Button asChild variant="outline" className="w-full rounded-xl font-black">
                 <Link href="/dashboard/conduite">
-                  Tracer une decision <ArrowRight className="ml-2 h-4 w-4" />
+                  Tracer une décision <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
             </CardContent>

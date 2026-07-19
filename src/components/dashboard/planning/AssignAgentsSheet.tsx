@@ -182,7 +182,7 @@ export const AssignAgentsSheet: React.FC = () => {
           if (Number.isFinite(activeStartMs) && endMs <= activeStartMs) {
             const restHours = (activeStartMs - endMs) / (1000 * 60 * 60);
             if (restHours < MIN_REST_HOURS) {
-              restWarnings.push(`Repos ${formatHours(restHours)} apres ${vacation.siteName || "mission precedente"}`);
+              restWarnings.push(`Repos ${formatHours(restHours)} après ${vacation.siteName || "mission précédente"}`);
             }
           }
 
@@ -507,7 +507,7 @@ export const AssignAgentsSheet: React.FC = () => {
                                 )}
                                 {compliance.status === "warning" && (
                                   <Badge className="border-none bg-amber-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-amber-600">
-                                    A controler
+                                    A contrôler
                                   </Badge>
                                 )}
                                 {compliance.status === "ok" && (
@@ -646,7 +646,7 @@ export const AssignAgentsSheet: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <ShieldAlert className="h-4 w-4 shrink-0" />
                   <span className="text-[10px] font-black uppercase tracking-tight">
-                    Conformite bloquante
+                    Conformité bloquante
                   </span>
                 </div>
                 <div className="space-y-1 pl-6 text-[10px]">
@@ -686,7 +686,7 @@ export const AssignAgentsSheet: React.FC = () => {
                     </div>
                   ))}
                   <p className="mt-1 font-bold italic opacity-100">
-                    Non bloquant, mais a arbitrer avant de confirmer.
+                    Non bloquant, mais à arbitrer avant de confirmer.
                   </p>
                 </div>
               </div>

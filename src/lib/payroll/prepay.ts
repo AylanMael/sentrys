@@ -298,7 +298,7 @@ export function computePrepayReport(input: {
   const weeklyHours = new Map<string, Map<string, number>>();
   const workedDays = new Map<string, Set<string>>();
   const warnings: string[] = [
-    "Pre-paie indicative : les taux, primes et majorations doivent etre valides par le gestionnaire paie.",
+    "Pré-paie indicative : les taux, primes et majorations doivent être validés par le gestionnaire paie.",
     `Les heures de nuit sont classees sur la plage ${settings.nightStartTime}-${settings.nightEndTime}.`,
   ];
 
@@ -350,7 +350,7 @@ export function computePrepayReport(input: {
 
     if (absence) {
       row.absenceHours += breakdown.totalHours;
-      row.anomalies.push("Absence/conge detecte : verifier le type avant export paie.");
+      row.anomalies.push("Absence/conge détecté : vérifier le type avant export paie.");
     } else {
       row.payableHours += breakdown.totalHours;
       row.workedVacationCount += 1;
@@ -366,11 +366,11 @@ export function computePrepayReport(input: {
 
     if (!vacation.isPublished) {
       draftVacationCount += 1;
-      row.anomalies.push("Vacation non publiee ou modifiee depuis publication.");
+      row.anomalies.push("Vacation non publiée ou modifiée depuis publication.");
     }
 
     if (breakdown.totalHours > 12.01) {
-      row.anomalies.push("Vacation superieure a 12h : a verifier avant pre-paie.");
+      row.anomalies.push("Vacation superieure a 12h : à vérifier avant pré-paie.");
     }
 
     if (vacation.siteName) {
@@ -458,7 +458,7 @@ export function computePrepayReport(input: {
       const previous = intervals[index - 1];
       const current = intervals[index];
       if (current.start.getTime() < previous.end.getTime()) {
-        row.anomalies.push("Chevauchement detecte entre deux vacations.");
+        row.anomalies.push("Chevauchement détecté entre deux vacations.");
         break;
       }
 

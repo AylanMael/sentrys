@@ -15,7 +15,7 @@ export type Plan = {
 
 export type Subscription = {
   planId: string;
-  status: "trialing" | "active" | "past_due" | "canceled" | "incomplete" | "incomplete_expired";
+  status: "trialing" | "active" | "past_due" | "canceled" | "incomplète" | "incomplète_expired";
   addons?: {
     extraAgents?: number;
     extraSites?: number;

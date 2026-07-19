@@ -141,7 +141,7 @@ export function nextPrepayPeriodStatus(
   | { ok: false; error: string } {
   if (action === "reopen") {
     if (current === "draft") {
-      return { ok: false, error: "La periode est deja en brouillon." };
+      return { ok: false, error: "La période est deja en brouillon." };
     }
     return { ok: true, status: "draft" };
   }
@@ -149,7 +149,7 @@ export function nextPrepayPeriodStatus(
   if (current === "exported") {
     return {
       ok: false,
-      error: "La periode est exportee. Rouvrez-la avant modification.",
+      error: "La période est exportée. Rouvrez-la avant modification.",
     };
   }
 
@@ -157,7 +157,7 @@ export function nextPrepayPeriodStatus(
     if (current === "locked") {
       return {
         ok: false,
-        error: "La periode est verrouillee. Rouvrez-la avant controle.",
+        error: "La période est verrouillée. Rouvrez-la avant controle.",
       };
     }
     return { ok: true, status: "checked" };
@@ -167,7 +167,7 @@ export function nextPrepayPeriodStatus(
     if (current !== "checked" && current !== "validated") {
       return {
         ok: false,
-        error: "Controle requis avant validation de la pre-paie.",
+        error: "Contrôle requis avant validation de la pré-paie.",
       };
     }
     return { ok: true, status: "validated" };
@@ -177,7 +177,7 @@ export function nextPrepayPeriodStatus(
     if (current !== "validated" && current !== "locked") {
       return {
         ok: false,
-        error: "Validation requise avant verrouillage de la pre-paie.",
+        error: "Validation requise avant verrouillage de la pré-paie.",
       };
     }
     return { ok: true, status: "locked" };

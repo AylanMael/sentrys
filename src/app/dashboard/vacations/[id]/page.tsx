@@ -128,7 +128,7 @@ function localInputToIso(value: string) {
 
 /* ================= component ================= */
 
-export default function VacationDetailPage() {
+export default function VacationDétailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const router = useRouter();
@@ -330,7 +330,7 @@ export default function VacationDetailPage() {
 
     if (new Date(endIso).getTime() <= new Date(startIso).getTime()) {
       toast({
-        title: "Dates invalides",
+        title: "Dates invalidés",
         description: "La fin doit être après le début.",
         variant: "destructive",
       });
@@ -503,7 +503,7 @@ export default function VacationDetailPage() {
               <span>
                 {startD && endD
                   ? `${format(startD, "dd MMM", { locale: fr })} de ${format(startD, "HH:mm")} à ${format(endD, "HH:mm")}`
-                  : "Dates invalides"}
+                  : "Dates invalidés"}
               </span>
             </div>
           </div>

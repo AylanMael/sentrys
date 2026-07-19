@@ -23,7 +23,7 @@ export function agencyEmailIdentity(
 }
 
 export function previewPeriodLabel(fromIso?: string | null, toIso?: string | null) {
-  if (!fromIso || !toIso) return "periode a definir";
+  if (!fromIso || !toIso) return "période a definir";
 
   const formatter = new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",

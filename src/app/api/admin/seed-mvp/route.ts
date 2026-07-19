@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
       professionalCardNumber: "CAR-075-2026-003",
       professionalCardExpiresAt: "2026-06-30",
       qualifications: ["ADS"],
-      notes: "Email manquant volontairement pour tester la diffusion bloquee.",
+      notes: "Email manquant volontairement pour tester la diffusion bloquée.",
     },
     {
       id: docId(auth.tenantId, "agent_nadia"),
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
       professionalCardNumber: "CAR-075-2026-005",
       professionalCardExpiresAt: "2025-12-31",
       qualifications: ["ADS"],
-      notes: "Carte expiree volontairement pour tester la conformite.",
+      notes: "Carte expirée volontairement pour tester la conformité.",
     },
   ];
 
@@ -236,7 +236,7 @@ export async function POST(req: NextRequest) {
       siteType: "retail",
       riskLevel: 3,
       agentIds: [agents[0].id, agents[2].id, agents[3].id],
-      instructions: "Accueil client, controle d'acces, rondes surface de vente.",
+      instructions: "Accueil client, controle d'accès, rondes surface de vente.",
     },
     {
       id: docId(auth.tenantId, "site_halles"),
@@ -262,7 +262,7 @@ export async function POST(req: NextRequest) {
       siteType: "tertiaire",
       riskLevel: 5,
       agentIds: [agents[1].id, agents[2].id, agents[3].id],
-      instructions: "Controle badges, registre visiteurs, ronde technique nuit.",
+      instructions: "Contrôle badges, registre visiteurs, ronde technique nuit.",
     },
     {
       id: docId(auth.tenantId, "site_chantier"),
@@ -275,7 +275,7 @@ export async function POST(req: NextRequest) {
       siteType: "chantier",
       riskLevel: 4,
       agentIds: [agents[0].id, agents[2].id],
-      instructions: "Controle engins, rondes perimetre, fermeture portail.",
+      instructions: "Contrôle engins, rondes périmètre, fermeture portail.",
     },
   ];
 
@@ -284,7 +284,7 @@ export async function POST(req: NextRequest) {
       id: docId(auth.tenantId, "vac_boutique_lun"),
       siteId: sites[0].id,
       siteName: sites[0].name,
-      title: "Accueil securite boutique",
+      title: "Accueil sécurité boutique",
       missionType: "surveillance",
       requiredQualification: "ADS",
       notes: "Vacation type jour 08h-18h.",
@@ -297,10 +297,10 @@ export async function POST(req: NextRequest) {
       id: docId(auth.tenantId, "vac_boutique_mar"),
       siteId: sites[0].id,
       siteName: sites[0].name,
-      title: "Accueil securite boutique",
+      title: "Accueil sécurité boutique",
       missionType: "surveillance",
       requiredQualification: "ADS",
-      notes: "Vacation recurrente, test duplication semaine.",
+      notes: "Vacation reçurrente, test duplication semaine.",
       startAt: atDay(weekStart, 1, 8),
       endAt: atDay(weekStart, 1, 18),
       assignedAgentIds: [agents[0].id],
@@ -323,7 +323,7 @@ export async function POST(req: NextRequest) {
       id: docId(auth.tenantId, "vac_halles_ssiap"),
       siteId: sites[1].id,
       siteName: sites[1].name,
-      title: "PC securite SSIAP",
+      title: "PC sécurité SSIAP",
       missionType: "ssiap",
       requiredQualification: "SSIAP 1",
       notes: "Qualification SSIAP obligatoire.",
@@ -339,7 +339,7 @@ export async function POST(req: NextRequest) {
       title: "Renfort samedi centre commercial",
       missionType: "surveillance",
       requiredQualification: "ADS",
-      notes: "Vacation week-end pour lisibilite PDF et prepaie.",
+      notes: "Vacation week-end pour lisibilité PDF et prepaie.",
       startAt: atDay(weekStart, 5, 9),
       endAt: atDay(weekStart, 5, 19),
       assignedAgentIds: [agents[3].id],
@@ -385,13 +385,13 @@ export async function POST(req: NextRequest) {
       isPublished: true,
     },
     {
-      id: docId(auth.tenantId, "vac_halles_carte_expiree"),
+      id: docId(auth.tenantId, "vac_halles_carte_expirée"),
       siteId: sites[1].id,
       siteName: sites[1].name,
-      title: "Cas conformite bloquante",
+      title: "Cas conformité bloquante",
       missionType: "surveillance",
       requiredQualification: "ADS",
-      notes: "Agent avec carte expiree pour tester le registre conformite.",
+      notes: "Agent avec carte expirée pour tester le registre conformité.",
       startAt: atDay(weekStart, 4, 14),
       endAt: atDay(weekStart, 4, 18),
       assignedAgentIds: [agents[4].id],
@@ -632,7 +632,7 @@ export async function POST(req: NextRequest) {
         startTime: "08:00",
         endTime: "18:00",
         missionType: "surveillance",
-        title: "Accueil securite boutique",
+        title: "Accueil sécurité boutique",
         requiredQualification: "ADS",
         assignedAgentId: agents[0].id,
         notes: "Standard boutique semaine sans week-end.",
@@ -672,7 +672,7 @@ export async function POST(req: NextRequest) {
         deliveryMode: "portal",
         deliveryStatus: "portal_published",
         deliveryTarget: agent.email ?? agent.phone,
-        deliveryNote: "Planning publie dans le portail agent - donnees de recette.",
+        deliveryNote: "Planning publié dans le portail agent - données de recette.",
         sentAt: now,
         sentAtIso: nowIso,
         sentBy: auth.uid,
@@ -689,7 +689,7 @@ export async function POST(req: NextRequest) {
         agencyProfile: null,
         complianceOverride: false,
         complianceOverrideReason: null,
-        complianceOverrideDetail: null,
+        complianceOverrideDétail: null,
         demoMvp: true,
         createdAt: now,
       },
@@ -718,7 +718,7 @@ export async function POST(req: NextRequest) {
       vacationCount: clientRetailVacations.length,
       readyVacationCount: clientRetailVacations.filter((vacation) => vacation.isPublished).length,
       draftCount: clientRetailVacations.filter((vacation) => !vacation.isPublished).length,
-      modifiedCount: 0,
+      modifiédCount: 0,
       missingAgentCount: clientRetailVacations.filter(
         (vacation) => vacation.assignedAgentIds.length === 0
       ).length,
@@ -729,7 +729,7 @@ export async function POST(req: NextRequest) {
       deliveryMode: "simulation",
       deliveryStatus: "simulated",
       deliveryTarget: "client.retail.demo@sentrys.local",
-      deliveryNote: "Preparation email client simulee - PDF pret pour recette.",
+      deliveryNote: "Preparation email client simulée - PDF prêt pour recette.",
       pdfUrl: `/site-planning/print?from=${encodeURIComponent(
         from.toISOString()
       )}&to=${encodeURIComponent(to.toISOString())}&clientId=${encodeURIComponent(
@@ -757,10 +757,10 @@ export async function POST(req: NextRequest) {
       status: "in_progress" as OperationSignalStatus,
       titleSnapshot: "Relance agent pour confirmation de prise de service",
       detailSnapshot:
-        "Cas de recette : relance telephone effectuee, attente retour agent.",
+        "Cas de recette : relancée telephone effectuee, attente retour agent.",
       href: "/dashboard/planning",
       kind: "manual",
-      note: "Relance a recontroler dans 30 minutes.",
+      note: "Relance a recontrôler dans 30 minutes.",
     },
     {
       signalId: "mvp-poste-non-affecte-boutique",
@@ -775,12 +775,12 @@ export async function POST(req: NextRequest) {
     {
       signalId: "mvp-diffusion-agent-en-attente",
       status: "seen" as OperationSignalStatus,
-      titleSnapshot: "Planning agent publie sans accuse reception",
+      titleSnapshot: "Planning agent publié sans accusé réception",
       detailSnapshot:
         "Un planning est disponible dans le portail agent, confirmation en attente.",
       href: "/dashboard/agent-planning",
       kind: "dispatch",
-      note: "A relancer si non confirme avant fin de journee.",
+      note: "A relancéer si non confirme avant fin de journee.",
     },
   ];
 
@@ -823,7 +823,7 @@ export async function POST(req: NextRequest) {
     action: "admin.seed_mvp",
     entityType: "system",
     entityId: "mvp-exploitation",
-    message: "Jeu de donnees MVP Exploitation installe",
+    message: "Jeu de données MVP Exploitation installe",
     severity: "info",
     meta: {
       clients: clients.length,

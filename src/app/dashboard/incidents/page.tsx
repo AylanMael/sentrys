@@ -252,7 +252,7 @@ function quickStatusSuccessTitle(status: IncidentStatus) {
   if (status === "investigating") return "Incident pris en charge";
   if (status === "resolved") return "Incident marque resolu";
   if (status === "closed") return "Incident clos";
-  return "Incident mis a jour";
+  return "Incident mis à jour";
 }
 
 function IncidentsSkeleton() {
@@ -323,22 +323,22 @@ export default function IncidentsPage() {
     if (stats.critical > 0) {
       return {
         title: "Priorite critique",
-        detail: `${stats.critical} incident(s) critique(s) a traiter avant toute autre action.`,
+        detail: `${stats.critical} incident(s) critique(s) à traiter avant toute autre action.`,
         tone: "danger" as const,
       };
     }
 
     if (stats.active > 0) {
       return {
-        title: "Suivi operationnel",
-        detail: `${stats.active} incident(s) ouvert(s) ou en cours attendent une decision.`,
+        title: "Suivi opérationnel",
+        detail: `${stats.active} incident(s) ouvert(s) ou en cours attendent une décision.`,
         tone: "warning" as const,
       };
     }
 
     return {
-      title: "Situation maitrisee",
-      detail: "Aucun incident actif dans le perimetre charge.",
+      title: "Situation maîtrisée",
+      detail: "Aucun incident actif dans le périmètre charge.",
       tone: "success" as const,
     };
   }, [stats.active, stats.critical]);
@@ -421,7 +421,7 @@ export default function IncidentsPage() {
         if (!options.quiet) {
           feedback.info(
             "Incidents synchronises",
-            `${nextIncidents.length} incident(s), ${nextSites.length} site(s) operationnel(s).`
+            `${nextIncidents.length} incident(s), ${nextSites.length} site(s) opérationnel(s).`
           );
         }
       } catch (err) {
@@ -459,7 +459,7 @@ export default function IncidentsPage() {
       },
       () => {
         setCapturingLocation(false);
-        feedback.warning("Position non ajoutee", "Vous pouvez declarer l'incident sans coordonnees GPS.");
+        feedback.warning("Position non ajoutee", "Vous pouvez declarer l'incident sans coordonnées GPS.");
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -489,12 +489,12 @@ export default function IncidentsPage() {
 
       feedback.success(
         quickStatusSuccessTitle(status),
-        `${site?.name ?? "Site"} : la main courante est mise a jour et tracee.`
+        `${site?.name ?? "Site"} : la main courante est mise à jour et tracée.`
       );
     } catch (err) {
       feedback.error(err, {
         title: "Traitement impossible",
-        fallback: "Le statut de l'incident n'a pas pu etre mis a jour.",
+        fallback: "Le statut de l'incident n'a pas pu être mis à jour.",
       });
     } finally {
       setUpdatingIncidentId(null);
@@ -505,7 +505,7 @@ export default function IncidentsPage() {
     event.preventDefault();
 
     if (!newSiteId || !description.trim()) {
-      feedback.warning("Declaration incomplete", "Choisissez un site et decrivez les faits.");
+      feedback.warning("Declaration incomplète", "Choisissez un site et decrivez les faits.");
       return;
     }
 
@@ -528,7 +528,7 @@ export default function IncidentsPage() {
 
       feedback.success(
         "Incident enregistre",
-        `${selectedSite?.name ?? "Site"} passe dans la conduite operationnelle.`
+        `${selectedSite?.name ?? "Site"} passe dans la conduite opérationnelle.`
       );
       setDialogOpen(false);
       resetCreateForm();
@@ -536,7 +536,7 @@ export default function IncidentsPage() {
     } catch (err) {
       feedback.error(err, {
         title: "Declaration impossible",
-        fallback: "Verifiez le site, la description et vos droits.",
+        fallback: "Vérifiez le site, la description et vos droits.",
       });
     } finally {
       setSaving(false);
@@ -611,14 +611,14 @@ export default function IncidentsPage() {
                   </DialogTitle>
                   <DialogDescription className="font-medium">
                     Une declaration courte, propre et exploitable vaut mieux qu'un long
-                    rapport flou. Le detail pourra etre enrichi ensuite.
+                    rapport flou. Le detail pourra être enrichi ensuite.
                   </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleCreate} className="space-y-6 p-8">
                   <div className="grid gap-5 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Site concerne</Label>
+                      <Label>Site concerné</Label>
                       <Select value={newSiteId} onValueChange={setNewSiteId}>
                         <SelectTrigger className="h-12 rounded-xl">
                           <SelectValue placeholder="Choisir un site" />
@@ -640,7 +640,7 @@ export default function IncidentsPage() {
                         onValueChange={(value) => setNewSeverity(value as IncidentSeverity)}
                       >
                         <SelectTrigger className="h-12 rounded-xl">
-                          <SelectValue placeholder="Choisir la gravite" />
+                          <SelectValue placeholder="Choisir la gravité" />
                         </SelectTrigger>
                         <SelectContent>
                           {SEVERITY_OPTIONS.map((option) => (
@@ -654,7 +654,7 @@ export default function IncidentsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Faits constates</Label>
+                    <Label>Faits constatés</Label>
                     <Textarea
                       value={description}
                       onChange={(event) => setDescription(event.target.value)}
@@ -836,7 +836,7 @@ export default function IncidentsPage() {
             <Input
               value={queryText}
               onChange={(event) => setQueryText(event.target.value)}
-              placeholder="Rechercher site, statut, gravite..."
+              placeholder="Rechercher site, statut, gravité..."
               className="h-12 rounded-xl pl-11 font-bold"
             />
           </div>
@@ -847,8 +847,8 @@ export default function IncidentsPage() {
             <EmptyState
               icon={MapPin}
               tone="warning"
-              title="Aucun site operationnel charge"
-              description="Un incident doit etre rattache a un site pour rester exploitable."
+              title="Aucun site opérationnel charge"
+              description="Un incident doit être rattaché a un site pour rester exploitable."
               action={
                 <Button asChild className="rounded-xl font-black">
                   <Link href="/dashboard/sites">Ouvrir les sites</Link>
@@ -883,7 +883,7 @@ export default function IncidentsPage() {
                   <TableHead className="min-w-[360px]">Incident</TableHead>
                   <TableHead>Gravite</TableHead>
                   <TableHead>Statut</TableHead>
-                  <TableHead className="min-w-[180px]">Mise a jour</TableHead>
+                  <TableHead className="min-w-[180px]">Mise à jour</TableHead>
                   <TableHead className="min-w-[280px] pr-6 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -904,7 +904,7 @@ export default function IncidentsPage() {
                           <div>
                             <p className="font-black">{siteLabel}</p>
                             <p className="text-xs font-medium text-muted-foreground">
-                              {site?.city || site?.address || "Localisation non renseignee"}
+                              {site?.city || site?.address || "Localisation non renseignée"}
                             </p>
                           </div>
                         </div>
@@ -915,7 +915,7 @@ export default function IncidentsPage() {
                             {incident.title || "Incident terrain"}
                           </p>
                           <p className="mt-1 line-clamp-2 text-sm font-medium leading-relaxed text-muted-foreground">
-                            {incident.description || "Aucun detail renseigne."}
+                            {incident.description || "Aucun detail renseigné."}
                           </p>
                         </div>
                       </TableCell>

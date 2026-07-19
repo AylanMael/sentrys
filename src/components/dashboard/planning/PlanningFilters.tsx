@@ -22,7 +22,7 @@ const publicationFilters: Array<{ value: PublicationFilter; label: string }> = [
   { value: "all", label: "Tous" },
   { value: "draft", label: "Brouillons" },
   { value: "published", label: "Publies" },
-  { value: "modified", label: "A republier" },
+  { value: "modifiéd", label: "A republiér" },
 ];
 
 export const PlanningFilters: React.FC = () => {

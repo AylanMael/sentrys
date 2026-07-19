@@ -126,7 +126,7 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.res;
 
   if (!canManageUsers(auth.role)) {
-    return forbidden("Action non autorisee avec votre role.");
+    return forbidden("Action non autorisée avec votre role.");
   }
 
   const statusFilter =
@@ -244,7 +244,7 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.res;
 
   if (!canManageUsers(auth.role)) {
-    return forbidden("Action non autorisee avec votre role.");
+    return forbidden("Action non autorisée avec votre role.");
   }
 
   let body: InviteBody;
@@ -263,7 +263,7 @@ export async function POST(req: NextRequest) {
 
   const allowedRoles = editableRolesFor(auth.role);
   if (!allowedRoles.includes(role)) {
-    return forbidden("Votre role ne permet pas d'attribuer ce niveau d'acces.");
+    return forbidden("Votre role ne permet pas d'attribuer ce niveau d'accès.");
   }
 
   let createdAuthUser = false;
@@ -306,7 +306,7 @@ export async function POST(req: NextRequest) {
 
         if (existing && String(existing.tenantId ?? "") !== auth.tenantId) {
           throw Object.assign(
-            new Error("Cet email est deja rattache a une autre agence."),
+            new Error("Cet email est deja rattaché à une autre agence."),
             { code: "TENANT_MISMATCH" }
           );
         }
@@ -318,7 +318,7 @@ export async function POST(req: NextRequest) {
           auth.role !== "owner"
         ) {
           throw Object.assign(
-            new Error("Seul le proprietaire peut reinviter ou modifier un administrateur."),
+            new Error("Seul le propriétaire peut reinviter ou modifier un administrateur."),
             { code: "PROTECTED_ADMIN" }
           );
         }
@@ -415,8 +415,8 @@ export async function POST(req: NextRequest) {
       resetLink,
       resetLinkError,
       message: resetLink
-        ? "Invitation preparee. Envoyez le lien d'activation a l'utilisateur."
-        : "Invitation preparee. Lien d'activation indisponible pour le moment.",
+        ? "Invitation préparée. Envoyez le lien d'activation à l'utilisateur."
+        : "Invitation préparée. Lien d'activation indisponible pour le moment.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -444,7 +444,7 @@ export async function PATCH(req: NextRequest) {
   if (!auth.ok) return auth.res;
 
   if (!canManageUsers(auth.role)) {
-    return forbidden("Action non autorisee avec votre role.");
+    return forbidden("Action non autorisée avec votre role.");
   }
 
   let body: UpdateBody;
@@ -463,7 +463,7 @@ export async function PATCH(req: NextRequest) {
 
   if (!uid) return bad("uid requis.");
   if (uid === auth.uid) {
-    return bad("Vous ne pouvez pas modifier votre propre acces depuis cet ecran.");
+    return bad("Vous ne pouvez pas modifier votre propre accès depuis cet écran.");
   }
 
   if (!role && !status) return bad("role ou statut requis.");
@@ -472,7 +472,7 @@ export async function PATCH(req: NextRequest) {
 
   const allowedRoles = editableRolesFor(auth.role);
   if (role && !allowedRoles.includes(role)) {
-    return forbidden("Votre role ne permet pas d'attribuer ce niveau d'acces.");
+    return forbidden("Votre role ne permet pas d'attribuer ce niveau d'accès.");
   }
 
   const targetRef = adminDb.collection("tenantUsers").doc(uid);
@@ -501,7 +501,7 @@ export async function PATCH(req: NextRequest) {
         auth.role !== "super_admin" &&
         auth.role !== "owner"
       ) {
-        throw Object.assign(new Error("Seul le proprietaire peut modifier un administrateur."), {
+        throw Object.assign(new Error("Seul le propriétaire peut modifier un administrateur."), {
           code: "PROTECTED_ADMIN",
         });
       }

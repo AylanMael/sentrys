@@ -32,7 +32,7 @@ type AgencyProfileResponse = {
 
 const STATUS_LABELS: Record<PrepayPeriodStatus, string> = {
   draft: "Brouillon",
-  checked: "Controle",
+  checked: "Contrôle",
   validated: "Valide",
   locked: "Verrouille",
   exported: "Exporte",
@@ -148,7 +148,7 @@ function PrepaySummaryContent() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    document.title = `Synthese pre-paie - ${formatRange(fromIso, toIso)}`;
+    document.title = `Synthese pré-paie - ${formatRange(fromIso, toIso)}`;
   }, [fromIso, toIso]);
 
   React.useEffect(() => {
@@ -190,7 +190,7 @@ function PrepaySummaryContent() {
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Impossible de charger la synthese pre-paie."
+            : "Impossible de charger la synthese pré-paie."
         );
       } finally {
         if (mounted) setLoading(false);
@@ -246,7 +246,7 @@ function PrepaySummaryContent() {
             </Link>
           </Button>
           <div className="text-center">
-            <p className="text-sm font-black">Synthese pre-paie</p>
+            <p className="text-sm font-black">Synthese pré-paie</p>
             <p className="text-xs text-slate-500">
               Bordereau PDF de controle et transmission cabinet.
             </p>
@@ -267,7 +267,7 @@ function PrepaySummaryContent() {
           {loading ? (
             <div className="flex min-h-[520px] items-center justify-center gap-3 text-slate-500">
               <Loader2 className="h-5 w-5 animate-spin" />
-              Chargement de la synthese pre-paie...
+              Chargement de la synthese pré-paie...
             </div>
           ) : error || !report ? (
             <div className="min-h-[520px] p-10">
@@ -309,7 +309,7 @@ function PrepaySummaryContent() {
                     Bordereau de transmission
                   </p>
                   <h1 className="mt-2 text-3xl font-black tracking-tight">
-                    Synthese pre-paie
+                    Synthese pré-paie
                   </h1>
                   <p className="mt-2 text-sm text-slate-300">
                     Variables issues du planning, a valider selon contrat,
@@ -379,7 +379,7 @@ function PrepaySummaryContent() {
                             <p className="text-[10px] text-slate-500">
                               Matricule {row.payrollId} - {row.vacationCount}{" "}
                               vacation(s) -{" "}
-                              {row.siteNames.join(", ") || "Site non renseigne"}
+                              {row.siteNames.join(", ") || "Site non renseigné"}
                             </p>
                           </td>
                           <td className="border-t border-slate-200 px-3 py-2 text-right font-black">
@@ -403,7 +403,7 @@ function PrepaySummaryContent() {
                           <td className="border-t border-slate-200 px-3 py-2">
                             {row.anomalies.length > 0 ? (
                               <span className="rounded-full bg-amber-100 px-2 py-1 font-black text-amber-800">
-                                A verifier
+                                A vérifier
                               </span>
                             ) : (
                               <span className="rounded-full bg-emerald-100 px-2 py-1 font-black text-emerald-800">
@@ -424,14 +424,14 @@ function PrepaySummaryContent() {
                       <p className="font-black">Reserve paie</p>
                     </div>
                     <p className="mt-2 text-xs leading-5">
-                      Ce document prepare les variables. La paie finale depend
+                      Ce document prépare les variables. La paie finale dépend
                       des contrats, absences qualifiees, accords collectifs et
-                      controles du gestionnaire paie.
+                      contrôles du gestionnaire paie.
                     </p>
                   </div>
 
                   <div className="rounded-3xl border border-slate-200 p-4">
-                    <p className="text-sm font-black">Points a regulariser</p>
+                    <p className="text-sm font-black">Points à régulariser</p>
                     <div className="mt-3 space-y-2 text-xs">
                       {report.summary.unassignedVacationCount > 0 && (
                         <p className="rounded-2xl bg-red-50 p-2 text-red-800">
@@ -442,14 +442,14 @@ function PrepaySummaryContent() {
                       {report.summary.draftVacationCount > 0 && (
                         <p className="rounded-2xl bg-amber-50 p-2 text-amber-800">
                           {report.summary.draftVacationCount} vacation(s) non
-                          publiee(s).
+                          publiée(s).
                         </p>
                       )}
                       {criticalRows.length === 0 &&
                       report.summary.unassignedVacationCount === 0 &&
                       report.summary.draftVacationCount === 0 ? (
                         <p className="rounded-2xl bg-emerald-50 p-2 text-emerald-800">
-                          Aucun point bloquant detecte.
+                          Aucun point bloquant détecté.
                         </p>
                       ) : (
                         criticalRows.map((row) => (
@@ -469,10 +469,10 @@ function PrepaySummaryContent() {
 
                   <div className="rounded-3xl border border-slate-200 p-4 text-xs text-slate-600">
                     <p className="font-black text-slate-950">
-                      Export cabinet associe
+                      Export cabinet associé
                     </p>
                     <p className="mt-2 leading-5">
-                      Le CSV cabinet utilise les codes rubriques parametres :
+                      Le CSV cabinet utilisé les codes rubriques paramètres :
                       {` ${Object.values(
                         report.settings.payrollRubricCodes
                       ).join(", ")}.`}
@@ -484,7 +484,7 @@ function PrepaySummaryContent() {
 
               <footer className="border-t border-slate-200 px-6 py-4 text-[10px] text-slate-500">
                 {agencyProfile.footerNote ||
-                  "Document genere par SENTRYS - controle exploitation avant paie definitive."}
+                  "Document généré par SENTRYS - controle exploitation avant paie définitive."}
               </footer>
             </>
           )}

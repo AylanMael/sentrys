@@ -1,4 +1,4 @@
-// src/lib/auth/roles.ts
+// src/lib/auth/rôles.ts
 
 export const APP_ROLES = [
   "super_admin",

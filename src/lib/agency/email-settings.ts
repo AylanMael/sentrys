@@ -1,7 +1,7 @@
 export const EMAIL_PROVIDERS = ["simulation", "brevo"] as const;
 export const EMAIL_SENDING_MODES = ["simulation", "live"] as const;
 export const EMAIL_SENDER_STRATEGIES = ["sentrys_shared", "agency_domain"] as const;
-export const EMAIL_DOMAIN_STATUSES = ["not_configured", "pending", "verified"] as const;
+export const EMAIL_DOMAIN_STATUSES = ["not_configured", "pending", "vérifiéd"] as const;
 
 export type EmailProvider = (typeof EMAIL_PROVIDERS)[number];
 export type EmailSendingMode = (typeof EMAIL_SENDING_MODES)[number];
@@ -73,7 +73,7 @@ export function normalizeAgencyEmailSettings(
     DEFAULT_AGENCY_EMAIL_SETTINGS.sendingMode
   );
   const sendingMode =
-    provider === "brevo" && domainStatus === "verified" ? requestedMode : "simulation";
+    provider === "brevo" && domainStatus === "vérifiéd" ? requestedMode : "simulation";
 
   return {
     provider,
@@ -109,7 +109,7 @@ export function emailProviderLabel(provider: EmailProvider) {
 }
 
 export function emailSendingModeLabel(mode: EmailSendingMode) {
-  if (mode === "live") return "Envoi reel";
+  if (mode === "live") return "Envoi réel";
   return "Simulation securisee";
 }
 
@@ -119,7 +119,7 @@ export function emailSenderStrategyLabel(strategy: EmailSenderStrategy) {
 }
 
 export function emailDomainStatusLabel(status: EmailDomainStatus) {
-  if (status === "verified") return "Domaine verifie";
+  if (status === "vérifiéd") return "Domaine vérifié";
   if (status === "pending") return "Validation en attente";
   return "Domaine non configure";
 }

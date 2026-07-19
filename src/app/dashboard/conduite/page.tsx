@@ -134,7 +134,7 @@ function actorLabel(state: OperationSignalState) {
     state.updatedByName ||
     state.updatedByEmail ||
     state.updatedByRole ||
-    "Non renseigne"
+    "Non renseigné"
   );
 }
 
@@ -143,7 +143,7 @@ function eventActorLabel(event: OperationSignalState["events"][number]) {
     event.actorName ||
     event.actorEmail ||
     event.actorRole ||
-    "Non renseigne"
+    "Non renseigné"
   );
 }
 
@@ -153,7 +153,7 @@ function kindLabel(kind: string | null) {
   if (kind === "start") return "Prise de service";
   if (kind === "incident") return "Incident";
   if (kind === "dispatch") return "Diffusion";
-  if (kind === "compliance") return "Conformite";
+  if (kind === "compliance") return "Conformité";
   if (kind === "publication") return "Publication";
   return "Signal";
 }
@@ -198,11 +198,11 @@ function eventSummary(state: OperationSignalState) {
 
 function buildRegistryCsv(states: OperationSignalState[]) {
   const header = [
-    "Mise a jour",
+    "Mise à jour",
     "Type",
     "Statut",
     "Signal",
-    "Detail",
+    "Détail",
     "Responsable",
     "Role",
     "Derniere observation",
@@ -255,7 +255,7 @@ export default function ConduitePage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualTitle, setManualTitle] = useState("");
-  const [manualDetail, setManualDetail] = useState("");
+  const [manualDétail, setManualDétail] = useState("");
   const [manualStatus, setManualStatus] =
     useState<OperationSignalStatus>("seen");
   const [manualSaving, setManualSaving] = useState(false);
@@ -347,17 +347,17 @@ export default function ConduitePage() {
       });
       await load(true, true);
       feedback.success(
-        "Statut mis a jour",
+        "Statut mis à jour",
         `Le signal est maintenant "${operationSignalStatusLabel(nextStatus)}".`
       );
     } catch (err) {
       const message = getApiErrorMessage(
         err,
-        "Impossible de mettre a jour le statut."
+        "Impossible de mettre à jour le statut."
       );
       setError(message);
       feedback.error(err, {
-        title: "Statut non modifie",
+        title: "Statut non modifié",
         fallback: message,
       });
     } finally {
@@ -382,27 +382,27 @@ export default function ConduitePage() {
         method: "POST",
         body: {
           title: manualTitle,
-          detail: manualDetail,
+          detail: manualDétail,
           status: manualStatus,
         },
       });
       setManualTitle("");
-      setManualDetail("");
+      setManualDétail("");
       setManualStatus("seen");
       setManualOpen(false);
       await load(true, true);
       feedback.success(
-        "Note de conduite creee",
-        "L'information est tracee dans le registre exploitation."
+        "Note de conduite créée",
+        "L'information est tracée dans le registre exploitation."
       );
     } catch (err) {
       const message = getApiErrorMessage(
         err,
-        "Impossible de creer l'entree de main courante."
+        "Impossible de créer l'entree de main courante."
       );
       setError(message);
       feedback.error(err, {
-        title: "Note non creee",
+        title: "Note non créée",
         fallback: message,
       });
     } finally {
@@ -432,7 +432,7 @@ export default function ConduitePage() {
       await load(true, true);
       feedback.success(
         "Observation ajoutee",
-        "La timeline de traitement est completee."
+        "La timeline de traitement est complétée."
       );
     } catch (err) {
       const message = getApiErrorMessage(
@@ -469,7 +469,7 @@ export default function ConduitePage() {
     anchor.remove();
     URL.revokeObjectURL(url);
     feedback.success(
-      "Export prepare",
+      "Export préparé",
       `${states.length} signal(s) exporte(s) pour Excel.`
     );
   }
@@ -500,11 +500,11 @@ export default function ConduitePage() {
               Main courante exploitation
             </Badge>
             <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">
-              Conduite operationnelle
+              Conduite opérationnelle
             </h1>
             <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
               Le journal de bord du responsable exploitation : chaque signal vu,
-              pris en charge ou traite reste trace, avec responsable, heure et observation.
+              pris en charge ou traite reste tracé, avec responsable, heure et observation.
             </p>
           </div>
 
@@ -526,7 +526,7 @@ export default function ConduitePage() {
               <RefreshCw
                 className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")}
               />
-              Rafraichir
+              Rafraîchir
             </Button>
             <Button
               type="button"
@@ -591,7 +591,7 @@ export default function ConduitePage() {
             <div>
               <p className="text-sm font-black text-foreground">Filtres du registre</p>
               <p className="text-xs font-semibold text-muted-foreground">
-                Affinez la main courante sans perdre le contexte de la journee.
+                Affinez la main courante sans perdre le contexte de là journee.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -738,7 +738,7 @@ export default function ConduitePage() {
                     Responsable
                   </TableHead>
                   <TableHead className="font-black uppercase tracking-[0.12em]">
-                    Mise a jour
+                    Mise à jour
                   </TableHead>
                   <TableHead className="text-right font-black uppercase tracking-[0.12em]">
                     Action
@@ -783,7 +783,7 @@ export default function ConduitePage() {
                       <div>
                         <p className="text-sm font-black">{actorLabel(state)}</p>
                         <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                          {state.updatedByRole || "role non renseigne"}
+                          {state.updatedByRole || "role non renseigné"}
                         </p>
                       </div>
                     </TableCell>
@@ -810,7 +810,7 @@ export default function ConduitePage() {
                           className="rounded-xl bg-white text-[11px] font-black"
                         >
                           <History className="mr-1 h-3 w-3" />
-                          Detail
+                          Détail
                         </Button>
                         {nextSignalActions(state.status).map((nextStatus) => (
                           <Button
@@ -947,7 +947,7 @@ export default function ConduitePage() {
                     </div>
                     <div>
                       <p className="font-black text-muted-foreground">
-                        Derniere mise a jour
+                        Derniere mise à jour
                       </p>
                       <p className="font-semibold">
                         {formatMoment(selectedState.updatedAtIso)}
@@ -974,7 +974,7 @@ export default function ConduitePage() {
                   <div className="mt-4 max-h-72 space-y-3 overflow-y-auto pr-1">
                     {selectedState.events.length === 0 ? (
                       <p className="rounded-2xl bg-muted/40 p-4 text-sm font-semibold text-muted-foreground">
-                        Aucun evenement trace pour cette entree.
+                        Aucun evenement tracé pour cette entree.
                       </p>
                     ) : (
                       selectedState.events.map((event, index) => (
@@ -1021,7 +1021,7 @@ export default function ConduitePage() {
                 <Textarea
                   value={observation}
                   onChange={(event) => setObservation(event.target.value)}
-                  placeholder="Ex : appel effectue, consigne donnee, controle realise, relance a prevoir..."
+                  placeholder="Ex : appel effectue, consigne donnée, controle realise, relancée a prevoir..."
                   className="mt-2 min-h-24 rounded-2xl bg-white font-semibold"
                   maxLength={600}
                 />
@@ -1067,7 +1067,7 @@ export default function ConduitePage() {
             </DialogTitle>
             <DialogDescription className="font-semibold leading-6">
               Ajoutez une information terrain utile a la main courante :
-              relance agent, appel client, consigne donnee, controle effectue.
+              relancée agent, appel client, consigne donnée, controle effectue.
             </DialogDescription>
           </DialogHeader>
 
@@ -1079,7 +1079,7 @@ export default function ConduitePage() {
               <Input
                 value={manualTitle}
                 onChange={(event) => setManualTitle(event.target.value)}
-                placeholder="Ex : Agent relance pour prise de poste"
+                placeholder="Ex : Agent relancée pour prise de poste"
                 className="h-11 rounded-2xl font-semibold"
                 maxLength={200}
               />
@@ -1087,12 +1087,12 @@ export default function ConduitePage() {
 
             <div className="space-y-2">
               <label className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">
-                Detail operationnel
+                Détail opérationnel
               </label>
               <Textarea
-                value={manualDetail}
-                onChange={(event) => setManualDetail(event.target.value)}
-                placeholder="Qui ? quoi ? quand ? decision prise ? prochaine action ?"
+                value={manualDétail}
+                onChange={(event) => setManualDétail(event.target.value)}
+                placeholder="Qui ? quoi ? quand ? décision prise ? prochaine action ?"
                 className="min-h-32 rounded-2xl font-semibold"
                 maxLength={800}
               />
@@ -1134,7 +1134,7 @@ export default function ConduitePage() {
               disabled={
                 manualSaving ||
                 !manualTitle.trim() ||
-                !manualDetail.trim()
+                !manualDétail.trim()
               }
               onClick={() => void createManualEntry()}
               className="rounded-2xl bg-slate-950 font-black text-white hover:bg-slate-800"

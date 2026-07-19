@@ -109,20 +109,20 @@ export default function NewAgentPage() {
 
       if (res.ok) {
         feedback.success(
-          "Agent cree",
-          "Le profil est pret. Vous pouvez maintenant completer son dossier."
+          "Agent créé",
+          "Le profil est prêt. Vous pouvez maintenant compléter son dossier."
         );
         router.push(`/dashboard/agents/${res.agent.id}`);
         return;
       }
 
-      feedback.error(res.error ?? "Creation impossible.", {
-        title: "Creation impossible",
+      feedback.error(res.error ?? "Création impossible.", {
+        title: "Création impossible",
       });
     } catch (error) {
       feedback.error(error, {
-        title: "Creation impossible",
-        fallback: "Impossible de creer l'agent pour le moment.",
+        title: "Création impossible",
+        fallback: "Impossible de créer l'agent pour le moment.",
       });
     } finally {
       setSaving(false);
@@ -359,7 +359,7 @@ export default function NewAgentPage() {
                 Adresse
               </Label>
               <Input
-                placeholder="Numero et rue"
+                placeholder="Numéro et rue"
                 value={addressLine1}
                 onChange={(e) => setAddressLine1(e.target.value)}
                 readOnly={!canWrite}
@@ -426,7 +426,7 @@ export default function NewAgentPage() {
                   Carte professionnelle
                 </Label>
                 <Input
-                  placeholder="Numero de carte pro"
+                  placeholder="Numéro de carte pro"
                   value={professionalCardNumber}
                   onChange={(e) => setProfessionalCardNumber(e.target.value)}
                   readOnly={!canWrite}

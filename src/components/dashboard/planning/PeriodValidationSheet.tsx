@@ -144,7 +144,7 @@ function validationActionLabel(action: ValidationLogAction) {
   if (action === "forced_publish") return "Publication forcee";
   if (action === "agent_dispatch_open") return "Diffusion agents";
   if (action === "site_dispatch_open") return "Remise client";
-  return "Controle";
+  return "Contrôle";
 }
 
 function getMissingAgents(vacation: VacationApiItem) {
@@ -577,10 +577,10 @@ export const PeriodValidationSheet: React.FC = () => {
 
   const readinessDescription =
     validationStatus === "ok"
-      ? "Le planning est lisible, couvert et exploitable. On peut publier puis diffuser."
+      ? "Le planning est lisible, couvert et exploitable. On peut publiér puis diffuser."
       : validationStatus === "warning"
-        ? "Le planning peut avancer, mais les points de vigilance doivent etre connus avant envoi."
-        : "Le planning contient au moins un risque operationnel qui doit etre traite ou force avec justification.";
+        ? "Le planning peut avancer, mais les points de vigilance doivent être connus avant envoi."
+        : "Le planning contient au moins un risque opérationnel qui doit être traite ou force avec justification.";
 
   const validationRiskSummary = React.useMemo(
     () =>
@@ -599,7 +599,7 @@ export const PeriodValidationSheet: React.FC = () => {
         },
         {
           title: "Dossiers agents bloquants",
-          description: "Un agent planifie presente un point conformite bloquant.",
+          description: "Un agent planifie presente un point conformité bloquant.",
           count: complianceBlockingAgents.length,
           tone: "blocking" as const,
         },
@@ -629,7 +629,7 @@ export const PeriodValidationSheet: React.FC = () => {
         },
         {
           title: "Sites sans couverture",
-          description: "Des sites du perimetre n'ont aucune vacation.",
+          description: "Des sites du périmètre n'ont aucune vacation.",
           count: sitesWithoutCoverage.length,
           tone: "warning" as const,
         },
@@ -651,8 +651,8 @@ export const PeriodValidationSheet: React.FC = () => {
       title: "Vacations couvertes",
       description:
         ops.total > 0
-          ? `${coverage}% de couverture sur le perimetre visible.`
-          : "Aucune vacation active sur cette periode.",
+          ? `${coverage}% de couverture sur le périmètre visible.`
+          : "Aucune vacation active sur cette période.",
       count: ops.full,
       tone: ops.total > 0 && ops.missingAgents === 0 ? "ok" : "blocking",
       icon: UserRoundCheck,
@@ -662,7 +662,7 @@ export const PeriodValidationSheet: React.FC = () => {
       description:
         ops.missingAgents > 0
           ? "Des agents manquent encore avant publication."
-          : "Aucun poste manquant detecte.",
+          : "Aucun poste manquant détecté.",
       count: ops.missingAgents,
       tone: ops.missingAgents > 0 ? "blocking" : "ok",
       icon: AlertTriangle,
@@ -672,7 +672,7 @@ export const PeriodValidationSheet: React.FC = () => {
       description:
         criticalConflictCount > 0
           ? "Au moins un agent est en chevauchement."
-          : "Aucun chevauchement critique dans la periode visible.",
+          : "Aucun chevauchement critique dans la période visible.",
       count: criticalConflictCount,
       tone: criticalConflictCount > 0 ? "blocking" : "ok",
       icon: ShieldAlert,
@@ -683,8 +683,8 @@ export const PeriodValidationSheet: React.FC = () => {
         complianceBlockingAgents.length > 0
           ? "Au moins un agent a un point bloquant avant diffusion."
           : complianceWarningAgents.length > 0
-            ? "Des dossiers agents restent a completer."
-            : "Aucun blocage conformite detecte.",
+            ? "Des dossiers agents restent a compléter."
+            : "Aucun blocage conformité détecté.",
       count: complianceBlockingAgents.length + complianceWarningAgents.length,
       tone:
         complianceBlockingAgents.length > 0
@@ -708,7 +708,7 @@ export const PeriodValidationSheet: React.FC = () => {
       title: "Repos insuffisants",
       description:
         restViolationCount > 0
-          ? "Controlez les 11h, le repos hebdomadaire 35h et les 6 jours consecutifs."
+          ? "Contrôlez les 11h, le repos hebdomadaire 35h et les 6 jours consecutifs."
           : "Repos minimum respecte sur les vacations visibles.",
       count: restViolationCount,
       tone: restViolationCount > 0 ? "warning" : "ok",
@@ -729,7 +729,7 @@ export const PeriodValidationSheet: React.FC = () => {
       description:
         overtimeAgents.length > 0
           ? "Des agents depassent leur volume contractuel."
-          : "Aucun depassement agent detecte.",
+          : "Aucun depassement agent détecté.",
       count: overtimeAgents.length,
       tone: overtimeAgents.length > 0 ? "warning" : "ok",
       icon: CalendarCheck2,
@@ -738,8 +738,8 @@ export const PeriodValidationSheet: React.FC = () => {
       title: "Sites sans couverture",
       description:
         sitesWithoutCoverage.length > 0
-          ? "Certains sites du perimetre n'ont aucune vacation."
-          : "Tous les sites du perimetre ont au moins une vacation.",
+          ? "Certains sites du périmètre n'ont aucune vacation."
+          : "Tous les sites du périmètre ont au moins une vacation.",
       count: sitesWithoutCoverage.length,
       tone: sitesWithoutCoverage.length > 0 ? "warning" : "ok",
       icon: ClipboardCheck,
@@ -875,9 +875,9 @@ export const PeriodValidationSheet: React.FC = () => {
 
     if (ops.total === 0) {
       actions.push({
-        title: "Construire la periode",
+        title: "Construire la période",
         description:
-          "Aucune vacation active n'est visible. Il faut creer ou pre-remplir le planning avant validation.",
+          "Aucune vacation active n'est visible. Il faut créer ou pre-remplir le planning avant validation.",
         tone: "blocking",
         actionLabel: "Retour planning",
         onAction: () => setValidationOpen(false),
@@ -906,8 +906,8 @@ export const PeriodValidationSheet: React.FC = () => {
 
     if (complianceBlockingAgents.length > 0) {
       actions.push({
-        title: "Regulariser les dossiers bloquants",
-        description: `${complianceBlockingAgents.length} agent(s) ont un point conformite bloquant sur la periode.`,
+        title: "Régulariser les dossiers bloquants",
+        description: `${complianceBlockingAgents.length} agent(s) ont un point conformité bloquant sur la période.`,
         tone: "blocking",
         actionLabel: "Voir agents",
         onAction: focusConflicts,
@@ -926,8 +926,8 @@ export const PeriodValidationSheet: React.FC = () => {
 
     if (restViolationCount > 0) {
       actions.push({
-        title: "Verifier les temps de repos",
-        description: `${restViolationCount} vacation(s) exposent un repos quotidien, hebdomadaire ou une serie de jours a verifier.`,
+        title: "Vérifier les temps de repos",
+        description: `${restViolationCount} vacation(s) exposent un repos quotidien, hebdomadaire ou une serie de jours à vérifier.`,
         tone: "warning",
         actionLabel: "Voir alertes",
         onAction: focusConflicts,
@@ -936,7 +936,7 @@ export const PeriodValidationSheet: React.FC = () => {
 
     if (sstCoverageWarningCount > 0) {
       actions.push({
-        title: "Verifier la presence SST",
+        title: "Vérifier la presence SST",
         description: `${sstCoverageWarningCount} vacation(s) collective(s) sans agent SST identifie.`,
         tone: "warning",
         actionLabel: "Voir planning",
@@ -946,8 +946,8 @@ export const PeriodValidationSheet: React.FC = () => {
 
     if (overtimeAgents.length > 0) {
       actions.push({
-        title: "Controler les volumes horaires",
-        description: `${overtimeAgents.length} agent(s) depassent leur volume contractuel sur la periode.`,
+        title: "Contrôler les volumes horaires",
+        description: `${overtimeAgents.length} agent(s) depassent leur volume contractuel sur la période.`,
         tone: "warning",
         actionLabel: "Voir details",
         onAction: focusCorrections,
@@ -956,7 +956,7 @@ export const PeriodValidationSheet: React.FC = () => {
 
     if (actions.length === 0) {
       actions.push({
-        title: "Planning pret pour le terrain",
+        title: "Planning prêt pour le terrain",
         description:
           "Tous les voyants principaux sont au vert. La prochaine action logique est la publication puis la diffusion.",
         tone: "ok",
@@ -1040,7 +1040,7 @@ export const PeriodValidationSheet: React.FC = () => {
 
               <div className="rounded-[1.5rem] border border-border/50 bg-background/85 p-4 text-center shadow-sm">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
-                  Score sante
+                  Score santé
                 </p>
                 <p className="mt-1 text-5xl font-black text-foreground">
                   {readinessScore}
@@ -1066,7 +1066,7 @@ export const PeriodValidationSheet: React.FC = () => {
                 { label: "Vacations", value: activeVacations.length },
                 { label: "Agents", value: activeAssignedAgentIds.size },
                 { label: "Sites", value: activeSiteIds.size },
-                { label: "A publier", value: draftCount },
+                { label: "A publiér", value: draftCount },
               ].map((metric) => (
                 <div
                   key={metric.label}
@@ -1188,7 +1188,7 @@ export const PeriodValidationSheet: React.FC = () => {
             sitesWithoutCoverage.length > 0) && (
             <div className="rounded-2xl border border-border/50 bg-muted/20 p-4">
               <p className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">
-                Details a surveiller
+                Détails a surveiller
               </p>
 
               {complianceEntries.length > 0 && (
@@ -1266,9 +1266,9 @@ export const PeriodValidationSheet: React.FC = () => {
             </p>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
               {validationStatus === "ok"
-                ? "La periode est propre. Tu peux publier et informer les agents."
+                ? "La période est propre. Tu peux publiér et informer les agents."
                 : validationStatus === "warning"
-                  ? "La periode est publiable, mais les alertes doivent etre connues avant envoi."
+                  ? "La période est publiable, mais les alertes doivent être connues avant envoi."
               : "Je recommande de corriger les postes manquants et conflits avant publication."}
             </p>
           </div>
@@ -1308,7 +1308,7 @@ export const PeriodValidationSheet: React.FC = () => {
                 </div>
               ) : validationHistory.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border/70 bg-muted/10 p-3 text-sm text-muted-foreground">
-                  Aucun controle journalise sur cette periode pour l&apos;instant.
+                  Aucun controle journalise sur cette période pour l&apos;instant.
                 </div>
               ) : (
                 validationHistory.slice(0, 5).map((entry) => (
@@ -1393,12 +1393,12 @@ export const PeriodValidationSheet: React.FC = () => {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-black text-foreground">
-                      Previsualisation de publication
+                      Prévisualisation de publication
                     </p>
                     <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                       Dernier controle avant envoi : seules les vacations non
-                      publiees ou modifiees depuis publication seront marquees
-                      comme publiees.
+                      publiées ou modifiées depuis publication seront marquées
+                      comme publiées.
                     </p>
                   </div>
                 </div>
@@ -1453,7 +1453,7 @@ export const PeriodValidationSheet: React.FC = () => {
               <div className="mt-4 max-h-72 overflow-y-auto rounded-2xl border border-border/60 bg-background">
                 {vacationsToPublish.length === 0 ? (
                   <div className="p-4 text-sm text-muted-foreground">
-                    Aucune vacation non publiee dans cette periode.
+                    Aucune vacation non publiée dans cette période.
                   </div>
                 ) : (
                   <div className="divide-y divide-border/60">
@@ -1482,7 +1482,7 @@ export const PeriodValidationSheet: React.FC = () => {
                                 vacation.startAtIso,
                                 vacation.endAtIso
                               )}{" "}
-                              - {vacation.siteName || "Site non renseigne"}
+                              - {vacation.siteName || "Site non renseigné"}
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
                               {assignedLabels}
@@ -1502,7 +1502,7 @@ export const PeriodValidationSheet: React.FC = () => {
                                 variant="outline"
                                 className="rounded-full border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
                               >
-                                A verifier
+                                A vérifier
                               </Badge>
                             )}
                           </div>

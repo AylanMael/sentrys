@@ -18,6 +18,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
+
+function resolveNextPath(rawNext: string | null, fallback: string) {
+  if (!rawNext) return fallback;
+
+  const next = rawNext.trim();
+  if (!next.startsWith("/") || next.startsWith("//") || next.includes("://")) {
+    return fallback;
+  }
+
+  return next;
+}
+
 function getFirebaseErrorCode(error: unknown): string | null {
   if (typeof error === "object" && error !== null && "code" in error) {
     const code = (error as { code?: unknown }).code;
@@ -54,7 +66,7 @@ export default function LoginPage() {
       toast({
         variant: "destructive",
         title: "Champs requis",
-        description: "Veuillez renseigner vos identifiants.",
+        description: "Veuillez renseignér vos identifiants.",
       });
       return;
     }
@@ -78,8 +90,26 @@ export default function LoginPage() {
         return;
       }
 
+      const profile = tenantUserSnap.data() as { role?: unknown; tenantId?: unknown };
+      const role = String(profile.role ?? "").trim().toLowerCase();
+      const tenantId = String(profile.tenantId ?? "").trim();
+      const isPlatformSuperAdmin = role === "super_admin" && tenantId === "platform";
+      const fallbackPath = isPlatformSuperAdmin ? "/platform" : "/dashboard";
+      const nextParam =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("next")
+          : null;
+      const requestedDestination = resolveNextPath(nextParam, fallbackPath);
+      const destination = isPlatformSuperAdmin
+        ? requestedDestination.startsWith("/platform")
+          ? requestedDestination
+          : "/platform"
+        : requestedDestination.startsWith("/platform")
+          ? fallbackPath
+          : requestedDestination;
+
       toast({ title: "Accès autorisé", description: "Chargement de votre environnement..." });
-      router.push("/dashboard");
+      router.push(destination);
     } catch (error: unknown) {
       let description = "Une erreur est survenue lors de l'authentification.";
       const code = getFirebaseErrorCode(error);

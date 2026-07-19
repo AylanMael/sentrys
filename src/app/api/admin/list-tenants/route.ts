@@ -14,7 +14,7 @@ function toIso(x: unknown) {
 }
 
 export async function GET(req: NextRequest) {
-  // Support roles must be able to list tenants to assist users with cross-tenant problems and view logs
+  // Support rôles must be able to list tenants to assist users with cross-tenant problems and view logs
   const { error } = await requireAdmin(req, { allowedRoles: ["global_admin", "support"] });
   if (error) return error;
 

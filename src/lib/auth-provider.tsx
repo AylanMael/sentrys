@@ -192,7 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (!isSignupRoute && me.ok && me.hasTenant === false) {
             console.warn(
-              "Authenticated user has no tenantUsers doc (provisioning incomplete). uid=",
+              "Authenticated user has no tenantUsers doc (provisioning incomplète). uid=",
               nextFirebaseUser.uid
             );
           }

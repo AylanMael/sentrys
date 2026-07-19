@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
     action: "operations.manual_log_created",
     entityType: "system",
     entityId: signalId,
-    message: `Main courante creee: ${titleSnapshot}`,
+    message: `Main courante créée: ${titleSnapshot}`,
     severity: status === "done" ? "info" : "warning",
     meta: {
       signalId,

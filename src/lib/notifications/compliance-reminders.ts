@@ -16,19 +16,19 @@ const REMINDER_RULES: ReminderRule[] = [
     key: "d3",
     minAgeDays: 3,
     severity: "warning",
-    title: "Exception conformite ouverte depuis 3 jours",
+    title: "Exception conformité ouverte depuis 3 jours",
   },
   {
     key: "d7",
     minAgeDays: 7,
     severity: "critical",
-    title: "Relance forte conformite apres 7 jours",
+    title: "Relance forte conformité après 7 jours",
   },
   {
     key: "d14",
     minAgeDays: 14,
     severity: "critical",
-    title: "Escalade conformite apres 14 jours",
+    title: "Escalade conformité après 14 jours",
   },
 ];
 
@@ -96,7 +96,7 @@ export async function ensureComplianceReminderNotifications(tenantId: string) {
     const agentId = clean(data.agentId);
     const agentName = clean(data.agentName) || "Agent";
     const detail =
-      clean(data.complianceOverrideDetail) || "Dossier agent a regulariser.";
+      clean(data.complianceOverrideDétail) || "Dossier agent à régulariser.";
     const reason = clean(data.complianceOverrideReason);
 
     return dueRules(ageDays).map((rule) => {

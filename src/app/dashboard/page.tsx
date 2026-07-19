@@ -98,7 +98,7 @@ type ComplianceSummaryItem = {
   siteNames: string[];
   sentAtIso: string | null;
   complianceOverrideReason: string | null;
-  complianceOverrideDetail: string | null;
+  complianceOverrideDétail: string | null;
   complianceResolutionStatus: "to_regularize" | "regularized" | "accepted_exception";
 };
 
@@ -552,7 +552,7 @@ export default function DashboardPage() {
               </h2>
             </div>
             <p className="max-w-2xl text-sm font-semibold text-muted-foreground">
-              Le cockpit donne la decision. Cette zone sert a approfondir les
+              Le cockpit donne la décision. Cette zone sert a approfondir les
               prises de service, incidents, sites en tension et remplacements.
             </p>
           </div>
@@ -572,7 +572,7 @@ export default function DashboardPage() {
               </h2>
               <p className="mt-1 text-sm font-semibold text-muted-foreground">
                 Le mode calme garde la conduite lisible. Carte et IA restent a
-                portee de main sans envahir l'ecran.
+                portee de main sans envahir l'écran.
               </p>
             </div>
 
@@ -884,7 +884,7 @@ function ComplianceSummaryAlert({
       <div className="glass-card flex items-center gap-4 rounded-[2rem] border-none p-5">
         <Loader2 className="h-5 w-5 animate-spin text-primary" />
         <p className="text-sm font-black uppercase tracking-[0.18em] text-muted-foreground">
-          Controle conformite en cours...
+          Contrôle conformité en cours...
         </p>
       </div>
     );
@@ -896,7 +896,7 @@ function ComplianceSummaryAlert({
         <div className="flex items-start gap-3">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
           <div>
-            <p className="text-sm font-black">Registre conformite indisponible</p>
+            <p className="text-sm font-black">Registre conformité indisponible</p>
             <p className="mt-1 text-xs font-semibold opacity-80">{error}</p>
           </div>
         </div>
@@ -914,11 +914,11 @@ function ComplianceSummaryAlert({
             </div>
             <div>
               <p className="text-sm font-black uppercase tracking-[0.18em]">
-                Conformite planning maitrisee
+                Conformité planning maîtrisée
               </p>
               <p className="mt-1 text-sm font-semibold opacity-80">
-                Aucune exception a regulariser. {closedCount} exception(s)
-                deja fermee(s) ou acceptee(s).
+                Aucune exception à régulariser. {closedCount} exception(s)
+                deja fermée(s) ou acceptee(s).
               </p>
             </div>
           </div>
@@ -949,11 +949,11 @@ function ComplianceSummaryAlert({
               Action exploitation
             </Badge>
             <h2 className="mt-2 text-2xl font-black tracking-tight text-foreground">
-              {openCount} exception(s) conformite a regulariser
+              {openCount} exception(s) conformité à régulariser
             </h2>
             <p className="mt-1 text-sm font-semibold leading-relaxed text-muted-foreground">
-              Des plannings ont ete forces. Il faut regulariser les dossiers,
-              accepter l'exception ou documenter la decision.
+              Des plannings ont ete forces. Il faut régulariser les dossiers,
+              accepter l'exception ou documenter la décision.
             </p>
 
             {summary?.urgent?.length ? (
@@ -968,8 +968,8 @@ function ComplianceSummaryAlert({
                       {item.agentName}
                     </p>
                     <p className="mt-1 line-clamp-2 text-xs font-semibold text-muted-foreground">
-                      {item.complianceOverrideDetail ||
-                        "Blocage conformite a verifier"}
+                      {item.complianceOverrideDétail ||
+                        "Blocage conformité à vérifier"}
                     </p>
                     <p className="mt-2 text-[11px] font-bold text-amber-700 dark:text-amber-300">
                       {item.periodLabel}

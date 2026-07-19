@@ -92,24 +92,24 @@ const publicationConfig: Record<
   draft: {
     label: "Brouillon",
     color: "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
-    description: "Cette vacation n'a pas encore ete publiee aux agents.",
+    description: "Cette vacation n'a pas encore ete publiée aux agents.",
   },
   published: {
     label: "Publie",
     color: "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200",
-    description: "Cette vacation est publiee et a jour.",
+    description: "Cette vacation est publiée et à jour.",
   },
-  modified: {
-    label: "A republier",
+  modifiéd: {
+    label: "A republiér",
     color: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200",
-    description: "Cette vacation a ete modifiee apres publication.",
+    description: "Cette vacation a été modifiée après publication.",
   },
 };
 
 export const VacationDetailsSheet: React.FC = () => {
   const {
     detailsOpen,
-    setDetailsOpen,
+    setDétailsOpen,
     activeVacation,
     deleteVacation,
     setAssignOpen,
@@ -125,13 +125,13 @@ export const VacationDetailsSheet: React.FC = () => {
     endAt: "",
   });
   const [scheduleSaving, setScheduleSaving] = React.useState(false);
-  const [detailsDraft, setDetailsDraft] = React.useState({
+  const [detailsDraft, setDétailsDraft] = React.useState({
     title: "",
     missionType: "",
     requiredQualification: "",
     notes: "",
   });
-  const [detailsSaving, setDetailsSaving] = React.useState(false);
+  const [detailsSaving, setDétailsSaving] = React.useState(false);
 
   React.useEffect(() => {
     if (!detailsOpen || !activeVacation) return;
@@ -144,7 +144,7 @@ export const VacationDetailsSheet: React.FC = () => {
         ? toLocalDateTimeValue(new Date(activeVacation.endAtIso))
         : "",
     });
-    setDetailsDraft({
+    setDétailsDraft({
       title: activeVacation.title ?? "",
       missionType: activeVacation.missionType ?? "",
       requiredQualification: activeVacation.requiredQualification ?? "",
@@ -163,7 +163,7 @@ export const VacationDetailsSheet: React.FC = () => {
   const handleDelete = async () => {
     if (confirm("Supprimer cette vacation ?")) {
       const ok = await deleteVacation(vacation.id);
-      if (ok) setDetailsOpen(false);
+      if (ok) setDétailsOpen(false);
     }
   };
 
@@ -180,7 +180,7 @@ export const VacationDetailsSheet: React.FC = () => {
     ) {
       toast({
         variant: "destructive",
-        title: "Horaires invalides",
+        title: "Horaires invalidés",
         description: "La fin doit être postérieure au début.",
       });
       return;
@@ -223,14 +223,14 @@ export const VacationDetailsSheet: React.FC = () => {
           : scheduleDraft.endAt,
       siteId: vacation.siteId ?? undefined,
     });
-    setDetailsOpen(false);
+    setDétailsOpen(false);
     setCreateOpen(true);
   };
 
-  const handleDetailsSave = async () => {
+  const handleDétailsSave = async () => {
     if (isLocked) return;
 
-    setDetailsSaving(true);
+    setDétailsSaving(true);
     try {
       const ok = await updateVacation(vacation.id, {
         title: detailsDraft.title.trim() || null,
@@ -253,7 +253,7 @@ export const VacationDetailsSheet: React.FC = () => {
         });
       }
     } finally {
-      setDetailsSaving(false);
+      setDétailsSaving(false);
     }
   };
 
@@ -293,7 +293,7 @@ export const VacationDetailsSheet: React.FC = () => {
   const publication = publicationConfig[publicationStatus];
 
   return (
-    <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
+    <Sheet open={detailsOpen} onOpenChange={setDétailsOpen}>
       <SheetContent className="overflow-y-auto border-l bg-white shadow-2xl sm:max-w-md dark:bg-slate-950">
         <SheetHeader className="mb-6">
           <div className="flex items-start justify-between">
@@ -358,7 +358,7 @@ export const VacationDetailsSheet: React.FC = () => {
                   {vacation.publishedAtIso
                     ? `Publiee le ${format(new Date(vacation.publishedAtIso), "dd MMM yyyy HH:mm", { locale: fr })}`
                     : "Aucune date de publication enregistree."}
-                  {publicationStatus === "modified" && vacation.updatedAtIso
+                  {publicationStatus === "modifiéd" && vacation.updatedAtIso
                     ? ` Derniere modification le ${format(new Date(vacation.updatedAtIso), "dd MMM yyyy HH:mm", { locale: fr })}.`
                     : ""}
                 </p>
@@ -487,7 +487,7 @@ export const VacationDetailsSheet: React.FC = () => {
                 variant="outline"
                 size="sm"
                 className="glass-button"
-                onClick={handleDetailsSave}
+                onClick={handleDétailsSave}
                 disabled={detailsSaving || isLocked}
               >
                 {detailsSaving ? "Enregistrement..." : "Enregistrer"}
@@ -502,7 +502,7 @@ export const VacationDetailsSheet: React.FC = () => {
                 <Input
                   value={detailsDraft.title}
                   onChange={(event) =>
-                    setDetailsDraft((previous) => ({
+                    setDétailsDraft((previous) => ({
                       ...previous,
                       title: event.target.value,
                     }))
@@ -520,7 +520,7 @@ export const VacationDetailsSheet: React.FC = () => {
                 <Select
                   value={detailsDraft.missionType || undefined}
                   onValueChange={(value) =>
-                    setDetailsDraft((previous) => ({
+                    setDétailsDraft((previous) => ({
                       ...previous,
                       missionType: value,
                     }))
@@ -547,7 +547,7 @@ export const VacationDetailsSheet: React.FC = () => {
                 <Input
                   value={detailsDraft.requiredQualification}
                   onChange={(event) =>
-                    setDetailsDraft((previous) => ({
+                    setDétailsDraft((previous) => ({
                       ...previous,
                       requiredQualification: event.target.value,
                     }))
@@ -565,7 +565,7 @@ export const VacationDetailsSheet: React.FC = () => {
                 <Textarea
                   value={detailsDraft.notes}
                   onChange={(event) =>
-                    setDetailsDraft((previous) => ({
+                    setDétailsDraft((previous) => ({
                       ...previous,
                       notes: event.target.value,
                     }))
@@ -661,7 +661,7 @@ export const VacationDetailsSheet: React.FC = () => {
           <Button
             variant="outline"
             className="glass-button flex-1"
-            onClick={() => setDetailsOpen(false)}
+            onClick={() => setDétailsOpen(false)}
           >
             Fermer
           </Button>

@@ -6,11 +6,11 @@ function csvCell(value: unknown) {
 }
 
 export function prepayCsvFilename(report: PrepayReport) {
-  return `pre-paie-${report.fromIso.slice(0, 10)}-${report.toIso.slice(0, 10)}.csv`;
+  return `pré-paie-${report.fromIso.slice(0, 10)}-${report.toIso.slice(0, 10)}.csv`;
 }
 
 export function prepayCabinetCsvFilename(report: PrepayReport) {
-  return `pre-paie-cabinet-${report.fromIso.slice(0, 10)}-${report.toIso.slice(0, 10)}.csv`;
+  return `pré-paie-cabinet-${report.fromIso.slice(0, 10)}-${report.toIso.slice(0, 10)}.csv`;
 }
 
 export function buildPrepayCsv(report: PrepayReport) {
@@ -175,7 +175,7 @@ export function buildPrepayCabinetCsv(report: PrepayReport) {
       quantity: row.publicHolidayHours,
       rate: report.settings.publicHolidayPremiumPercent,
       amount: row.publicHolidayPremiumAmount,
-      comment: "Hors traitement specifique du 1er mai si renseigne.",
+      comment: "Hors traitement specifique du 1er mai si renseigné.",
     });
     pushCabinetLine(lines, {
       report,
@@ -202,7 +202,7 @@ export function buildPrepayCabinetCsv(report: PrepayReport) {
       agentId: row.payrollId,
       agentName: row.agentName,
       code: codes.absenceHours,
-      label: "Absences detectees",
+      label: "Absences détectées",
       quantity: row.absenceHours,
       comment: "Type d'absence a qualifier avant paie.",
     });

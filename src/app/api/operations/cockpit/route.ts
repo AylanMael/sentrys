@@ -244,7 +244,7 @@ export async function GET(req: NextRequest) {
   let draftOrModified = 0;
   let startsNextTwoHours = 0;
   const upcomingStarts: typeof todayVacations = [];
-  const modifiedVacations: typeof todayVacations = [];
+  const modifiédVacations: typeof todayVacations = [];
 
   const uncoveredVacations = todayVacations.filter((vacation) => {
     const required = requiredAgents(vacation.data);
@@ -257,7 +257,7 @@ export async function GET(req: NextRequest) {
 
     if (!isPublishedFresh(vacation.data)) {
       draftOrModified += 1;
-      modifiedVacations.push(vacation);
+      modifiédVacations.push(vacation);
     }
 
     if (
@@ -330,7 +330,7 @@ export async function GET(req: NextRequest) {
         text(vacation.data.siteName) ||
         (text(vacation.data.siteId)
           ? siteName(sitesById.get(text(vacation.data.siteId)), "Site")
-          : "Site non renseigne");
+          : "Site non renseigné");
 
       return priority({
         id: `coverage-${vacation.id}`,
@@ -346,7 +346,7 @@ export async function GET(req: NextRequest) {
       priority({
         id: `incident-${incident.id}`,
         title: text(incident.data.title) || "Incident critique",
-        detail: `${text(incident.data.severity) || "high"} - ${incident.updatedAtIso ? "mis a jour " + formatHour(incident.updatedAtIso) : "a traiter"}`,
+        detail: `${text(incident.data.severity) || "high"} - ${incident.updatedAtIso ? "mis à jour " + formatHour(incident.updatedAtIso) : "à traiter"}`,
         href: `/dashboard/incidents/${incident.id}`,
         tone:
           text(incident.data.severity).toLowerCase() === "critical"
@@ -360,21 +360,21 @@ export async function GET(req: NextRequest) {
     ...complianceOpenDispatches.slice(0, 3).map((dispatch) =>
       priority({
         id: `compliance-${dispatch.id}`,
-        title: "Forcage conformite a regulariser",
+        title: "Forçage conformité à régulariser",
         detail:
           text(dispatch.data.agentName) ||
           agentName(agentsById.get(text(dispatch.data.agentId)), "Agent"),
         href: "/dashboard/conformite",
         tone: "warning",
-        actionLabel: "Regulariser",
+        actionLabel: "Régulariser",
         rank: 30,
       })
     ),
     ...unacknowledgedDispatches.slice(0, 3).map((dispatch) =>
       priority({
         id: `ack-${dispatch.id}`,
-        title: "Planning non accuse",
-        detail: `${text(dispatch.data.agentName) || "Agent"} n'a pas confirme la reception.`,
+        title: "Planning non accusé",
+        detail: `${text(dispatch.data.agentName) || "Agent"} n'a pas confirme la réception.`,
         href: "/dashboard/planning",
         tone: "info",
         actionLabel: "Relancer",
@@ -389,8 +389,8 @@ export async function GET(req: NextRequest) {
     priorities.push(
       priority({
         id: "all-clear",
-        title: "Exploitation sous controle",
-        detail: "Aucun blocage majeur detecte sur le planning du jour.",
+        title: "Exploitation sous contrôle",
+        detail: "Aucun blocage majeur détecté sur le planning du jour.",
         href: "/dashboard/planning",
         tone: "success",
         actionLabel: "Voir planning",
@@ -404,7 +404,7 @@ export async function GET(req: NextRequest) {
       text(data.siteName) ||
       (text(data.siteId)
         ? siteName(sitesById.get(text(data.siteId)), "Site")
-        : "Site non renseigne")
+        : "Site non renseigné")
     );
   };
 
@@ -448,7 +448,7 @@ export async function GET(req: NextRequest) {
           timeIso: startIso,
           href: `/dashboard/planning?vacationId=${vacation.id}`,
           tone: firstAgentId ? "info" : "critical",
-          actionLabel: firstAgentId ? "Verifier" : "Affecter",
+          actionLabel: firstAgentId ? "Vérifier" : "Affecter",
           rank: firstAgentId ? 45 : 15,
         });
       }),
@@ -456,8 +456,8 @@ export async function GET(req: NextRequest) {
       timelineItem({
         id: `feed-incident-${incident.id}`,
         kind: "incident",
-        title: text(incident.data.title) || "Incident a traiter",
-        detail: `${text(incident.data.severity) || "high"} - ${text(incident.data.siteName) || "site a verifier"}`,
+        title: text(incident.data.title) || "Incident à traiter",
+        detail: `${text(incident.data.severity) || "high"} - ${text(incident.data.siteName) || "site à vérifier"}`,
         timeIso: incident.updatedAtIso,
         href: `/dashboard/incidents/${incident.id}`,
         tone:
@@ -473,14 +473,14 @@ export async function GET(req: NextRequest) {
       timelineItem({
         id: `feed-compliance-${dispatch.id}`,
         kind: "compliance",
-        title: "Forcage conformite ouvert",
+        title: "Forçage conformité ouvert",
         detail:
           text(dispatch.data.agentName) ||
           agentName(agentsById.get(text(dispatch.data.agentId)), "Agent"),
         timeIso: toIso(dispatch.data.sentAt) || text(dispatch.data.sentAtIso),
         href: "/dashboard/conformite",
         tone: "warning",
-        actionLabel: "Regulariser",
+        actionLabel: "Régulariser",
         rank: 30,
       })
     ),
@@ -488,8 +488,8 @@ export async function GET(req: NextRequest) {
       timelineItem({
         id: `feed-dispatch-${dispatch.id}`,
         kind: "dispatch",
-        title: "Planning envoye non accuse",
-        detail: `${text(dispatch.data.agentName) || "Agent"} - relance conseillee`,
+        title: "Planning envoyé non accusé",
+        detail: `${text(dispatch.data.agentName) || "Agent"} - relancée conseillee`,
         timeIso: toIso(dispatch.data.sentAt) || text(dispatch.data.sentAtIso),
         href: "/dashboard/planning",
         tone: "info",
@@ -497,11 +497,11 @@ export async function GET(req: NextRequest) {
         rank: 55,
       })
     ),
-    ...modifiedVacations.slice(0, 4).map((vacation) =>
+    ...modifiédVacations.slice(0, 4).map((vacation) =>
       timelineItem({
         id: `feed-publication-${vacation.id}`,
         kind: "publication",
-        title: "Vacation a publier",
+        title: "Vacation a publiér",
         detail: `${vacationSiteLabel(vacation.data)} - ${formatHour(toIso(vacation.data.startAt))}`,
         timeIso: toIso(vacation.data.updatedAt) || toIso(vacation.data.startAt),
         href: `/dashboard/planning?vacationId=${vacation.id}`,
@@ -526,7 +526,7 @@ export async function GET(req: NextRequest) {
         id: "feed-all-clear",
         kind: "all_clear",
         title: "Rien d'urgent sur la conduite de journee",
-        detail: "Le planning, les diffusions et les alertes critiques sont sous controle.",
+        detail: "Le planning, les diffusions et les alertes critiques sont sous contrôle.",
         timeIso: new Date().toISOString(),
         href: "/dashboard/planning",
         tone: "success",
@@ -597,7 +597,7 @@ export async function GET(req: NextRequest) {
         ? "Action immediate requise"
         : verdict === "warning"
           ? "Exploitation a surveiller"
-          : "Exploitation sous controle",
+          : "Exploitation sous contrôle",
     kpis: {
       coverageRate,
       todayVacations: todayVacations.length,

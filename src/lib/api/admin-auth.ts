@@ -28,22 +28,22 @@ export async function requireAdmin(
     const decodedToken = await adminAuth.verifyIdToken(token, true);
 
     // 2. Normalisation très défensive des rôles
-    const rawRoles = decodedToken.roles;
-    const roles: string[] = Array.isArray(rawRoles)
+    const rawRoles = decodedToken.rôles;
+    const rôles: string[] = Array.isArray(rawRoles)
       ? rawRoles.filter((r) => typeof r === "string")
       : [];
 
-    const isGlobalAdmin = roles.includes("global_admin");
-    const isSupport = roles.includes("support");
-    const isTenantAdmin = roles.includes("tenant_admin");
+    const isGlobalAdmin = rôles.includes("global_admin");
+    const isSupport = rôles.includes("support");
+    const isTenantAdmin = rôles.includes("tenant_admin");
 
     if (!isGlobalAdmin && !isSupport && !isTenantAdmin) {
-      return { error: NextResponse.json({ ok: false, error: "Forbidden: No admin roles found" }, { status: 403 }) };
+      return { error: NextResponse.json({ ok: false, error: "Forbidden: No admin rôles found" }, { status: 403 }) };
     }
 
     // 3. Restriction par rôle autorisé strict
     if (options?.allowedRoles && options.allowedRoles.length > 0) {
-      const hasAllowedRole = options.allowedRoles.some(role => roles.includes(role));
+      const hasAllowedRole = options.allowedRoles.some(role => rôles.includes(role));
       if (!hasAllowedRole) {
         return { error: NextResponse.json({ ok: false, error: "Forbidden: Insufficient role" }, { status: 403 }) };
       }

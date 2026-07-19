@@ -27,7 +27,7 @@ function json(status: number, body: ApiOk | ApiErr) {
   return res;
 }
 
-function errorDetails(error: unknown) {
+function errorDétails(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -216,7 +216,7 @@ export async function GET(req: NextRequest) {
     return json(500, {
       ok: false,
       error: "Internal error",
-      details: errorDetails(e),
+      details: errorDétails(e),
     });
   }
 }
@@ -298,7 +298,7 @@ export async function POST(req: NextRequest) {
     return json(500, {
       ok: false,
       error: "Internal error",
-      details: errorDetails(e),
+      details: errorDétails(e),
     });
   }
 }

@@ -93,7 +93,7 @@ export function IncidentComments(props: { incidentId: string; tenantId: string }
           variant: "destructive",
           title: "Erreur commentaires",
           description: msg.includes("Missing or insufficient permissions")
-            ? "Permissions Firestore insuffisantes (rules commentaires)."
+            ? "Permissions Firestore insuffisantés (rules commentaires)."
             : "Impossible de charger les commentaires.",
         });
       }

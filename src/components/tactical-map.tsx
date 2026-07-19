@@ -64,7 +64,7 @@ function pointFromSite(site: any): MapPoint | null {
     lat,
     lng,
     kind: "site",
-    title: site.name || "Site operationnel",
+    title: site.name || "Site opérationnel",
     detail: site.address || site.city || null,
   };
 }
@@ -131,7 +131,7 @@ export default function TacticalMap({
     <div className="relative h-full w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-inner">
       <div className="absolute left-3 top-3 z-[1000] rounded-2xl border border-white/80 bg-white/95 p-3 text-slate-900 shadow-lg backdrop-blur">
         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-          Carte operationnelle
+          Carte opérationnelle
         </p>
         <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs font-black">
           <div className="rounded-xl bg-blue-50 px-2 py-1 text-blue-700">
@@ -165,7 +165,7 @@ export default function TacticalMap({
         <div className="flex h-full min-h-[420px] items-center justify-center p-6 text-center">
           <div className="max-w-sm rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <p className="text-lg font-black text-slate-900">
-              Aucune coordonnee exploitable
+              Aucune coordonnée exploitable
             </p>
             <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
               Ajoutez latitude et longitude sur les fiches sites ou incidents
@@ -195,7 +195,7 @@ export default function TacticalMap({
                       {site.title}
                     </p>
                     <p className="mt-1 text-xs font-semibold text-slate-500">
-                      {site.detail || "Adresse non renseignee"}
+                      {site.detail || "Adresse non renseignée"}
                     </p>
                   </div>
                 </Popup>
@@ -230,7 +230,7 @@ export default function TacticalMap({
                         {incident.title}
                       </p>
                       <p className="mt-1 text-xs font-semibold text-slate-500">
-                        {incident.detail || "Aucun detail renseigne"}
+                        {incident.detail || "Aucun detail renseigné"}
                       </p>
                     </div>
                   </Popup>

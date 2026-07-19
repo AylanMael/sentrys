@@ -784,7 +784,7 @@ export function OperationsOverview({
                       Aucun point bloquant
                     </p>
                     <p className="mt-2 text-sm font-semibold text-muted-foreground/70">
-                      La journee est couverte et aucun incident prioritaire n&apos;exige une action immediate.
+                      Là journee est couverte et aucun incident prioritaire n&apos;exige une action immediate.
                     </p>
                   </div>
                 </div>
@@ -981,7 +981,7 @@ export function OperationsOverview({
                     Tous les points clés sont confirmés
                   </p>
                   <p className="mt-2 text-sm font-semibold text-muted-foreground/70">
-                    Aucun agent demarre n&apos;apparait en attente de pointage sur les vacations suivies.
+                    Aucun agent démarre n&apos;apparaît en attente de pointage sur les vacations suivies.
                   </p>
                 </div>
               </div>
@@ -1020,7 +1020,7 @@ export function OperationsOverview({
 
                 <div className="mt-5 flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold text-muted-foreground/70">
-                    Verifier la situation avec le site ou l&apos;agent concerne.
+                    Vérifier la situation avec le site ou l&apos;agent concerné.
                   </p>
                   <ArrowRight className="h-4 w-4 text-primary" />
                 </div>

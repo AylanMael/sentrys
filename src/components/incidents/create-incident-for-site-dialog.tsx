@@ -162,7 +162,7 @@ export function CreateIncidentForSiteDialog({
         variant: "destructive",
         title: "Création impossible",
         description: err?.message?.includes("Missing or insufficient permissions")
-          ? "Permissions Firestore insuffisantes (rules incidents) ou site hors tenant."
+          ? "Permissions Firestore insuffisantés (rules incidents) ou site hors tenant."
           : err?.message ?? "Erreur inconnue.",
       });
     } finally {

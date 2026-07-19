@@ -208,8 +208,8 @@ export async function POST(req: NextRequest) {
             results.push({
               id,
               ok: false,
-              error: "Chevauchement detecte pour l'agent",
-              code: "overlap_detected",
+              error: "Chevauchement détecté pour l'agent",
+              code: "overlap_détectéd",
               overlaps,
             });
             continue;
@@ -330,8 +330,8 @@ export async function POST(req: NextRequest) {
            if (overlaps.length > 0) {
              results.push({
                ok: false,
-               error: "Chevauchement detecte pour l'agent",
-               code: "overlap_detected",
+               error: "Chevauchement détecté pour l'agent",
+               code: "overlap_détectéd",
                overlaps,
              });
              continue;

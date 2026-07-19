@@ -53,7 +53,7 @@ type SiteDispatchRow = {
   vacations: VacationApiItem[];
   readyVacations: VacationApiItem[];
   draftCount: number;
-  modifiedCount: number;
+  modifiédCount: number;
   missingAgentCount: number;
   plannedAgentCount: number;
 };
@@ -74,7 +74,7 @@ type SiteDispatchHistoryItem = {
   vacationCount: number;
   readyVacationCount: number;
   draftCount: number;
-  modifiedCount: number;
+  modifiédCount: number;
   missingAgentCount: number;
   plannedAgentCount: number;
   channel: ClientDispatchChannel;
@@ -110,7 +110,7 @@ type ClientContact = {
   phone?: string | null;
 };
 
-type ClientDetailResponse = {
+type ClientDétailResponse = {
   ok: true;
   item: ClientContact;
 };
@@ -126,7 +126,7 @@ function siteLabel(site: SiteApiItem) {
 }
 
 function siteSubtitle(site: SiteApiItem) {
-  return [site.clientName, site.city].filter(Boolean).join(" - ") || "Client a renseigner";
+  return [site.clientName, site.city].filter(Boolean).join(" - ") || "Client a renseignér";
 }
 
 function activeOnly(vacation: VacationApiItem) {
@@ -167,7 +167,7 @@ function formatSentAt(value?: string | null) {
 
 function clientChannelDescription(channel: ClientDispatchChannel) {
   if (channel === "email") {
-    return "Simulation email : on prepare le PDF et on historise la cible, sans envoi reel.";
+    return "Simulation email : on prépare le PDF et on historise la cible, sans envoi réel.";
   }
 
   return "Historique interne : preuve de preparation, sans diffusion externe.";
@@ -176,7 +176,7 @@ function clientChannelDescription(channel: ClientDispatchChannel) {
 function clientDeliveryLabel(entry: SiteDispatchHistoryItem) {
   if (entry.deliveryStatus === "logged") return "Journalise";
   if (entry.deliveryStatus === "blocked") return "Bloque";
-  return "Email prepare";
+  return "Email prépare";
 }
 
 function sitePlanningPrintHref(input: {
@@ -293,8 +293,8 @@ export const SiteDispatchSheet: React.FC = () => {
           draftCount: vacations.filter(
             (vacation) => getVacationPublicationStatus(vacation) === "draft"
           ).length,
-          modifiedCount: vacations.filter(
-            (vacation) => getVacationPublicationStatus(vacation) === "modified"
+          modifiédCount: vacations.filter(
+            (vacation) => getVacationPublicationStatus(vacation) === "modifiéd"
           ).length,
           missingAgentCount: vacations.reduce(
             (total, vacation) => total + missingAgents(vacation),
@@ -376,7 +376,7 @@ export const SiteDispatchSheet: React.FC = () => {
 
     siteRows.forEach((row) => {
       const clientId = row.site.clientId ?? null;
-      const label = row.site.clientName || "Client non renseigne";
+      const label = row.site.clientName || "Client non renseigné";
       const key = clientId ? `id:${clientId}` : `name:${label}`;
       const current =
         groups.get(key) ??
@@ -425,7 +425,7 @@ export const SiteDispatchSheet: React.FC = () => {
       }
 
       try {
-        const response = await apiFetch<ClientDetailResponse>(
+        const response = await apiFetch<ClientDétailResponse>(
           `/api/clients/${focusedClientGroup.clientId}`
         );
 
@@ -451,7 +451,7 @@ export const SiteDispatchSheet: React.FC = () => {
           acc.vacations += row.vacations.length;
           acc.ready += row.readyVacations.length;
           acc.draft += row.draftCount;
-          acc.modified += row.modifiedCount;
+          acc.modifiéd += row.modifiédCount;
           acc.missing += row.missingAgentCount;
           if (!row.site.clientName) acc.noClient += 1;
           return acc;
@@ -460,7 +460,7 @@ export const SiteDispatchSheet: React.FC = () => {
           vacations: 0,
           ready: 0,
           draft: 0,
-          modified: 0,
+          modifiéd: 0,
           missing: 0,
           noClient: 0,
         }
@@ -516,14 +516,14 @@ export const SiteDispatchSheet: React.FC = () => {
       toName: focusedClientContact?.contactName || clientName,
       toEmail,
       subject: `Planning des agents - ${clientName} - ${period}`,
-      preheader: `${selectedRows.length} site(s), ${totals.vacations} vacation(s), ${totals.ready} service(s) pret(s).`,
+      preheader: `${selectedRows.length} site(s), ${totals.vacations} vacation(s), ${totals.ready} service(s) prêt(s).`,
       bodyLines: [
         `Bonjour ${focusedClientContact?.contactName || clientName},`,
-        `Veuillez trouver le planning des agents prevus sur vos sites pour la periode du ${period}.`,
+        `Veuillez trouver le planning des agents prevus sur vos sites pour la période du ${period}.`,
         `Ce planning couvre ${selectedRows.length} site(s) et ${totals.vacations} vacation(s).`,
-        `Agents planifies : ${selectedRows.reduce((total, row) => total + row.plannedAgentCount, 0)} affectation(s) visibles sur la periode.`,
+        `Agents planifies : ${selectedRows.reduce((total, row) => total + row.plannedAgentCount, 0)} affectation(s) visibles sur la période.`,
         "Le PDF joint recapitule les horaires, les sites et les agents planifies.",
-        "Nous restons disponibles pour toute question ou ajustement operationnel.",
+        "Nous restons disponibles pour toute question ou ajustement opérationnel.",
         "Cordialement,",
         identity.fromName,
       ],
@@ -535,12 +535,12 @@ export const SiteDispatchSheet: React.FC = () => {
         },
       ],
       warnings: [
-        !toEmail ? "Aucun email client/facturation n'est renseigne." : "",
-        totals.modified > 0
-          ? `${totals.modified} vacation(s) ont ete modifiees apres publication.`
+        !toEmail ? "Aucun email client/facturation n'est renseigné." : "",
+        totals.modifiéd > 0
+          ? `${totals.modifiéd} vacation(s) ont ete modifiées après publication.`
           : "",
         totals.draft > 0 ? `${totals.draft} vacation(s) sont encore en brouillon.` : "",
-        totals.missing > 0 ? `${totals.missing} agent(s) manquant(s) restent a traiter.` : "",
+        totals.missing > 0 ? `${totals.missing} agent(s) manquant(s) restent à traiter.` : "",
         identity.replyTo.includes("configurer")
           ? "L'email d'exploitation de l'agence n'est pas encore configure."
           : "",
@@ -558,7 +558,7 @@ export const SiteDispatchSheet: React.FC = () => {
     selectedRows,
     totals.draft,
     totals.missing,
-    totals.modified,
+    totals.modifiéd,
     totals.ready,
     totals.vacations,
   ]);
@@ -585,12 +585,12 @@ export const SiteDispatchSheet: React.FC = () => {
       toast({
         title:
           channel === "email"
-            ? "Envoi client prepare"
+            ? "Envoi client prépare"
             : "Remise client journalisee",
         description:
           response.blocked && response.blocked.length > 0
-            ? `${response.created} remise(s) preparee(s), ${response.blocked.length} bloquee(s) faute d'email client.`
-            : `${response.created} remise(s) historisee(s) pour cette periode.`,
+            ? `${response.created} remise(s) préparée(s), ${response.blocked.length} bloquée(s) faute d'email client.`
+            : `${response.created} remise(s) historisee(s) pour cette période.`,
       });
       await loadHistory();
     } catch (error) {
@@ -625,8 +625,8 @@ export const SiteDispatchSheet: React.FC = () => {
             Preparation client par site
           </SheetTitle>
           <SheetDescription>
-            Controle les plannings site avant remise client : PDF, agents
-            planifies, anomalies et sites a completer.
+            Contrôle les plannings site avant remise client : PDF, agents
+            planifies, anomalies et sites a compléter.
           </SheetDescription>
         </SheetHeader>
 
@@ -652,9 +652,9 @@ export const SiteDispatchSheet: React.FC = () => {
                 <SummaryCard label="Pretes" value={totals.ready} tone="good" />
                 <SummaryCard
                   label="Alertes"
-                  value={totals.draft + totals.modified + totals.missing + totals.noClient}
+                  value={totals.draft + totals.modifiéd + totals.missing + totals.noClient}
                   tone={
-                    totals.draft + totals.modified + totals.missing + totals.noClient > 0
+                    totals.draft + totals.modifiéd + totals.missing + totals.noClient > 0
                       ? "warning"
                       : "neutral"
                   }
@@ -665,16 +665,16 @@ export const SiteDispatchSheet: React.FC = () => {
           </div>
 
           {(totals.draft > 0 ||
-            totals.modified > 0 ||
+            totals.modifiéd > 0 ||
             totals.missing > 0 ||
             totals.noClient > 0) && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
               <div className="flex gap-3">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  Controle requis : {totals.draft} brouillon(s), {totals.modified} a
-                  republier, {totals.missing} agent(s) manquant(s), {totals.noClient} site(s)
-                  sans client renseigne.
+                  Contrôle requis : {totals.draft} brouillon(s), {totals.modifiéd} a
+                  republiér, {totals.missing} agent(s) manquant(s), {totals.noClient} site(s)
+                  sans client renseigné.
                 </p>
               </div>
             </div>
@@ -714,8 +714,8 @@ export const SiteDispatchSheet: React.FC = () => {
             <div className="flex gap-3">
               <Send className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                Etape actuelle : preparation, previsualisation et historique.
-                Aucun email client reel ne part depuis ce panneau pour l&apos;instant.
+                Étape actuelle : preparation, prévisualisation et historique.
+                Aucun email client réel ne part depuis ce panneau pour l&apos;instant.
               </p>
             </div>
           </div>
@@ -726,7 +726,7 @@ export const SiteDispatchSheet: React.FC = () => {
                 <div>
                   <p className="text-sm font-black">Sites a remettre au client</p>
                   <p className="text-xs text-muted-foreground">
-                    Selectionne les sites a previsualiser ou preparer.
+                    Selectionne les sites a previsualiser ou préparer.
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -758,7 +758,7 @@ export const SiteDispatchSheet: React.FC = () => {
                   <Building2 className="mx-auto h-8 w-8 text-muted-foreground" />
                   <p className="mt-3 font-black">Aucun planning site visible</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Verifie la periode du planning ou cree des vacations sur un site.
+                    Verifie la période du planning ou créé des vacations sur un site.
                   </p>
                 </div>
               ) : (
@@ -767,7 +767,7 @@ export const SiteDispatchSheet: React.FC = () => {
                     const selected = selectedSiteIds.has(row.site.id);
                     const hasAlert =
                       row.draftCount > 0 ||
-                      row.modifiedCount > 0 ||
+                      row.modifiédCount > 0 ||
                       row.missingAgentCount > 0 ||
                       !row.site.clientName;
 
@@ -829,7 +829,7 @@ export const SiteDispatchSheet: React.FC = () => {
                                 variant="outline"
                                 className="rounded-full border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300"
                               >
-                                A verifier
+                                A vérifier
                               </Badge>
                             )}
                             <Badge
@@ -844,7 +844,7 @@ export const SiteDispatchSheet: React.FC = () => {
                         <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
                           <MiniStat
                             icon={<FileText className="h-3.5 w-3.5" />}
-                            label="Services prets"
+                            label="Services prêts"
                             value={`${row.readyVacations.length}/${row.vacations.length}`}
                           />
                           <MiniStat
@@ -879,7 +879,7 @@ export const SiteDispatchSheet: React.FC = () => {
                   Action conseillee
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Ouvre le PDF global ou site par site, controle la lisibilite, puis
+                  Ouvre le PDF global ou site par site, controle la lisibilité, puis
                   imprime ou sauvegarde en PDF avant remise client.
                 </p>
                 <div className="mt-4 space-y-2">
@@ -979,17 +979,17 @@ export const SiteDispatchSheet: React.FC = () => {
               </div>
 
               <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 text-xs text-muted-foreground">
-                <p className="font-black text-foreground">Client concerne</p>
+                <p className="font-black text-foreground">Client concerné</p>
                 <p className="mt-1">
                   {focusedClientGroup
                     ? `${focusedClientGroup.label} - ${focusedClientGroup.rows.length} site(s) selectionne(s).`
                     : selectedClientGroups.length > 1
                       ? `${selectedClientGroups.length} clients selectionnes : le PDF client dedie est desactive.`
-                      : "Selectionne au moins un site rattache a un client."}
+                      : "Selectionne au moins un site rattaché a un client."}
                 </p>
                 {!focusedClientGroup?.clientId && focusedClientGroup && (
                   <p className="mt-2 font-semibold text-amber-700 dark:text-amber-300">
-                    Client sans identifiant : rattache le site a une fiche client
+                    Client sans identifiant : rattaché le site a une fiche client
                     pour imprimer tous ses sites automatiquement.
                   </p>
                 )}
@@ -1015,7 +1015,7 @@ export const SiteDispatchSheet: React.FC = () => {
                 <div className="mt-3 space-y-2">
                   {history.length === 0 ? (
                     <div className="rounded-xl border border-dashed bg-background/70 p-3 text-xs text-muted-foreground">
-                      Aucune remise client historisee sur cette periode.
+                      Aucune remise client historisee sur cette période.
                     </div>
                   ) : (
                     history.slice(0, 6).map((entry) => (
@@ -1050,11 +1050,11 @@ export const SiteDispatchSheet: React.FC = () => {
                         </p>
 
                         {(entry.draftCount > 0 ||
-                          entry.modifiedCount > 0 ||
+                          entry.modifiédCount > 0 ||
                           entry.missingAgentCount > 0) && (
                           <p className="mt-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
                             Alertes : {entry.draftCount} brouillon(s),{" "}
-                            {entry.modifiedCount} a republier,{" "}
+                            {entry.modifiédCount} a republiér,{" "}
                             {entry.missingAgentCount} agent(s) manquant(s).
                           </p>
                         )}

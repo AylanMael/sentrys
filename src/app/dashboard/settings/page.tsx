@@ -182,7 +182,7 @@ export default function SettingsPage() {
           description:
             error instanceof Error
               ? error.message
-              : "Impossible de charger l'identite agence.",
+              : "Impossible de charger l'identité agence.",
           variant: "destructive",
         });
       } finally {
@@ -223,7 +223,7 @@ export default function SettingsPage() {
       if (!options?.quiet) {
         toast({
           title: "Configuration agence enregistrée",
-          description: "Les prochains documents et aperçus email utiliseront ces informations.",
+          description: "Les prochains documents et aperçus email utiliséront ces informations.",
         });
       }
       return response;
@@ -580,8 +580,8 @@ export default function SettingsPage() {
                       <StatusTile
                         label="État Domaine Agence"
                         value={emailDomainStatusLabel(emailSettings.domainStatus)}
-                        tone={emailSettings.domainStatus === "verified" ? "good" : emailSettings.domainStatus === "pending" ? "warning" : "neutral"}
-                        pulse={emailSettings.domainStatus === "verified" || emailSettings.domainStatus === "pending"}
+                        tone={emailSettings.domainStatus === "vérifiéd" ? "good" : emailSettings.domainStatus === "pending" ? "warning" : "neutral"}
+                        pulse={emailSettings.domainStatus === "vérifiéd" || emailSettings.domainStatus === "pending"}
                       />
                     </div>
 
@@ -651,7 +651,7 @@ export default function SettingsPage() {
                             disabled={
                               !canEdit ||
                               emailSettings.provider !== "brevo" ||
-                              emailSettings.domainStatus !== "verified"
+                              emailSettings.domainStatus !== "vérifiéd"
                             }
                             className="h-9 rounded-lg text-[10px] font-black uppercase tracking-[0.12em] transition-all"
                           >

@@ -114,7 +114,7 @@ export function computeAgentCompliance(
     alerts.push({
       code: "agent_inactive",
       title: "Agent inactif",
-      detail: "Cet agent ne doit pas etre affecte tant qu'il est inactif.",
+      detail: "Cet agent ne doit pas être affecte tant qu'il est inactif.",
       severity: "blocking",
     });
   }
@@ -131,8 +131,8 @@ export function computeAgentCompliance(
   if (!cardNumber) {
     alerts.push({
       code: "professional_card_missing",
-      title: "Carte professionnelle non renseignee",
-      detail: "Numero CNAPS a completer pour securiser l'exploitation.",
+      title: "Carte professionnelle non renseignée",
+      detail: "Numéro CNAPS a compléter pour sécuriser l'exploitation.",
       severity: "warning",
     });
   }
@@ -147,14 +147,14 @@ export function computeAgentCompliance(
   } else if (cardDays !== null && cardDays < 0) {
     alerts.push({
       code: "professional_card_expired",
-      title: "Carte professionnelle expiree",
-      detail: "Affectation bloquee jusqu'a regularisation.",
+      title: "Carte professionnelle expirée",
+      detail: "Affectation bloquée jusqu'a régularisation.",
       severity: "blocking",
     });
   } else if (cardDays !== null && cardDays <= 60) {
     alerts.push({
       code: "professional_card_expiring_soon",
-      title: "Carte pro bientot expiree",
+      title: "Carte pro bientot expirée",
       detail: `Expiration dans ${cardDays} jour${cardDays > 1 ? "s" : ""}.`,
       severity: "warning",
     });
@@ -163,7 +163,7 @@ export function computeAgentCompliance(
   if (qualificationsOf(agent).length === 0) {
     alerts.push({
       code: "qualifications_missing",
-      title: "Qualifications non renseignees",
+      title: "Qualifications non renseignées",
       detail: "Renseignez ADS, SSIAP, SST ou les habilitations utiles.",
       severity: "warning",
     });

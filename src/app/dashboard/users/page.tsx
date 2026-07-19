@@ -121,21 +121,21 @@ const ROLE_RESTRICTIONS: Array<{
 }> = [
   {
     role: "owner",
-    title: "Proprietaire",
+    title: "Propriétaire",
     detail: "Pilotage complet de l'agence et des droits sensibles.",
     permissions: ["Tout administrer", "Gerer utilisateurs", "Facturation", "Exports"],
   },
   {
     role: "admin",
     title: "Administrateur",
-    detail: "Gestion operationnelle complete hors transfert proprietaire.",
-    permissions: ["Planning", "Agents/sites", "Utilisateurs", "Parametres"],
+    detail: "Gestion opérationnelle complete hors transfert propriétaire.",
+    permissions: ["Planning", "Agents/sites", "Utilisateurs", "Paramètres"],
   },
   {
     role: "manager",
     title: "Manager exploitation",
     detail: "Pilote le terrain sans toucher aux droits sensibles.",
-    permissions: ["Planning", "Conduite", "Incidents", "Pre-paie lecture"],
+    permissions: ["Planning", "Conduite", "Incidents", "Pré-paie lecture"],
   },
   {
     role: "agent",
@@ -146,7 +146,7 @@ const ROLE_RESTRICTIONS: Array<{
   {
     role: "client",
     title: "Client",
-    detail: "Acces restreint aux informations de son perimetre client.",
+    detail: "Acces restreint aux informations de son périmètre client.",
     permissions: ["Vue client", "PDF site", "Suivi prestation"],
   },
   {
@@ -272,7 +272,7 @@ export default function UsersPage() {
       } catch (err) {
         const message = getApiErrorMessage(
           err,
-          "Impossible de charger les utilisateurs reels."
+          "Impossible de charger les utilisateurs réels."
         );
         setError(message);
         feedback.error(err, {
@@ -297,8 +297,8 @@ export default function UsersPage() {
   ) {
     if (!target.canEdit || target.isSelf) {
       feedback.warning(
-        "Action protegee",
-        "Vous ne pouvez pas modifier votre propre acces ou un compte protege."
+        "Action protégée",
+        "Vous ne pouvez pas modifier votre propre accès ou un compte protégé."
       );
       return;
     }
@@ -316,8 +316,8 @@ export default function UsersPage() {
       });
 
       feedback.success(
-        "Acces mis a jour",
-        `${target.name ?? target.email ?? target.uid} a ete modifie.`
+        "Acces mis à jour",
+        `${target.name ?? target.email ?? target.uid} a été modifié.`
       );
       await loadUsers(true);
     } catch (err) {
@@ -353,7 +353,7 @@ export default function UsersPage() {
     if (!editableRoles.includes(inviteRole)) {
       feedback.warning(
         "Role non autorise",
-        "Votre niveau d'acces ne permet pas d'attribuer ce role."
+        "Votre niveau d'accès ne permet pas d'attribuer ce role."
       );
       return;
     }
@@ -375,8 +375,8 @@ export default function UsersPage() {
       setInviteEmail("");
       setInviteName("");
       feedback.success(
-        "Invitation preparee",
-        `${result.name} est rattache a l'agence avec le role ${result.roleLabel}.`
+        "Invitation préparée",
+        `${result.name} est rattaché à l'agence avec le role ${result.roleLabel}.`
       );
       await loadUsers(true);
     } catch (err) {
@@ -413,7 +413,7 @@ export default function UsersPage() {
         icon={LockKeyhole}
         tone="danger"
         title="Acces reserve aux administrateurs"
-        description="La gestion des utilisateurs permet de modifier les roles et restrictions de l'agence. Elle est reservee aux proprietaires et administrateurs."
+        description="La gestion des utilisateurs permet de modifier les rôles et restrictions de l'agence. Elle est reservee aux propriétaires et administrateurs."
       />
     );
   }
@@ -424,15 +424,15 @@ export default function UsersPage() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <Badge className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100">
-              Donnees reelles tenantUsers
+              Données réelles tenantUsers
             </Badge>
             <h1 className="mt-4 flex items-center gap-3 text-3xl font-black tracking-tight md:text-4xl">
               <Users className="h-8 w-8 text-cyan-200" />
-              Utilisateurs, roles et restrictions
+              Utilisateurs, rôles et restrictions
             </h1>
             <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-slate-300">
-              Cet ecran pilote les acces reels de l'agence. Chaque changement
-              est enregistre dans l'audit log et les roles definissent les
+              Cet écran pilote les accès réels de l'agence. Chaque changement
+              est enregistre dans l'audit log et les rôles definissent les
               modules accessibles.
             </p>
           </div>
@@ -454,8 +454,8 @@ export default function UsersPage() {
                 Inviter un utilisateur
               </DialogTitle>
               <DialogDescription className="font-semibold leading-6">
-                Provisionne un compte Firebase Auth, rattache l'utilisateur a
-                cette agence, puis prepare un lien d'activation testable.
+                Provisionne un compte Firebase Auth, rattaché l'utilisateur a
+                cette agence, puis prépare un lien d'activation testable.
               </DialogDescription>
             </DialogHeader>
 
@@ -511,7 +511,7 @@ export default function UsersPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs font-semibold leading-5 text-muted-foreground">
-                  Le role determine les modules visibles. Par prudence, evitez
+                  Le role determine les modules visibles. Par prudence, évitez
                   les droits administrateur si l'utilisateur n'en a pas besoin.
                 </p>
               </div>
@@ -522,12 +522,12 @@ export default function UsersPage() {
                     <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-700 dark:text-emerald-300" />
                     <div className="min-w-0 flex-1">
                       <p className="font-black text-foreground">
-                        Invitation prete pour {inviteResult.name}
+                        Invitation prête pour {inviteResult.name}
                       </p>
                       <p className="mt-1 text-sm font-semibold leading-6 text-muted-foreground">
                         {inviteResult.createdAuthUser
-                          ? "Un nouveau compte Firebase a ete cree."
-                          : "Un compte existant a ete rattache ou reactive."}
+                          ? "Un nouveau compte Firebase a été créé."
+                          : "Un compte existant a été rattaché ou réactive."}
                       </p>
 
                       {inviteResult.resetLink ? (
@@ -549,8 +549,8 @@ export default function UsersPage() {
                         </div>
                       ) : (
                         <p className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-3 text-xs font-bold text-amber-800 dark:text-amber-200">
-                          Le lien d'activation n'a pas pu etre genere. Le compte
-                          est cree, mais il faudra renvoyer un lien apres
+                          Le lien d'activation n'a pas pu être généré. Le compte
+                          est créé, mais il faudra renvoyer un lien après
                           configuration Firebase Auth.
                         </p>
                       )}
@@ -666,7 +666,7 @@ export default function UsersPage() {
                 icon={Users}
                 tone="warning"
                 title="Aucun utilisateur dans ce filtre"
-                description="Changez le filtre ou verifiez le provisioning tenantUsers."
+                description="Changez le filtre ou vérifiéz le provisioning tenantUsers."
                 className="m-6"
               />
             ) : (
@@ -677,7 +677,7 @@ export default function UsersPage() {
                     <TableHead>Role</TableHead>
                     <TableHead>Statut</TableHead>
                     <TableHead>Restrictions</TableHead>
-                    <TableHead>Derniere mise a jour</TableHead>
+                    <TableHead>Derniere mise à jour</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -714,7 +714,7 @@ export default function UsersPage() {
                                 ) : null}
                               </div>
                               <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                                {item.email ?? "Email non renseigne"}
+                                {item.email ?? "Email non renseigné"}
                               </p>
                               <p className="mt-1 font-mono text-[10px] text-muted-foreground/70">
                                 {item.uid}
@@ -789,8 +789,8 @@ export default function UsersPage() {
                           {!canEditRow ? (
                             <p className="mt-2 text-xs font-semibold text-muted-foreground">
                               {item.isSelf
-                                ? "Votre propre acces est protege."
-                                : "Compte protege ou role non modifiable par votre niveau."}
+                                ? "Votre propre accès est protégé."
+                                : "Compte protégé ou role non modifiable par votre niveau."}
                             </p>
                           ) : null}
                         </TableCell>
@@ -800,7 +800,7 @@ export default function UsersPage() {
                           {updating ? (
                             <div className="mt-2 flex items-center gap-2 text-xs text-primary">
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              Mise a jour...
+                              Mise à jour...
                             </div>
                           ) : null}
                         </TableCell>
@@ -821,7 +821,7 @@ export default function UsersPage() {
                 Restrictions par role
               </CardTitle>
               <CardDescription>
-                Lecture rapide des droits pour eviter les erreurs d'affectation.
+                Lecture rapide des droits pour éviter les erreurs d'affectation.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -867,9 +867,9 @@ export default function UsersPage() {
               <div>
                 <p className="font-black text-foreground">Regles de securite</p>
                 <p className="mt-1 text-sm font-medium leading-6 text-muted-foreground">
-                  Le dernier administrateur actif ne peut pas etre retire. Votre
-                  propre acces ne peut pas etre modifie depuis cet ecran. Les
-                  changements sont traces dans l'audit log.
+                  Le dernier administrateur actif ne peut pas être retire. Votre
+                  propre accès ne peut pas être modifié depuis cet écran. Les
+                  changements sont tracés dans l'audit log.
                 </p>
               </div>
             </CardContent>

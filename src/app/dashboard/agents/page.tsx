@@ -76,10 +76,10 @@ function agentInitials(agent: Agent) {
 }
 
 function professionalCardLabel(agent: Agent) {
-  if (!agent.professionalCardExpiresAt) return "A verifier";
+  if (!agent.professionalCardExpiresAt) return "A vérifier";
 
   const target = new Date(`${agent.professionalCardExpiresAt}T00:00:00`);
-  if (Number.isNaN(target.getTime())) return "A verifier";
+  if (Number.isNaN(target.getTime())) return "A vérifier";
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -98,7 +98,7 @@ function complianceBadgeClass(status: string) {
 
 function complianceLabel(status: string) {
   if (status === "blocking") return "Bloquant";
-  if (status === "warning") return "A completer";
+  if (status === "warning") return "A compléter";
   return "Dossier OK";
 }
 
@@ -251,7 +251,7 @@ export default function AgentsPage() {
                 Agents
               </h1>
               <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                Visualisez les agents, leur conformite, leurs contacts et les dossiers a traiter.
+                Visualisez les agents, leur conformité, leurs contacts et les dossiers à traiter.
               </p>
             </div>
           </div>
@@ -270,7 +270,7 @@ export default function AgentsPage() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <AgentMetric label="Agents filtres" value={agents.length} detail="Vivier courant" />
         <AgentMetric label="Actifs" value={countActive} detail={`${countInactive} inactif(s)`} tone="success" />
-        <AgentMetric label="A completer" value={complianceSummary.warning} detail="Dossiers a surveiller" tone="warning" />
+        <AgentMetric label="A compléter" value={complianceSummary.warning} detail="Dossiers a surveiller" tone="warning" />
         <AgentMetric label="Bloquants" value={complianceSummary.blocking} detail="Non affectables" tone={complianceSummary.blocking > 0 ? "danger" : "success"} />
       </div>
 
@@ -396,7 +396,7 @@ export default function AgentsPage() {
               </p>
               {canWrite && (
                 <Button asChild variant="outline" className="rounded-xl font-semibold">
-                  <Link href="/dashboard/agents/new">Creer le premier agent</Link>
+                  <Link href="/dashboard/agents/new">Créer le premier agent</Link>
                 </Button>
               )}
             </div>
@@ -530,7 +530,7 @@ export default function AgentsPage() {
                       <TableRow className="bg-muted/35 hover:bg-muted/35">
                         <TableHead className="min-w-[260px] pl-6 font-black uppercase tracking-[0.12em]">Agent</TableHead>
                         <TableHead className="font-black uppercase tracking-[0.12em]">Statut</TableHead>
-                        <TableHead className="font-black uppercase tracking-[0.12em]">Conformite</TableHead>
+                        <TableHead className="font-black uppercase tracking-[0.12em]">Conformité</TableHead>
                         <TableHead className="font-black uppercase tracking-[0.12em]">Carte pro</TableHead>
                         <TableHead className="font-black uppercase tracking-[0.12em]">Contact</TableHead>
                         <TableHead className="pr-6 text-right font-black uppercase tracking-[0.12em]">Action</TableHead>
@@ -563,7 +563,7 @@ export default function AgentsPage() {
                                 <div>
                                   <p className="font-black text-foreground">{agentName(a)}</p>
                                   <p className="text-xs font-medium text-muted-foreground">
-                                    {a.employeeNumber || "Matricule non renseigne"}
+                                    {a.employeeNumber || "Matricule non renseigné"}
                                   </p>
                                 </div>
                               </div>
@@ -595,7 +595,7 @@ export default function AgentsPage() {
                             <TableCell>
                               <div className="space-y-1 text-sm">
                                 <p className="font-bold text-foreground">
-                                  {a.professionalCardNumber || "Numero absent"}
+                                  {a.professionalCardNumber || "Numéro absent"}
                                 </p>
                                 <p className="text-xs font-medium text-muted-foreground">
                                   {professionalCardLabel(a)}

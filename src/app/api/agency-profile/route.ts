@@ -122,7 +122,7 @@ export async function PATCH(req: NextRequest) {
     action: "agency_profile.updated",
     entityType: "system",
     entityId: auth.tenantId,
-    message: "Identite documentaire agence mise a jour",
+    message: "Identité documentaire agence mise à jour",
     severity: "info",
     meta: {
       hasLogo: Boolean(profile.logoUrl),

@@ -260,7 +260,7 @@ function formatHourQuantity(hours: number) {
 }
 
 function getAgentName(agent?: AgentPrintItem | null) {
-  if (!agent) return "Agent non renseigne";
+  if (!agent) return "Agent non renseigné";
 
   const name = `${agent.firstName ?? ""} ${agent.lastName ?? ""}`.trim();
   const employeeNumber = normalizeText(agent.employeeNumber);
@@ -749,12 +749,12 @@ function SitePlanningPrintContent() {
           </div>
         ) : sitePlans.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-slate-700">
-            Aucun planning site a imprimer sur cette periode.
+            Aucun planning site à imprimer sur cette période.
           </div>
         ) : (
           <div className="space-y-4">
             {sitePlans.map((plan) => {
-              const siteDetails = getSiteSubtitle(plan.site);
+              const siteDétails = getSiteSubtitle(plan.site);
               const siteLabel = getSiteLabel(plan.site);
 
               return (
@@ -828,7 +828,7 @@ function SitePlanningPrintContent() {
                       <p className="mt-1 text-lg font-black leading-tight text-slate-950">
                         {siteLabel}
                       </p>
-                      {siteDetails.map((detail) => (
+                      {siteDétails.map((detail) => (
                         <p
                           key={detail}
                           className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-500"
@@ -907,7 +907,7 @@ function SitePlanningPrintContent() {
                               colSpan={days.length + 2}
                               className="border border-slate-200 px-3 py-8 text-center text-sm font-semibold text-slate-500"
                             >
-                              Aucun agent planifie sur ce site pour cette periode.
+                              Aucun agent planifie sur ce site pour cette période.
                             </td>
                           </tr>
                         ) : (
@@ -1023,7 +1023,7 @@ function SitePlanningPrintContent() {
                       </p>
                       <p className="mt-0.5">
                         {agencyProfile.footerNote ||
-                          "Document operationnel - seule la derniere version diffusee fait foi."}
+                          "Document opérationnel - seule la derniere version diffusée fait foi."}
                       </p>
                     </div>
                     <p className="text-right leading-tight">

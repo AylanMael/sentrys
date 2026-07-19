@@ -36,11 +36,11 @@ function bad(message: string) {
 }
 
 function actionMessage(action: PrepayPeriodAction) {
-  if (action === "check") return "Pre-paie controlee";
-  if (action === "validate") return "Pre-paie validee";
-  if (action === "lock") return "Pre-paie verrouillee";
-  if (action === "mark_exported") return "Pre-paie marquee exportee";
-  return "Pre-paie rouverte";
+  if (action === "check") return "Pré-paie controlee";
+  if (action === "validate") return "Pré-paie validee";
+  if (action === "lock") return "Pré-paie verrouillée";
+  if (action === "mark_exported") return "Pré-paie marquée exportée";
+  return "Pré-paie rouverte";
 }
 
 function periodRef(tenantId: string, fromIso: string, toIso: string) {

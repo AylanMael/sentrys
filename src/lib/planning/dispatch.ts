@@ -42,8 +42,8 @@ export function getDispatchDeliveryStatus(
 
 export function dispatchChannelLabel(channel: DispatchChannel) {
   if (channel === "portal") return "Portail agent";
-  if (channel === "email") return "Email simule";
-  if (channel === "whatsapp") return "WhatsApp simule";
+  if (channel === "email") return "Email simulé";
+  if (channel === "whatsapp") return "WhatsApp simulé";
   return "Historique interne";
 }
 

@@ -129,7 +129,7 @@ type ComplianceOverrideItem = {
   channel: string;
   sentAtIso: string | null;
   complianceOverrideReason: string | null;
-  complianceOverrideDetail: string | null;
+  complianceOverrideDétail: string | null;
   complianceResolutionStatus: ResolutionStatus;
   complianceResolutionNote: string | null;
   complianceResolutionAtIso: string | null;
@@ -184,10 +184,10 @@ function formatFileSize(size: number | null | undefined) {
 }
 
 function formatDateTime(value: string | null) {
-  if (!value) return "Non renseigne";
+  if (!value) return "Non renseigné";
 
   const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "Non renseigne";
+  if (!Number.isFinite(date.getTime())) return "Non renseigné";
 
   return new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
@@ -222,7 +222,7 @@ function equipmentStatusClass(status: AgentEquipmentItem["status"]) {
 function complianceOverrideStatusLabel(status: ResolutionStatus) {
   if (status === "regularized") return "Regularise";
   if (status === "accepted_exception") return "Exception acceptee";
-  return "A regulariser";
+  return "A régulariser";
 }
 
 function complianceOverrideStatusClass(status: ResolutionStatus) {
@@ -293,8 +293,8 @@ function getAgentComplianceAlerts(agent: Agent): ComplianceAlert[] {
   if (!agent.professionalCardNumber) {
     alerts.push({
       id: "card-number",
-      title: "Carte professionnelle non renseignee",
-      detail: "Point sensible exploitation : numero CNAPS a completer.",
+      title: "Carte professionnelle non renseignée",
+      detail: "Point sensible exploitation : numéro CNAPS a compléter.",
       tone: "danger",
     });
   }
@@ -303,20 +303,20 @@ function getAgentComplianceAlerts(agent: Agent): ComplianceAlert[] {
     alerts.push({
       id: "card-expiry",
       title: "Expiration carte pro absente",
-      detail: "Sans date d'expiration, le controle de conformite reste aveugle.",
+      detail: "Sans date d'expiration, le controle de conformité reste aveugle.",
       tone: "warning",
     });
   } else if (cardDays !== null && cardDays < 0) {
     alerts.push({
       id: "card-expired",
-      title: "Carte professionnelle expiree",
+      title: "Carte professionnelle expirée",
       detail: "A traiter avant toute affectation sensible.",
       tone: "danger",
     });
   } else if (cardDays !== null && cardDays <= 60) {
     alerts.push({
       id: "card-soon",
-      title: "Carte pro bientot expiree",
+      title: "Carte pro bientot expirée",
       detail: `Expiration dans ${cardDays} jour${cardDays > 1 ? "s" : ""}.`,
       tone: "warning",
     });
@@ -343,7 +343,7 @@ function getAgentComplianceAlerts(agent: Agent): ComplianceAlert[] {
   if (!hasIdentityDocument) {
     alerts.push({
       id: "doc-identity",
-      title: "Piece d'identite non archivee",
+      title: "Piece d'identité non archivee",
       detail: "Pratique pour le controle administratif et les renouvellements.",
       tone: "info",
     });
@@ -365,8 +365,8 @@ function getOperationalVerdict(
       tone: "blocked",
       label: "Bloque",
       title: "Agent suspendu",
-      detail: "Cet agent ne doit pas etre affecte tant que son statut reste inactif.",
-      action: "Verifier le motif de suspension avant toute planification.",
+      detail: "Cet agent ne doit pas être affecte tant que son statut reste inactif.",
+      action: "Vérifier le motif de suspension avant toute planification.",
     };
   }
 
@@ -376,7 +376,7 @@ function getOperationalVerdict(
       label: "Non affectable",
       title: firstDanger.title,
       detail: firstDanger.detail,
-      action: "Regulariser ce point avant une affectation sensible.",
+      action: "Régulariser ce point avant une affectation sensible.",
     };
   }
 
@@ -385,7 +385,7 @@ function getOperationalVerdict(
       tone: "watch",
       label: "A surveiller",
       title: "Affectable avec vigilance",
-      detail: `${openComplianceCount} point(s) de conformite planning restent ouverts.`,
+      detail: `${openComplianceCount} point(s) de conformité planning restent ouverts.`,
       action: "Consulter le registre avant diffusion du planning.",
     };
   }
@@ -393,10 +393,10 @@ function getOperationalVerdict(
   if (firstWarning) {
     return {
       tone: "watch",
-      label: "A completer",
+      label: "A compléter",
       title: firstWarning.title,
       detail: firstWarning.detail,
-      action: "Completer le dossier pour eviter un blocage plus tard.",
+      action: "Compléter le dossier pour éviter un blocage plus tard.",
     };
   }
 
@@ -404,8 +404,8 @@ function getOperationalVerdict(
     tone: "go",
     label: "Affectable",
     title: "Pret pour planification",
-    detail: "Identite, contact et conformite essentielle sont exploitables.",
-    action: "L'agent peut etre planifie et diffuse sans alerte majeure.",
+    detail: "Identité, contact et conformité essentielle sont exploitables.",
+    action: "L'agent peut être planifie et diffusé sans alerte majeure.",
   };
 }
 
@@ -453,11 +453,11 @@ function getDocumentChecklist(agent: Agent): DocumentCheck[] {
       label: "Carte pro",
       detail:
         cardDays === null
-          ? "A verifier"
+          ? "A vérifier"
           : cardDays < 0
             ? "Expiree"
             : cardDays <= 60
-              ? "Bientot expiree"
+              ? "Bientot expirée"
               : "Valide",
       tone:
         cardDays === null
@@ -476,7 +476,7 @@ function getDocumentChecklist(agent: Agent): DocumentCheck[] {
     },
     {
       id: "identity",
-      label: "Identite",
+      label: "Identité",
       detail: hasIdentityDocument ? "Archivee" : "A archiver",
       tone: hasIdentityDocument ? "success" : "info",
     },
@@ -490,7 +490,7 @@ function documentCheckClass(tone: DocumentCheck["tone"]) {
   return "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200";
 }
 
-export default function AgentDetailPage() {
+export default function AgentDétailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
@@ -565,7 +565,7 @@ export default function AgentDetailPage() {
           setComplianceOverridesError(
             error instanceof Error
               ? error.message
-              : "Impossible de charger les exceptions conformite."
+              : "Impossible de charger les exceptions conformité."
           );
         }
       } finally {
@@ -596,7 +596,7 @@ export default function AgentDetailPage() {
         setAgent((prev: Agent | null) => (prev ? { ...prev, ...patch } : null));
         feedback.success(
           "Dossier sauvegarde",
-          "Les informations de l'agent sont a jour."
+          "Les informations de l'agent sont à jour."
         );
       }
     } catch (error) {
@@ -774,7 +774,7 @@ export default function AgentDetailPage() {
         current ? { ...current, photoUrl: response.photoUrl } : current
       );
       feedback.success(
-        "Photo mise a jour",
+        "Photo mise à jour",
         "L'identification visuelle de l'agent est disponible."
       );
     } catch (error) {
@@ -806,7 +806,7 @@ export default function AgentDetailPage() {
         icon={UserCircle}
         tone="warning"
         title="Agent introuvable"
-        description="Ce profil n'existe pas ou a ete supprime."
+        description="Ce profil n'existe pas ou a été supprime."
         className="mx-auto mt-10 min-h-[50vh] max-w-2xl"
         action={
           <Button
@@ -980,7 +980,7 @@ export default function AgentDetailPage() {
                 {agentName}
               </h2>
               <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                {agent.employeeNumber ? `Matricule ${agent.employeeNumber}` : "Matricule non renseigne"}
+                {agent.employeeNumber ? `Matricule ${agent.employeeNumber}` : "Matricule non renseigné"}
               </p>
             </div>
 
@@ -994,7 +994,7 @@ export default function AgentDetailPage() {
                 </Button>
               ) : (
                 <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-bold text-amber-800 dark:text-amber-200">
-                  Telephone a renseigner
+                  Telephone a renseignér
                 </div>
               )}
 
@@ -1007,7 +1007,7 @@ export default function AgentDetailPage() {
                 </Button>
               ) : (
                 <div className="rounded-2xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm font-bold text-sky-800 dark:text-sky-200">
-                  Email a renseigner
+                  Email a renseignér
                 </div>
               )}
             </div>
@@ -1017,7 +1017,7 @@ export default function AgentDetailPage() {
                 Urgence
               </p>
               <p className="mt-1 font-black text-foreground">
-                {agent.emergencyContactName || "Contact non renseigne"}
+                {agent.emergencyContactName || "Contact non renseigné"}
               </p>
               <p className="text-sm font-semibold text-muted-foreground">
                 {agent.emergencyContactPhone || "Telephone urgence absent"}
@@ -1124,7 +1124,7 @@ export default function AgentDetailPage() {
               <div className="flex items-center gap-2">
                 <ShieldAlert className="h-4 w-4 text-primary" />
                 <h2 className="text-sm font-semibold text-foreground">
-                  Controle exploitation
+                  Contrôle exploitation
                 </h2>
               </div>
               <Badge variant="outline" className="font-mono">
@@ -1184,7 +1184,7 @@ export default function AgentDetailPage() {
                   ))}
                   {complianceAlerts.length > 5 && (
                     <p className="text-xs font-semibold text-muted-foreground">
-                      +{complianceAlerts.length - 5} point(s) a completer.
+                      +{complianceAlerts.length - 5} point(s) a compléter.
                     </p>
                   )}
                 </div>
@@ -1207,7 +1207,7 @@ export default function AgentDetailPage() {
               <div className="flex items-center gap-2">
                 <FileWarning className="h-4 w-4 text-primary" />
                 <h2 className="text-sm font-semibold text-foreground">
-                  Conformite planning
+                  Conformité planning
                 </h2>
               </div>
               <Badge
@@ -1238,7 +1238,7 @@ export default function AgentDetailPage() {
                     <p className="font-bold">Aucune exception de planning</p>
                   </div>
                   <p className="mt-1 text-xs opacity-80">
-                    Aucun forcage conformite n'est rattache a cet agent.
+                    Aucun forçage conformité n'est rattaché a cet agent.
                   </p>
                 </div>
               ) : (
@@ -1246,7 +1246,7 @@ export default function AgentDetailPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-200">
                       <p className="text-[10px] font-black uppercase tracking-[0.14em] opacity-70">
-                        A regulariser
+                        A régulariser
                       </p>
                       <p className="mt-1 text-2xl font-black">
                         {openComplianceOverrides.length}
@@ -1287,8 +1287,8 @@ export default function AgentDetailPage() {
                           </span>
                         </div>
                         <p className="mt-2 font-bold text-foreground">
-                          {item.complianceOverrideDetail ||
-                            "Blocage conformite non detaille"}
+                          {item.complianceOverrideDétail ||
+                            "Blocage conformité non détaillé"}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {item.periodLabel} - {item.vacationCount} vacation(s)
@@ -1351,7 +1351,7 @@ export default function AgentDetailPage() {
                   ))
                 ) : (
                   <span className="text-sm italic text-muted-foreground">
-                    Aucune qualification renseignee
+                    Aucune qualification renseignée
                   </span>
                 )}
               </div>
@@ -1364,9 +1364,9 @@ export default function AgentDetailPage() {
             <div className="overflow-x-auto rounded-2xl border bg-card p-2 shadow-sm">
               <TabsList className="h-auto w-max min-w-full justify-start gap-2 bg-transparent p-0">
                 <TabsTrigger value="profil" className="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-[0.12em]">Profil & contact</TabsTrigger>
-                <TabsTrigger value="conformite" className="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-[0.12em]">Conformite</TabsTrigger>
+                <TabsTrigger value="conformite" className="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-[0.12em]">Conformité</TabsTrigger>
                 <TabsTrigger value="documents" className="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-[0.12em]">Documents</TabsTrigger>
-                <TabsTrigger value="rh" className="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-[0.12em]">RH & materiel</TabsTrigger>
+                <TabsTrigger value="rh" className="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-[0.12em]">RH & matériel</TabsTrigger>
               </TabsList>
             </div>
 
@@ -1561,7 +1561,7 @@ export default function AgentDetailPage() {
                       setAgent({ ...agent, addressLine1: e.target.value })
                     }
                     readOnly={!canWrite}
-                    placeholder="Numero et rue"
+                    placeholder="Numéro et rue"
                     className="h-12 rounded-xl bg-background border-border/50 focus-visible:ring-primary/30 font-medium"
                   />
                 </div>
@@ -1625,7 +1625,7 @@ export default function AgentDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
                   <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest pl-1">
-                    Numero carte professionnelle
+                    Numéro carte professionnelle
                   </Label>
                   <Input
                     value={agent.professionalCardNumber ?? ""}
@@ -1633,7 +1633,7 @@ export default function AgentDetailPage() {
                       setAgent({ ...agent, professionalCardNumber: e.target.value })
                     }
                     readOnly={!canWrite}
-                    placeholder="Numero CNAPS"
+                    placeholder="Numéro CNAPS"
                     className="h-12 rounded-xl bg-background border-border/50 focus-visible:ring-primary/30 font-medium"
                   />
                 </div>
@@ -1711,7 +1711,7 @@ export default function AgentDetailPage() {
                     Equipements individuels
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Tenues, badges, cles, radio, PTI/DATI et materiel remis a l'agent.
+                    Tenues, badges, cles, radio, PTI/DATI et matériel remis a l'agent.
                   </p>
                 </div>
               </div>
@@ -1731,7 +1731,7 @@ export default function AgentDetailPage() {
             <CardContent className="p-6 space-y-5">
               {equipmentItems.length === 0 ? (
                 <div className="rounded-xl border border-dashed bg-muted/10 p-6 text-center text-sm text-muted-foreground">
-                  Aucun equipement rattache a cet agent. Ajoutez ici les tenues, badges, radios, cles ou PTI remis.
+                  Aucun equipement rattaché a cet agent. Ajoutez ici les tenues, badges, radios, cles ou PTI remis.
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1870,7 +1870,7 @@ export default function AgentDetailPage() {
                       <div className="grid gap-3 md:grid-cols-2">
                         <div className="space-y-2">
                           <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                            Etat
+                            État
                           </Label>
                           <Input
                             value={item.condition ?? ""}
@@ -1916,7 +1916,7 @@ export default function AgentDetailPage() {
                     className="rounded-xl font-semibold"
                   >
                     {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Enregistrer le materiel
+                    Enregistrer le matériel
                   </Button>
                 </div>
               )}
@@ -2002,7 +2002,7 @@ export default function AgentDetailPage() {
                   })
                 ) : (
                   <div className="rounded-xl border border-dashed bg-muted/10 p-6 text-center text-sm text-muted-foreground">
-                    Aucun document rattache a cet agent.
+                    Aucun document rattaché a cet agent.
                   </div>
                 )}
               </div>

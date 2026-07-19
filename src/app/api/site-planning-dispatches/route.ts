@@ -47,7 +47,7 @@ type SiteDispatchVacation = {
   endAtIso: string | null;
   assignedAgentIds: string[];
   requiredAgents: number;
-  publicationStatus: "draft" | "published" | "modified";
+  publicationStatus: "draft" | "published" | "modifiéd";
 };
 
 type SitePlanningDispatchRow = {
@@ -65,7 +65,7 @@ type SitePlanningDispatchRow = {
   vacationCount: number;
   readyVacationCount: number;
   draftCount: number;
-  modifiedCount: number;
+  modifiédCount: number;
   missingAgentCount: number;
   plannedAgentCount: number;
   channel: DispatchChannel;
@@ -137,7 +137,7 @@ function publicationStatus(data: Record<string, unknown>) {
     Number.isFinite(updatedAt) &&
     updatedAt > publishedAt + 1000
   ) {
-    return "modified" as const;
+    return "modifiéd" as const;
   }
 
   return "published" as const;
@@ -171,7 +171,7 @@ function pickDispatch(
     vacationCount: Number(data.vacationCount ?? 0),
     readyVacationCount: Number(data.readyVacationCount ?? 0),
     draftCount: Number(data.draftCount ?? 0),
-    modifiedCount: Number(data.modifiedCount ?? 0),
+    modifiédCount: Number(data.modifiédCount ?? 0),
     missingAgentCount: Number(data.missingAgentCount ?? 0),
     plannedAgentCount: Number(data.plannedAgentCount ?? 0),
     channel,
@@ -428,7 +428,7 @@ export async function POST(req: NextRequest) {
       const clientName =
         normalizeText(client?.name) ||
         groupSites[0]?.clientName ||
-        (groupSites.length === 1 ? groupSites[0].name : "Client non renseigne");
+        (groupSites.length === 1 ? groupSites[0].name : "Client non renseigné");
       const clientEmail =
         normalizeText(client?.billingEmail) || normalizeText(client?.email);
       const groupSiteIds = groupSites.map((site) => site.id);
@@ -466,8 +466,8 @@ export async function POST(req: NextRequest) {
         draftCount: groupVacations.filter(
           (vacation) => vacation.publicationStatus === "draft"
         ).length,
-        modifiedCount: groupVacations.filter(
-          (vacation) => vacation.publicationStatus === "modified"
+        modifiédCount: groupVacations.filter(
+          (vacation) => vacation.publicationStatus === "modifiéd"
         ).length,
         missingAgentCount: groupVacations.reduce(
           (total, vacation) => total + missingAgents(vacation),
@@ -480,7 +480,7 @@ export async function POST(req: NextRequest) {
         deliveryTarget: channel === "email" ? clientEmail : null,
         deliveryNote:
           channel === "email"
-            ? "Preparation email : PDF client pret, aucun email reel n'a ete envoye."
+            ? "Preparation email : PDF client prêt, aucun email réel n'a été envoyé."
             : "Remise client journalisee en interne uniquement.",
         pdfUrl: buildPdfUrl({
           fromIso,
@@ -536,10 +536,10 @@ export async function POST(req: NextRequest) {
     actorUid: auth.uid,
     actorEmail: auth.email ?? null,
     actorRole: auth.role ?? null,
-    action: "site-planning.prepared",
+    action: "site-planning.prépared",
     entityType: "site",
     entityId: `${fromIso}_${toIsoParam}`,
-    message: `Remise client preparee pour ${dispatchableRows.length} client(s)`,
+    message: `Remise client préparée pour ${dispatchableRows.length} client(s)`,
     severity: "info",
     meta: {
       fromIso,

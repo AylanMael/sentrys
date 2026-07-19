@@ -256,7 +256,7 @@ export default function ClientsPage() {
                 Clients
               </h1>
               <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                Retrouvez rapidement les clients, contacts, SIRET et sites rattaches.
+                Retrouvez rapidement les clients, contacts, SIRET et sites rattachés.
               </p>
             </div>
           </div>
@@ -288,7 +288,7 @@ export default function ClientsPage() {
         <ClientMetric label="Clients charges" value={items.length} detail={nextCursor ? "D autres resultats disponibles" : "Portefeuille courant"} />
         <ClientMetric label="Actifs" value={activeClientsCount} detail={`${inactiveClientsCount} inactif(s)`} tone="success" />
         <ClientMetric label="Contact incomplet" value={missingContactCount} detail="Email ou telephone absent" tone={missingContactCount > 0 ? "warning" : "success"} />
-        <ClientMetric label="SIRET manquant" value={missingSiretCount} detail="A completer pour facturation" tone={missingSiretCount > 0 ? "warning" : "success"} />
+        <ClientMetric label="SIRET manquant" value={missingSiretCount} detail="A compléter pour facturation" tone={missingSiretCount > 0 ? "warning" : "success"} />
       </div>
 
       <Card className="overflow-hidden rounded-[1.5rem] border bg-background shadow-sm ring-1 ring-black/5">
@@ -430,7 +430,7 @@ export default function ClientsPage() {
                             {c.name}
                           </p>
                           <p className="mt-0.5 truncate text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                            {c.legalName || "Client operationnel"}
+                            {c.legalName || "Client opérationnel"}
                           </p>
                         </div>
                       </div>
@@ -440,17 +440,17 @@ export default function ClientsPage() {
                     <div className="mt-5 grid gap-3 rounded-2xl bg-muted/25 p-4">
                       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                         <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="truncate">{c.email || "Email non renseigne"}</span>
+                        <span className="truncate">{c.email || "Email non renseigné"}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
                         <Phone className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{c.phone || "Telephone non renseigne"}</span>
+                        <span className="truncate">{c.phone || "Telephone non renseigné"}</span>
                       </div>
                     </div>
 
                     <div className="mt-5 flex items-center justify-between gap-3">
                       <code className="truncate rounded-lg bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">
-                        SIRET: {c.siret || "Non renseigne"}
+                        SIRET: {c.siret || "Non renseigné"}
                       </code>
                       <span className="flex items-center text-xs font-black uppercase tracking-widest text-primary">
                         Ouvrir
@@ -525,7 +525,7 @@ export default function ClientsPage() {
                                 {c.name}
                               </p>
                               <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground">
-                                {c.legalName || "Client operationnel"}
+                                {c.legalName || "Client opérationnel"}
                               </p>
                             </div>
                           </div>
@@ -534,17 +534,17 @@ export default function ClientsPage() {
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 text-sm text-foreground">
                               <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                              <span className="truncate">{c.email || "Email non renseigne"}</span>
+                              <span className="truncate">{c.email || "Email non renseigné"}</span>
                             </div>
                             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                               <Phone className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">{c.phone || "Telephone non renseigne"}</span>
+                              <span className="truncate">{c.phone || "Telephone non renseigné"}</span>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <code className="rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">
-                            {c.siret || "Non renseigne"}
+                            {c.siret || "Non renseigné"}
                           </code>
                         </TableCell>
                         <TableCell>{clientStatusBadge(c.status)}</TableCell>
@@ -565,7 +565,7 @@ export default function ClientsPage() {
                   <div className="flex items-center gap-3 bg-muted/50 px-6 py-3 rounded-full border">
                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
                     <span className="text-sm font-bold text-muted-foreground">
-                      Chargement des donnees...
+                      Chargement des données...
                     </span>
                   </div>
                 </div>

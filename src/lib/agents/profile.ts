@@ -11,7 +11,7 @@ export const AGENT_QUALIFICATION_OPTIONS = [
 
 export const AGENT_DOCUMENT_KIND_OPTIONS = [
   { value: "professional_card", label: "Carte professionnelle" },
-  { value: "identity", label: "Piece d'identite" },
+  { value: "identity", label: "Piece d'identité" },
   { value: "address_proof", label: "Justificatif domicile" },
   { value: "qualification", label: "Diplome / qualification" },
   { value: "medical", label: "Document medical" },
@@ -20,7 +20,7 @@ export const AGENT_DOCUMENT_KIND_OPTIONS = [
 ] as const;
 export const AGENT_EQUIPMENT_CATEGORY_OPTIONS = [
   { value: "uniform", label: "Tenue" },
-  { value: "badge", label: "Badge / acces" },
+  { value: "badge", label: "Badge / accès" },
   { value: "radio", label: "Radio" },
   { value: "keys", label: "Cles" },
   { value: "pti", label: "PTI / DATI" },

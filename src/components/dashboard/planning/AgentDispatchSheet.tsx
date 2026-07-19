@@ -100,7 +100,7 @@ type DispatchApiItem = {
   agencyProfile?: AgencyDocumentProfile;
   complianceOverride?: boolean;
   complianceOverrideReason?: string | null;
-  complianceOverrideDetail?: string | null;
+  complianceOverrideDétail?: string | null;
 };
 
 type DispatchListResponse = {
@@ -259,10 +259,10 @@ function deliveryStatusLabel(entry: DispatchApiItem) {
     if (entry.acknowledgedAtIso) return "Confirme";
     if (entry.printedAtIso || (entry.printedCount ?? 0) > 0) return "PDF ouvert";
     if (entry.viewedAtIso || (entry.viewedCount ?? 0) > 0) return "Consulte";
-    return "A relancer";
+    return "A relancéer";
   }
 
-  if (entry.printedAtIso || (entry.printedCount ?? 0) > 0) return "PDF pret";
+  if (entry.printedAtIso || (entry.printedCount ?? 0) > 0) return "PDF prêt";
   if (entry.channel === "email" || entry.channel === "whatsapp") return "Simule";
   if (entry.channel === "internal") return "Journalise";
   if (entry.deliveryStatus === "simulated") return "Simule";
@@ -301,11 +301,11 @@ function channelDescription(channel: DispatchChannel) {
   }
 
   if (channel === "email") {
-    return "Simulation email : on trace l'envoi et le PDF pret, sans envoyer d'email reel.";
+    return "Simulation email : on tracé l'envoi et le PDF prêt, sans envoyer d'email réel.";
   }
 
   if (channel === "whatsapp") {
-    return "Simulation WhatsApp : on trace le message pret, sans envoyer de WhatsApp reel.";
+    return "Simulation WhatsApp : on tracé le message prêt, sans envoyer de WhatsApp réel.";
   }
 
   return "Journalisation interne uniquement, utile pour tests ou remise en main propre.";
@@ -357,18 +357,18 @@ function deliveryTargetForAgent(agent: AgentApiItem, channel: DispatchChannel) {
 
 function deliveryNoteForChannel(channel: DispatchChannel) {
   if (channel === "email") {
-    return "Previsualisation email : PDF pret, aucun email reel n'a ete envoye.";
+    return "Prévisualisation email : PDF prêt, aucun email réel n'a été envoyé.";
   }
 
   if (channel === "whatsapp") {
-    return "Previsualisation WhatsApp : PDF pret, aucun message reel n'a ete envoye.";
+    return "Prévisualisation WhatsApp : PDF prêt, aucun message réel n'a été envoyé.";
   }
 
   if (channel === "portal") {
-    return "Previsualisation portail agent avant publication.";
+    return "Prévisualisation portail agent avant publication.";
   }
 
-  return "Previsualisation interne avant journalisation.";
+  return "Prévisualisation interne avant journalisation.";
 }
 
 export const AgentDispatchSheet: React.FC = () => {
@@ -423,11 +423,11 @@ export const AgentDispatchSheet: React.FC = () => {
         (acc, vacation) => {
           const status = getVacationPublicationStatus(vacation);
           if (status === "draft") acc.draft += 1;
-          if (status === "modified") acc.modified += 1;
+          if (status === "modifiéd") acc.modifiéd += 1;
           if (vacation.assignedAgentIds.length === 0) acc.unassigned += 1;
           return acc;
         },
-        { draft: 0, modified: 0, unassigned: 0 }
+        { draft: 0, modifiéd: 0, unassigned: 0 }
       ),
     [activeVacations]
   );
@@ -636,7 +636,7 @@ export const AgentDispatchSheet: React.FC = () => {
         deliveryTarget: deliveryTargetForAgent(row.agent, channel),
         deliveryNote: deliveryNoteForChannel(channel),
         sentAtIso: new Date().toISOString(),
-        sentBy: "previsualisation",
+        sentBy: "prévisualisation",
         viewedAtIso: null,
         lastViewedAtIso: null,
         viewedCount: 0,
@@ -706,7 +706,7 @@ export const AgentDispatchSheet: React.FC = () => {
           : hasComplianceBlock && !hasForcedCompliance
             ? "Dossier agent bloquant"
             : hasForcedCompliance
-              ? "Pret avec forcage trace"
+              ? "Pret avec forçage tracé"
             : "Pret pour envoi",
         fromName: identity.fromName,
         fromEmail: identity.fromEmail,
@@ -717,10 +717,10 @@ export const AgentDispatchSheet: React.FC = () => {
         preheader: `${row.vacations.length} vacation(s) planifiee(s) sur ${sitesText}.`,
         bodyLines: [
           `Bonjour ${row.label},`,
-          `Votre planning pour la periode du ${period} est pret.`,
-          `Vous etes planifie sur ${row.vacations.length} vacation(s). Sites concernes : ${sitesText}.`,
-          "Le PDF joint fait foi pour vos horaires, lieux d'intervention et consignes operationnelles.",
-          "Merci de verifier votre planning et de signaler rapidement toute anomalie a l'exploitation.",
+          `Votre planning pour la période du ${period} est prêt.`,
+          `Vous etes planifie sur ${row.vacations.length} vacation(s). Sites concernés : ${sitesText}.`,
+          "Le PDF joint fait foi pour vos horaires, lieux d'intervention et consignes opérationnelles.",
+          "Merci de vérifier votre planning et de signaler rapidement toute anomalie a l'exploitation.",
           "Cordialement,",
           identity.fromName,
         ],
@@ -732,15 +732,15 @@ export const AgentDispatchSheet: React.FC = () => {
           },
         ],
         warnings: [
-          missingEmail ? "L'agent n'a pas d'email renseigne." : "",
+          missingEmail ? "L'agent n'a pas d'email renseigné." : "",
           hasComplianceBlock && firstComplianceAlert
-            ? `Conformite bloquante : ${firstComplianceAlert}.`
+            ? `Conformité bloquante : ${firstComplianceAlert}.`
             : "",
           hasForcedCompliance
-            ? `Forcage exploitation trace : ${forceComplianceReasonValue}.`
+            ? `Forçage exploitation tracé : ${forceComplianceReasonValue}.`
             : "",
           !hasComplianceBlock && firstComplianceAlert
-            ? `Point dossier a verifier : ${firstComplianceAlert}.`
+            ? `Point dossier à vérifier : ${firstComplianceAlert}.`
             : "",
           identity.replyTo.includes("configurer")
             ? "L'email d'exploitation de l'agence n'est pas encore configure."
@@ -808,13 +808,13 @@ export const AgentDispatchSheet: React.FC = () => {
       );
 
       toast({
-        title: "Planning diffuse",
+        title: "Planning diffusé",
         description:
           response.blocked && response.blocked.length > 0
-            ? `${response.created} agent(s) prepare(s), ${response.blocked.length} bloque(s) pour coordonnees ou conformite.`
+            ? `${response.created} agent(s) préparé(s), ${response.blocked.length} bloqué(s) pour coordonnées ou conformité.`
             : channel === "portal"
-              ? `${response.created} agent(s) ont recu leur planning dans le portail agent.`
-              : `${response.created} diffusion(s) simulee(s) et historisee(s).`,
+              ? `${response.created} agent(s) ont reçu leur planning dans le portail agent.`
+              : `${response.created} diffusion(s) simulée(s) et historisee(s).`,
       });
       await loadHistory();
     } catch (error) {
@@ -874,8 +874,8 @@ export const AgentDispatchSheet: React.FC = () => {
             Diffusion agents
           </SheetTitle>
           <SheetDescription>
-            Vue agent par agent avant envoi. On diffuse uniquement les vacations
-            publiees, affectees et a jour.
+            Vue agent par agent avant envoi. On diffusé uniquement les vacations
+            publiées, affectees et à jour.
           </SheetDescription>
         </SheetHeader>
 
@@ -891,7 +891,7 @@ export const AgentDispatchSheet: React.FC = () => {
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {selectedRows.length} agent(s) selectionne(s),{" "}
-                  {selectedVacationIds.length} vacation(s) pretes a envoyer.
+                  {selectedVacationIds.length} vacation(s) prêtes a envoyer.
                 </p>
               </div>
 
@@ -954,8 +954,8 @@ export const AgentDispatchSheet: React.FC = () => {
               <div className="flex gap-3">
                 <Send className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  Mode simulation actif : aucun {channel === "email" ? "email" : "WhatsApp"} reel
-                  ne partira aujourd&apos;hui. On cree l&apos;historique, la cible, et le PDF pret a envoyer.
+                  Mode simulation actif : aucun {channel === "email" ? "email" : "WhatsApp"} réel
+                  ne partira aujourd&apos;hui. On crée l&apos;historique, la cible, et le PDF prêt a envoyer.
                 </p>
               </div>
             </div>
@@ -988,7 +988,7 @@ export const AgentDispatchSheet: React.FC = () => {
                       .map((row) => {
                         const issue = complianceIssueByAgentId.get(row.agent.id);
                         return `${row.label} : ${
-                          issue?.blockingAlerts[0] ?? "conformite a corriger"
+                          issue?.blockingAlerts[0] ?? "conformité à corriger"
                         }`;
                       })
                       .join(" - ")}
@@ -1013,8 +1013,8 @@ export const AgentDispatchSheet: React.FC = () => {
                       Forcer la diffusion avec responsabilite exploitation
                     </span>
                     <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-                      Le forcage sera trace dans l&apos;historique et cote serveur.
-                      Les agents sans email/telephone requis resteront bloques.
+                      Le forçage sera tracé dans l&apos;historique et cote serveur.
+                      Les agents sans email/telephone requis resteront bloqués.
                     </span>
                   </span>
                 </label>
@@ -1039,7 +1039,7 @@ export const AgentDispatchSheet: React.FC = () => {
                       )}
                     >
                       {canForceCompliance
-                        ? "Forcage pret : les dossiers bloquants seront diffuses et traces."
+                        ? "Forçage prêt : les dossiers bloquants seront diffusés et tracés."
                         : "Saisis un motif clair de 8 caracteres minimum pour forcer."}
                     </p>
                   </div>
@@ -1054,7 +1054,7 @@ export const AgentDispatchSheet: React.FC = () => {
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
                   {selectedRowsComplianceWarning.length} dossier(s) agent(s) restent
-                  a completer, sans blocage de diffusion.
+                  a compléter, sans blocage de diffusion.
                 </p>
               </div>
             </div>
@@ -1066,7 +1066,7 @@ export const AgentDispatchSheet: React.FC = () => {
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
                   <p className="font-bold">
-                    Volume horaire eleve detecte avant diffusion.
+                    Volume horaire eleve détecté avant diffusion.
                   </p>
                   <p className="mt-1">
                     {selectedRowsWorkloadAlerts
@@ -1090,10 +1090,10 @@ export const AgentDispatchSheet: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm font-black text-emerald-900 dark:text-emerald-100">
-                    Controle final avant diffusion
+                    Contrôle final avant diffusion
                   </p>
                   <p className="mt-1 text-xs text-emerald-800/80 dark:text-emerald-100/80">
-                    PDF, coordonnees et conformite sont verifies avant envoi.
+                    PDF, coordonnées et conformité sont vérifiés avant envoi.
                   </p>
                 </div>
               </div>
@@ -1136,7 +1136,7 @@ export const AgentDispatchSheet: React.FC = () => {
               </div>
               <div className="rounded-2xl border border-emerald-500/20 bg-white/70 p-3 dark:bg-emerald-950/30">
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800/70 dark:text-emerald-100/70">
-                  PDF prets
+                  PDF prêts
                 </p>
                 <p className="mt-1 text-2xl font-black text-emerald-950 dark:text-emerald-50">
                   {selectedRows.length}
@@ -1169,15 +1169,15 @@ export const AgentDispatchSheet: React.FC = () => {
           </div>
 
           {(blockedCounts.draft > 0 ||
-            blockedCounts.modified > 0 ||
+            blockedCounts.modifiéd > 0 ||
             blockedCounts.unassigned > 0) && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
               <div className="flex gap-3">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
                   {blockedCounts.draft} brouillon(s),{" "}
-                  {blockedCounts.modified} a republier et{" "}
-                  {blockedCounts.unassigned} sans agent ne seront pas diffuses.
+                  {blockedCounts.modifiéd} a republiér et{" "}
+                  {blockedCounts.unassigned} sans agent ne seront pas diffusés.
                 </p>
               </div>
             </div>
@@ -1208,9 +1208,9 @@ export const AgentDispatchSheet: React.FC = () => {
               {agentRows.length === 0 ? (
                 <div className="rounded-2xl border border-dashed p-8 text-center">
                   <Users className="mx-auto h-8 w-8 text-muted-foreground" />
-                  <p className="mt-3 font-black">Aucun planning agent pret</p>
+                  <p className="mt-3 font-black">Aucun planning agent prêt</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Publie d&apos;abord les vacations et verifie qu&apos;elles sont
+                    Publie d&apos;abord les vacations et vérifié qu&apos;elles sont
                     affectees a un agent.
                   </p>
                 </div>
@@ -1320,7 +1320,7 @@ export const AgentDispatchSheet: React.FC = () => {
                                     : "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
                                 )}
                               >
-                                {canForceCompliance ? "Forcage trace" : "Dossier bloque"}
+                                {canForceCompliance ? "Forçage tracé" : "Dossier bloqué"}
                               </Badge>
                             )}
                             {hasWarningCompliance && selected && (
@@ -1328,7 +1328,7 @@ export const AgentDispatchSheet: React.FC = () => {
                                 variant="outline"
                                 className="rounded-full border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300"
                               >
-                                Dossier a verifier
+                                Dossier à vérifier
                               </Badge>
                             )}
                             <Badge
@@ -1390,7 +1390,7 @@ export const AgentDispatchSheet: React.FC = () => {
                         variant="outline"
                         className="rounded-full border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300"
                       >
-                        {dispatchHistoryStats.followUp} relance(s)
+                        {dispatchHistoryStats.followUp} relancée(s)
                       </Badge>
                     </>
                   )}
@@ -1403,7 +1403,7 @@ export const AgentDispatchSheet: React.FC = () => {
               <div className="max-h-[58vh] space-y-2 overflow-y-auto pr-1">
                 {history.length === 0 ? (
                   <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
-                    Aucun envoi enregistre sur cette periode.
+                    Aucun envoi enregistre sur cette période.
                   </div>
                 ) : (
                   history.slice(0, 18).map((entry) => (
@@ -1536,8 +1536,8 @@ export const AgentDispatchSheet: React.FC = () => {
                       )}
                       {entry.complianceOverride && (
                         <p className="mt-2 rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-[11px] font-bold text-sky-800 dark:text-sky-200">
-                          Forcage conformite trace :{" "}
-                          {entry.complianceOverrideReason || "motif non renseigne"}
+                          Forçage conformité tracé :{" "}
+                          {entry.complianceOverrideReason || "motif non renseigné"}
                         </p>
                       )}
                       {entry.siteNames.length > 0 && (

@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 
 // --- Types ---
 export type PlanningMode = "site" | "agent";
-export type PublicationFilter = "all" | "draft" | "published" | "modified";
+export type PublicationFilter = "all" | "draft" | "published" | "modifiéd";
 export type VacationPublicationStatus = Exclude<PublicationFilter, "all">;
 
 export interface VacationApiItem {
@@ -64,7 +64,7 @@ export function getVacationPublicationStatus(
     Number.isFinite(updatedAt) &&
     updatedAt > publishedAt + 1000
   ) {
-    return "modified";
+    return "modifiéd";
   }
 
   return "published";
@@ -186,7 +186,7 @@ export interface PlanningContextType {
   createOpen: boolean;
   setCreateOpen: (v: boolean) => void;
   detailsOpen: boolean;
-  setDetailsOpen: (v: boolean) => void;
+  setDétailsOpen: (v: boolean) => void;
   assignOpen: boolean;
   setAssignOpen: (v: boolean) => void;
   replaceOpen: boolean;
@@ -286,7 +286,7 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDétailsOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
@@ -429,9 +429,9 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if (panel === "assign") {
       setAssignOpen(true);
-      setDetailsOpen(false);
+      setDétailsOpen(false);
     } else {
-      setDetailsOpen(true);
+      setDétailsOpen(true);
     }
 
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -1380,7 +1380,7 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
       });
 
       if (toPublish.length === 0) {
-        toast({ title: "Publication", description: "Aucune nouvelle mission à publier sur cette plage." });
+        toast({ title: "Publication", description: "Aucune nouvelle mission à publiér sur cette plage." });
         return;
       }
 
@@ -1436,7 +1436,7 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
     tensionMode, setTensionMode, selectedIds, setSelectedIds, clearSelection,
     showAbsences, setShowAbsences,
     publicationFilter, setPublicationFilter,
-    createOpen, setCreateOpen, detailsOpen, setDetailsOpen, assignOpen, setAssignOpen,
+    createOpen, setCreateOpen, detailsOpen, setDétailsOpen, assignOpen, setAssignOpen,
     replaceOpen, setReplaceOpen, insightsOpen, setInsightsOpen, propagationOpen, setPropagationOpen,
     weekPropagationOpen, setWeekPropagationOpen, siteTemplateOpen, setSiteTemplateOpen,
     validationOpen, setValidationOpen, dispatchOpen, setDispatchOpen,

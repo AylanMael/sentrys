@@ -6,7 +6,7 @@ export const MISSION_TYPE_OPTIONS = [
   "Agent cynophile",
   "Ronde mobile",
   "Accueil / filtrage",
-  "Controle d'acces",
+  "Contrôle d'accès",
   "Surete evenementielle",
   "Intervention",
 ] as const;

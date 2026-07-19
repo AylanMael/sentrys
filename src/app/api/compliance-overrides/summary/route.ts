@@ -57,7 +57,7 @@ function normalizeStatus(value: unknown): ResolutionStatus {
 }
 
 function periodLabel(fromIso: string | null, toIsoValue: string | null) {
-  if (!fromIso || !toIsoValue) return "Periode non renseignee";
+  if (!fromIso || !toIsoValue) return "Periode non renseignée";
 
   const formatter = new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
@@ -103,8 +103,8 @@ export async function GET(req: NextRequest) {
         sentAtIso: toIso(data.sentAt) ?? clean(data.sentAtIso) ?? null,
         complianceOverrideReason:
           clean(data.complianceOverrideReason) || null,
-        complianceOverrideDetail:
-          clean(data.complianceOverrideDetail) || null,
+        complianceOverrideDétail:
+          clean(data.complianceOverrideDétail) || null,
         complianceResolutionStatus: normalizeStatus(
           data.complianceResolutionStatus
         ),

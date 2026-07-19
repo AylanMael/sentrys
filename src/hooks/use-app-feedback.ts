@@ -111,18 +111,18 @@ function inferTone(title: string, description: string) {
   }
 
   if (
-    value.includes("cree") ||
+    value.includes("créé") ||
     value.includes("ajoute") ||
     value.includes("termine") ||
     value.includes("effectue") ||
     value.includes("duplique") ||
-    value.includes("publie") ||
+    value.includes("publié") ||
     value.includes("supprime") ||
     value.includes("sauvegarde") ||
     value.includes("enregistre") ||
     value.includes("reconduit") ||
     value.includes("reproduit") ||
-    value.includes("mis a jour")
+    value.includes("mis à jour")
   ) {
     return "success" as const;
   }

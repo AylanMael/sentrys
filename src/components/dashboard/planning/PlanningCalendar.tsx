@@ -80,7 +80,7 @@ export const PlanningCalendar: React.FC = () => {
     pasteMode,
     performPasteAt,
     pasteBusy,
-    setDetailsOpen,
+    setDétailsOpen,
     setReplaceOpen,
     setActiveVacationId,
     setPropagationOpen,
@@ -292,7 +292,7 @@ export const PlanningCalendar: React.FC = () => {
             tensionMode && hasConflict ? "evt-tension" : "",
             publicationStatus === "draft" ? "evt-draft" : "",
             publicationStatus === "published" ? "evt-published" : "",
-            publicationStatus === "modified" ? "evt-publication-stale" : "",
+            publicationStatus === "modifiéd" ? "evt-publication-stale" : "",
             stats.maxDurationViolations.includes(v.id) ? "evt-legal-block" : "",
             stats.sstCoverageWarnings.includes(v.id) ? "evt-sst-warning" : "",
           ].filter(Boolean),
@@ -444,7 +444,7 @@ export const PlanningCalendar: React.FC = () => {
     const v = arg.event.extendedProps.v as VacationApiItem;
     const js = arg.jsEvent;
     setActiveVacationId(v.id);
-    setDetailsOpen(true);
+    setDétailsOpen(true);
     setSelectedIds((prev: Set<string>) => {
       const next = new Set(prev);
       if (js.ctrlKey || js.metaKey) {
@@ -454,7 +454,7 @@ export const PlanningCalendar: React.FC = () => {
       }
       return next;
     });
-  }, [setSelectedIds, setActiveVacationId, setDetailsOpen]);
+  }, [setSelectedIds, setActiveVacationId, setDétailsOpen]);
 
   const handleDateClick = useCallback((arg: DateClickArg) => {
     if (pasteMode && !pasteBusy) {
@@ -514,7 +514,7 @@ export const PlanningCalendar: React.FC = () => {
 
     const ok = await updateVacation(id, patch);
     if (!ok) { arg.revert(); toast({ variant: "destructive", title: "Erreur", description: "Echec de sauvegarde." }); }
-    else { toast({ title: "Planning mis a jour" }); }
+    else { toast({ title: "Planning mis à jour" }); }
     if (ok) {
       scheduleScrollRestore();
     } else {
@@ -603,7 +603,7 @@ export const PlanningCalendar: React.FC = () => {
            <div className="flex flex-col gap-1">
              <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Activite</span>
              <div className="h-8 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center shadow-sm">
-                <span className="text-[10px] font-black text-emerald-600 uppercase">Agent de Securite</span>
+                <span className="text-[10px] font-black text-emerald-600 uppercase">Agent de Sécurité</span>
              </div>
            </div>
         </div>
@@ -625,7 +625,7 @@ export const PlanningCalendar: React.FC = () => {
                     Planning vierge, on le remplit proprement.
                   </h3>
                   <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                    Utilise un planning type pour creer une semaine complete par site,
+                    Utilise un planning type pour créer une semaine complete par site,
                     ou ajoute une premiere vacation standard 08h-18h. Le but : que
                     meme un novice sache quoi faire en moins de dix secondes.
                   </p>
@@ -878,7 +878,7 @@ export const PlanningCalendar: React.FC = () => {
           setSelectedIds={setSelectedIds}
           filteredVacations={filteredVacations}
           setActiveVacationId={setActiveVacationId}
-          setDetailsOpen={setDetailsOpen}
+          setDétailsOpen={setDétailsOpen}
           setReplaceOpen={setReplaceOpen}
           duplicateVacation={duplicateVacation}
           openPropagation={(id) => {

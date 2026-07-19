@@ -222,7 +222,7 @@ export default function NewVacationPage() {
   async function submit() {
     if (!user || !tenantId || !canWrite) { toast({ title: "Erreur", description: "Problème d'accès ou de droits.", variant: "destructive" }); return; }
     if (!siteId) { toast({ title: "Champ requis", description: "Choisis un site.", variant: "destructive" }); return; }
-    if (!startAtIso || !endAtIso || !isDateRangeValid) { toast({ title: "Erreur", description: "Dates invalides.", variant: "destructive" }); return; }
+    if (!startAtIso || !endAtIso || !isDateRangeValid) { toast({ title: "Erreur", description: "Dates invalidés.", variant: "destructive" }); return; }
     if (selectedAgentIds.length > 0 && hasOverlaps) { toast({ title: "Conflits", description: "Retire les agents en conflit.", variant: "destructive" }); return; }
 
     const reqAgents = Math.max(1, parseIntSafe(requiredAgents, 1));

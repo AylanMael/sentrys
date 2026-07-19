@@ -56,7 +56,7 @@ export const PlanningLegend: React.FC = () => {
             <div className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
               <Badge variant="outline" className="border-slate-300 bg-slate-100 text-slate-700 shadow-sm shrink-0 mt-0.5">Brouillon</Badge>
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-slate-100">Pas encore envoye</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-slate-100">Pas encore envoyé</p>
                 <p className="text-[10px] text-muted-foreground leading-tight">Vacation en preparation, visible par l&apos;exploitation uniquement.</p>
               </div>
             </div>
@@ -64,16 +64,16 @@ export const PlanningLegend: React.FC = () => {
             <div className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
               <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800 shadow-sm shrink-0 mt-0.5">Publie</Badge>
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-slate-100">Planning envoye</p>
-                <p className="text-[10px] text-muted-foreground leading-tight">Vacation deja publiee et a jour pour les agents.</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-slate-100">Planning envoyé</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">Vacation deja publiée et à jour pour les agents.</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-              <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800 shadow-sm shrink-0 mt-0.5">A republier</Badge>
+              <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800 shadow-sm shrink-0 mt-0.5">A republiér</Badge>
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-slate-100">Modification apres publication</p>
-                <p className="text-[10px] text-muted-foreground leading-tight">Une vacation publiee a change et doit etre renvoyee.</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-slate-100">Modification après publication</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">Une vacation publiée a changé et doit être renvoyée.</p>
               </div>
             </div>
           </div>

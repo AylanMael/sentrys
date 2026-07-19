@@ -195,8 +195,8 @@ export const CreateVacationSheet: React.FC = () => {
 
       if (resId) {
         toast({
-          title: "Vacation creee",
-          description: "L'operation a ete ajoutee au planning.",
+          title: "Vacation créée",
+          description: "L'operation a été ajoutee au planning.",
         });
         setCreateOpen(false);
         form.reset({
@@ -212,7 +212,7 @@ export const CreateVacationSheet: React.FC = () => {
         toast({
           variant: "destructive",
           title: "Erreur",
-          description: "Impossible de creer la vacation.",
+          description: "Impossible de créer la vacation.",
         });
       }
     } finally {
@@ -226,7 +226,7 @@ export const CreateVacationSheet: React.FC = () => {
         <SheetHeader>
           <SheetTitle className="text-xl font-bold">Nouvelle vacation</SheetTitle>
           <SheetDescription>
-            La vacation demarre par defaut a 08:00 et se termine a 18:00 le meme jour.
+            La vacation démarre par défaut a 08:00 et se termine a 18:00 le meme jour.
           </SheetDescription>
         </SheetHeader>
 
@@ -415,7 +415,7 @@ export const CreateVacationSheet: React.FC = () => {
                   <FormLabel>Consignes</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Consignes d'acces, zone sensible, materiel, point de rendez-vous..."
+                      placeholder="Consignes d'accès, zone sensible, matériel, point de rendez-vous..."
                       {...field}
                       className="min-h-[120px] bg-background/50"
                     />
@@ -438,7 +438,7 @@ export const CreateVacationSheet: React.FC = () => {
                 {saving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
-                Creer la vacation
+                Créer la vacation
               </Button>
             </SheetFooter>
           </form>

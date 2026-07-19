@@ -15,7 +15,7 @@ interface CalendarContextMenuProps {
   setSelectedIds: (ids: Set<string>) => void;
   filteredVacations: VacationApiItem[];
   setActiveVacationId: (id: string) => void;
-  setDetailsOpen: (open: boolean) => void;
+  setDétailsOpen: (open: boolean) => void;
   setReplaceOpen: (open: boolean) => void;
   duplicateVacation: (id: string) => void;
   openPropagation: (id: string) => void;
@@ -26,7 +26,7 @@ interface CalendarContextMenuProps {
 
 export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
   x, y, eventId, onClose, selectedIds, setSelectedIds,
-  filteredVacations, setActiveVacationId, setDetailsOpen, setReplaceOpen,
+  filteredVacations, setActiveVacationId, setDétailsOpen, setReplaceOpen,
   duplicateVacation, openPropagation, setIdsToDelete, setDeleteConfirmOpen, magicFill
 }) => {
   if (typeof document === "undefined") return null;
@@ -83,7 +83,7 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
             const v = activeVacation;
             if (v) {
               setActiveVacationId(v.id);
-              setDetailsOpen(true);
+              setDétailsOpen(true);
             }
             onClose();
           }}
@@ -91,7 +91,7 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
           <div className="h-6 w-6 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover/item:bg-white/20">
             <Users className="h-3.5 w-3.5" />
           </div>
-          Details de la mission
+          Détails de la mission
         </button>
 
         <button
@@ -101,7 +101,7 @@ export const CalendarContextMenu: React.FC<CalendarContextMenuProps> = ({
             const v = activeVacation;
             if (v) {
               setActiveVacationId(v.id);
-              setDetailsOpen(false);
+              setDétailsOpen(false);
               setReplaceOpen(true);
             }
             onClose();

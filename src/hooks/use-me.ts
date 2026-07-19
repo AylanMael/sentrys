@@ -11,7 +11,7 @@ export type Me = {
   role?: string | null;
   status?: string | null;
   hasTenant?: boolean;
-  tenant?: any; // optionnel si tu l’utilises
+  tenant?: any; // optionnel si tu l’utilisés
 };
 
 export function useMe() {

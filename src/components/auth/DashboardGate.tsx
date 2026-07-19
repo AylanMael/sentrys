@@ -76,6 +76,11 @@ export function DashboardGate({ children }: { children: ReactNode }) {
       const status = norm(data.status);
       const tenantId = data.tenantId;
 
+      if (role === "super_admin" && tenantId === "platform") {
+        router.replace("/platform");
+        return;
+      }
+
       if (isInternalTenantRole(role)) {
         if (!tenantId || status !== "active") {
           router.replace("/forbidden");

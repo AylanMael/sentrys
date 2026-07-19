@@ -162,7 +162,7 @@ export const CalendarResource: React.FC<CalendarResourceProps> = ({
         <div className="pl-8 text-[8px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {pendingCount > 0
             ? `${pendingCount} vacation${pendingCount > 1 ? "s" : ""} a couvrir`
-            : "Couverture maitrisee"}
+            : "Couverture maîtrisée"}
         </div>
       )}
     </div>
@@ -175,7 +175,7 @@ export const ResourceAreaHeader: React.FC<{ mode: "site" | "agent" }> = ({
   <div className="flex items-center gap-2 px-2">
     <GripVertical className="h-3 w-3 opacity-30" />
     <span className="text-[10px] font-black uppercase tracking-widest">
-      {mode === "site" ? "Sites operationnels" : "Effectifs agents"}
+      {mode === "site" ? "Sites opérationnels" : "Effectifs agents"}
     </span>
   </div>
 );

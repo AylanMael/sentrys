@@ -83,7 +83,7 @@ type DispatchRow = {
   agencyProfile: AgencyDocumentProfile;
   complianceOverride: boolean;
   complianceOverrideReason: string | null;
-  complianceOverrideDetail: string | null;
+  complianceOverrideDétail: string | null;
 };
 
 type BlockedRowReason = {
@@ -236,7 +236,7 @@ function pickDispatch(
     }),
     complianceOverride: data.complianceOverride === true,
     complianceOverrideReason: normalizeText(data.complianceOverrideReason),
-    complianceOverrideDetail: normalizeText(data.complianceOverrideDetail),
+    complianceOverrideDétail: normalizeText(data.complianceOverrideDétail),
   };
 }
 
@@ -434,11 +434,11 @@ export async function POST(req: NextRequest) {
               : null,
       deliveryNote:
         channel === "email"
-          ? "Simulation email : aucun email reel n'a ete envoye."
+          ? "Simulation email : aucun email réel n'a été envoyé."
           : channel === "whatsapp"
-            ? "Simulation WhatsApp : aucun message reel n'a ete envoye."
+            ? "Simulation WhatsApp : aucun message réel n'a été envoyé."
             : channel === "portal"
-              ? "Planning publie dans le portail agent."
+              ? "Planning publié dans le portail agent."
               : "Diffusion journalisee en interne uniquement.",
       sentAtIso: nowIso,
       sentBy: auth.uid,
@@ -455,7 +455,7 @@ export async function POST(req: NextRequest) {
       agencyProfile,
       complianceOverride: complianceIsForced,
       complianceOverrideReason: complianceIsForced ? forceComplianceReason : null,
-      complianceOverrideDetail: complianceBlock?.detail ?? null,
+      complianceOverrideDétail: complianceBlock?.detail ?? null,
     };
   });
 
@@ -485,7 +485,7 @@ export async function POST(req: NextRequest) {
       blockedRowReasons.set(row.agentId, {
         reason: contactReason.reason,
         detail: complianceReason
-          ? `${contactReason.detail} Blocage conformite constate: ${complianceReason.detail}`
+          ? `${contactReason.detail} Blocage conformité constaté: ${complianceReason.detail}`
           : contactReason.detail,
       });
       return;
@@ -535,8 +535,8 @@ export async function POST(req: NextRequest) {
         tenantId: auth.tenantId,
         type: "compliance_override",
         severity: "warning",
-        title: "Forcage conformite a regulariser",
-        message: `${row.agentName} - ${row.complianceOverrideDetail ?? "dossier agent a verifier"}`,
+        title: "Forçage conformité à régulariser",
+        message: `${row.agentName} - ${row.complianceOverrideDétail ?? "dossier agent à vérifier"}`,
         href: `/dashboard/conformite?agentId=${row.agentId}`,
         sourceId: ref.id,
         agentId: row.agentId,
@@ -561,7 +561,7 @@ export async function POST(req: NextRequest) {
     action: "planning.dispatched",
     entityType: "assignment",
     entityId: `${from.toISOString()}_${to.toISOString()}`,
-    message: `Planning diffuse a ${dispatchableRows.length} agent(s)`,
+    message: `Planning diffusé a ${dispatchableRows.length} agent(s)`,
     severity: "info",
     meta: {
       fromIso: from.toISOString(),

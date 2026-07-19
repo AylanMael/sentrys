@@ -276,6 +276,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const canSeeUsersTeam = useMemo(() => canManageUsers(role), [role]);
   const canSeeBackoffice = useMemo(() => canReadBackoffice(role), [role]);
+  const tenantStatus = useMemo(() => {
+    return norm((user as any)?.tenant?.status);
+  }, [user]);
+  const tenantOnboardingStatus = useMemo(() => {
+    return norm((user as any)?.tenant?.onboarding?.status);
+  }, [user]);
+  const isPlatformSuperAdmin = role === "super_admin" && user?.tenantId === "platform";
+  const needsAgencyOnboarding = useMemo(() => {
+    if (!user?.tenantId || user.tenantId === "platform") return false;
+    if (!hasRole(role, ["owner", "admin", "manager"])) return false;
+    if (!tenantStatus) return false;
+    return !["active", "trial", "trialing", "ok"].includes(tenantStatus);
+  }, [role, tenantStatus, user?.tenantId]);
 
   const gateStatus = useMemo(() => {
     const s = norm((userDoc as any)?.status ?? "active");
@@ -331,6 +344,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     isStaff,
     router,
     pathname,
+  ]);
+
+  useEffect(() => {
+    if (loading || loadingUserDoc || !user?.uid || !needsAgencyOnboarding) return;
+
+    const allowedDuringOnboarding = [
+      "/dashboard/onboarding",
+      "/dashboard/settings",
+      "/dashboard/clients",
+      "/dashboard/sites",
+      "/dashboard/users",
+      "/dashboard/pending",
+      "/dashboard/rejected",
+      "/dashboard/archived",
+    ];
+    const currentPath = pathname ?? "";
+    const allowed = allowedDuringOnboarding.some((href) => {
+      return currentPath === href || currentPath.startsWith(href + "/");
+    });
+
+    if (!allowed) {
+      router.replace("/dashboard/onboarding");
+    }
+  }, [
+    loading,
+    loadingUserDoc,
+    needsAgencyOnboarding,
+    pathname,
+    router,
+    user?.uid,
   ]);
 
   useEffect(() => {
@@ -411,7 +454,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             ? [{ href: "/dashboard/agent-planning", icon: Bell, label: "Mes diffusions" }]
             : []),
           { href: "/dashboard/planning", icon: CalendarDays, label: "Planning" },
-          { href: "/dashboard/prepaie", icon: Calculator, label: "Pre-paie" },
+          { href: "/dashboard/prepaie", icon: Calculator, label: "Pré-paie" },
           { href: "/dashboard/vacations", icon: CalendarClock, label: "Vacations" },
           { href: "/dashboard/patrols", icon: Activity, label: "Rondes" },
           { href: "/dashboard/incidents", icon: Siren, label: "Incidents" },
@@ -430,19 +473,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {
         label: "Administration",
         items: [
-          ...(role === "super_admin"
+          ...(isPlatformSuperAdmin
             ? [{ href: "/platform", icon: ShieldCheck, label: "Backoffice SaaS" }]
+            : []),
+          ...(needsAgencyOnboarding
+            ? [{ href: "/dashboard/onboarding", icon: CheckCircle2, label: tenantOnboardingStatus === "activation_requested" ? "Activation demandee" : "Demarrage agence" }]
             : []),
           { href: "/dashboard/activity", icon: Activity, label: "Audit Log" },
           { href: "/dashboard/recette", icon: CheckCircle2, label: "Recette MVP" },
-          { href: "/dashboard/conformite", icon: FileWarning, label: "Conformite" },
+          { href: "/dashboard/conformite", icon: FileWarning, label: "Conformité" },
           ...(canSeeUsersTeam
             ? [{ href: "/dashboard/users", icon: Users, label: "Équipe" }]
             : []),
         ],
       },
     ];
-  }, [canSeeUsersTeam, role]);
+  }, [canSeeUsersTeam, isPlatformSuperAdmin, needsAgencyOnboarding, role, tenantOnboardingStatus]);
 
   const handleLogout = async () => {
     await auth.signOut();
@@ -703,7 +749,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           <div>
                             <p className="font-black">Aucune alerte active</p>
                             <p className="mt-1 text-xs opacity-80">
-                              Les notifications exploitation apparaitront ici.
+                              Les notifications exploitation apparaîtront ici.
                             </p>
                           </div>
                         </div>

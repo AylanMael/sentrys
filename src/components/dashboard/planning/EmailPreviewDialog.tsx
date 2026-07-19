@@ -87,10 +87,10 @@ export const EmailPreviewDialog: React.FC<{
             <div>
               <DialogTitle className="flex items-center gap-2 text-xl font-black tracking-tight">
                 <Mail className="h-5 w-5 text-sky-600" />
-                Previsualisation email {preview.kind === "agent" ? "agent" : "client"}
+                Prévisualisation email {preview.kind === "agent" ? "agent" : "client"}
               </DialogTitle>
               <DialogDescription className="mt-1">
-                Brouillon exact avant branchement Brevo. Aucun email reel ne part.
+                Brouillon exact avant branchement Brevo. Aucun email réel ne part.
               </DialogDescription>
             </div>
 
@@ -181,7 +181,7 @@ export const EmailPreviewDialog: React.FC<{
 
           {preview.warnings && preview.warnings.length > 0 && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
-              <p className="font-black">Points a verifier</p>
+              <p className="font-black">Points à vérifier</p>
               <ul className="mt-2 list-inside list-disc space-y-1">
                 {preview.warnings.map((warning) => (
                   <li key={warning}>{warning}</li>
@@ -194,8 +194,8 @@ export const EmailPreviewDialog: React.FC<{
             <div className="flex gap-3">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                Mode simulation: ce brouillon est pret pour l'integration Brevo,
-                mais aucun email reel n'est envoye tant que le domaine et la cle API
+                Mode simulation: ce brouillon est prêt pour l'integration Brevo,
+                mais aucun email réel n'est envoyé tant que le domaine et la cle API
                 ne sont pas configures.
               </p>
             </div>

@@ -95,7 +95,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
 
   const hasComplianceIssue = !!assignedComplianceIssue;
   const complianceErrorMessage = assignedComplianceIssue
-    ? `${assignedComplianceIssue.compliance.alerts[0]?.title ?? "Dossier agent a controler"} pour ${assignedComplianceIssue.agent.firstName} ${assignedComplianceIssue.agent.lastName}`
+    ? `${assignedComplianceIssue.compliance.alerts[0]?.title ?? "Dossier agent a contrôler"} pour ${assignedComplianceIssue.agent.firstName} ${assignedComplianceIssue.agent.lastName}`
     : "";
 
   const isUncovered = filled === 0 && need > 0;
@@ -154,16 +154,16 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
   const publicationLabel =
     publicationStatus === "draft"
       ? "Brouillon"
-      : publicationStatus === "modified"
-        ? "A republier"
+      : publicationStatus === "modifiéd"
+        ? "A republiér"
         : "Publie";
   const publicationBadgeClass =
     publicationStatus === "draft"
       ? "border-slate-300 bg-white/70 text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300"
-      : publicationStatus === "modified"
+      : publicationStatus === "modifiéd"
         ? "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
         : "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200";
-  const showPublicationBadge = publicationStatus === "draft" || publicationStatus === "modified";
+  const showPublicationBadge = publicationStatus === "draft" || publicationStatus === "modifiéd";
   const showInlinePublicationBadge = showPublicationBadge && !arg.view.type.includes("resourceTimeline");
   const legalWarningTitle = legalWarning
     ? "Vacation superieure a 12h"
@@ -206,7 +206,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
         <span className="ml-auto shrink-0 text-[8px] font-black opacity-70">
           {filled}/{need}
         </span>
-        {publicationStatus === "modified" && (
+        {publicationStatus === "modifiéd" && (
           <span className="shrink-0 rounded-sm bg-amber-100 px-1 text-[8px] font-black text-amber-800">
             Maj
           </span>
@@ -223,7 +223,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
       legalWarning ||
       sstWarning ||
       hasComplianceIssue ||
-      publicationStatus === "modified";
+      publicationStatus === "modifiéd";
 
     return (
       <div
@@ -279,7 +279,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
             )}
             {violatesRest && (
               <span
-                title="Repos minimum a controler"
+                title="Repos minimum a contrôler"
                 className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-900"
               >
                 <AlertTriangle className="h-2.5 w-2.5" />
@@ -301,7 +301,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
                 <ShieldAlert className="h-2.5 w-2.5" />
               </span>
             )}
-            {publicationStatus === "modified" && (
+            {publicationStatus === "modifiéd" && (
               <span
                 title={publicationLabel}
                 className="rounded-full bg-amber-50 px-1.5 py-0 text-[7px] font-black uppercase tracking-wide text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-900"
@@ -342,7 +342,7 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
             </span>
           )}
           {violatesRest && (
-            <span title={conflictMessages || "Repos minimum a controler"}>
+            <span title={conflictMessages || "Repos minimum a contrôler"}>
               <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
             </span>
           )}

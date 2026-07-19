@@ -419,7 +419,7 @@ export const CoverageExpressSheet: React.FC = () => {
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
                   <p className="font-bold">
-                    {analysis.conflicts.length} vacation(s) ignoree(s) pour eviter
+                    {analysis.conflicts.length} vacation(s) ignoree(s) pour éviter
                     un conflit horaire.
                   </p>
                   <div className="mt-2 max-h-28 space-y-1 overflow-y-auto text-xs">
@@ -440,7 +440,7 @@ export const CoverageExpressSheet: React.FC = () => {
               <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
               <p className="mt-3 font-black">Rien a couvrir</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Ce site n&apos;a pas de vacation non couverte dans la periode visible.
+                Ce site n&apos;a pas de vacation non couverte dans la période visible.
               </p>
             </div>
           )}

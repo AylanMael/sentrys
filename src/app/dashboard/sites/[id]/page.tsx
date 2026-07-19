@@ -131,7 +131,7 @@ function agentLabel(a: AgentApi) {
   return name || a.email || a.id;
 }
 
-export default function SiteDetailPage() {
+export default function SiteDétailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
 
@@ -678,7 +678,7 @@ export default function SiteDetailPage() {
             <CardContent className="p-0">
               {emergencyContacts.length === 0 ? (
                 <div className="py-10 text-center text-sm text-muted-foreground">
-                  Aucun contact d'urgence client n'est renseigne pour ce site.
+                  Aucun contact d'urgence client n'est renseigné pour ce site.
                 </div>
               ) : (
                 <div className="divide-y divide-border/50">

@@ -242,7 +242,7 @@ export async function PUT(
         );
       }
       if (err?.code === "OPT_LOCK") {
-        return conflict("Vacation modified by someone else", {
+        return conflict("Vacation modifiéd by someone else", {
           code: "optimistic_lock",
           currentUpdatedAtIso: err?.currentUpdatedAtIso ?? null,
           hint: "Reload and retry with the latest updatedAtIso.",

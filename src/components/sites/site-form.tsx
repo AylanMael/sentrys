@@ -377,7 +377,7 @@ export function SiteForm({
 
         {values.emergencyContacts.length === 0 ? (
           <div className="rounded-lg border border-dashed bg-background/60 p-4 text-sm text-muted-foreground">
-            Aucun contact d'urgence renseigne. Ajoutez au moins un contact client joignable hors horaires ouvrables.
+            Aucun contact d'urgence renseigné. Ajoutez au moins un contact client joignable hors horaires ouvrables.
           </div>
         ) : (
           <div className="space-y-3">
@@ -413,7 +413,7 @@ export function SiteForm({
                     <Input
                       value={contact.role ?? ""}
                       onChange={(e) => updateEmergencyContact(index, "role", e.target.value)}
-                      placeholder="Ex: Directrice securite"
+                      placeholder="Ex: Directrice sécurité"
                     />
                   </div>
                   <div className="space-y-2">

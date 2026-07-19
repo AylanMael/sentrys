@@ -669,7 +669,7 @@ export const SmartDistributionSheet: React.FC = () => {
               <div className="flex gap-3">
                 <Scale className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  Proposition prete pour {selectedSite.name} :{" "}
+                  Proposition prête pour {selectedSite.name} :{" "}
                   {plan.assignments.length} vacation(s) repartie(s), avec un
                   volume equilibre entre les agents selectionnes.
                 </p>
@@ -706,7 +706,7 @@ export const SmartDistributionSheet: React.FC = () => {
               <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
               <p className="mt-3 font-black">Rien a repartir</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Ce site n&apos;a aucune vacation vide sur la periode courante.
+                Ce site n&apos;a aucune vacation vide sur la période courante.
               </p>
             </div>
           )}

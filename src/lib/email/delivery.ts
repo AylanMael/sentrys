@@ -61,7 +61,7 @@ function brevoApiKey() {
   return null;
 }
 
-function payloadDetail(payload: unknown) {
+function payloadDétail(payload: unknown) {
   if (typeof payload === "string") return payload.slice(0, 500);
 
   try {
@@ -84,7 +84,7 @@ export function getAgencyEmailDeliveryReadiness(
       domainStatus: settings.domainStatus,
       apiKeyPresent,
       reason: "provider_simulation",
-      detail: "Fournisseur en simulation : aucun email reel ne sera envoye.",
+      detail: "Fournisseur en simulation : aucun email réel ne sera envoyé.",
     };
   }
 
@@ -96,19 +96,19 @@ export function getAgencyEmailDeliveryReadiness(
       domainStatus: settings.domainStatus,
       apiKeyPresent,
       reason: "mode_simulation",
-      detail: "Mode simulation actif : l'envoi reel est volontairement neutralise.",
+      detail: "Mode simulation actif : l'envoi réel est volontairement neutralise.",
     };
   }
 
-  if (settings.domainStatus !== "verified") {
+  if (settings.domainStatus !== "vérifiéd") {
     return {
       liveReady: false,
       provider: settings.provider,
       sendingMode: settings.sendingMode,
       domainStatus: settings.domainStatus,
       apiKeyPresent,
-      reason: "domain_not_verified",
-      detail: "Domaine expediteur non verifie : l'envoi reel reste bloque.",
+      reason: "domain_not_vérifiéd",
+      detail: "Domaine expediteur non vérifié : l'envoi réel reste bloqué.",
     };
   }
 
@@ -131,7 +131,7 @@ export function getAgencyEmailDeliveryReadiness(
     domainStatus: settings.domainStatus,
     apiKeyPresent,
     reason: null,
-    detail: "Configuration prete pour l'envoi reel via Brevo.",
+    detail: "Configuration prête pour l'envoi réel via Brevo.",
   };
 }
 
@@ -256,7 +256,7 @@ export async function sendAgencyTransactionalEmail(
         requestedLive,
         messageId: null,
         reason: `brevo_http_${response.status}`,
-        detail: payloadDetail(payload),
+        detail: payloadDétail(payload),
         recipientEmail: toEmail,
         senderEmail: fromEmail,
         sentAtIso,

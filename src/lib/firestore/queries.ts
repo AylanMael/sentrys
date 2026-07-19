@@ -12,7 +12,7 @@ export function qRecentIncidents(db: Firestore, tenantId: string, n = 6) {
 
 /**
  * Incidents ouverts
- * Reco: à terme, utilise statusKey="ouvert" partout.
+ * Reco: à terme, utilisé statusKey="ouvert" partout.
  */
 export function qOpenIncidents(db: Firestore, tenantId: string) {
   return query(

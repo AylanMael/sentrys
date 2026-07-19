@@ -87,7 +87,7 @@ const STATUS_FLOW: Array<{
   {
     status: "resolved",
     label: "Resolu",
-    detail: "La situation est reglee, il reste a cloturer proprement.",
+    detail: "La situation est reglee, il reste a clôturer proprement.",
   },
   {
     status: "closed",
@@ -122,9 +122,9 @@ function severityClass(severity: IncidentSeverity) {
 }
 
 function formatMoment(value: string | null) {
-  if (!value) return "Non renseigne";
+  if (!value) return "Non renseigné";
   const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "Non renseigne";
+  if (!Number.isFinite(date.getTime())) return "Non renseigné";
 
   return new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
@@ -149,7 +149,7 @@ function nextRecommendedStatus(status: IncidentStatus): IncidentStatus {
 function siteDisplay(site: SiteRow | null, incident: IncidentRow | null) {
   if (site?.name) return site.name;
   if (incident?.siteId) return `Site ${incident.siteId.slice(0, 8)}`;
-  return "Site non renseigne";
+  return "Site non renseigné";
 }
 
 function IncidentSkeleton() {
@@ -164,7 +164,7 @@ function IncidentSkeleton() {
   );
 }
 
-export default function IncidentDetailPage() {
+export default function IncidentDétailPage() {
   const params = useParams();
   const router = useRouter();
   const feedback = useAppFeedback();
@@ -231,7 +231,7 @@ export default function IncidentDetailPage() {
   async function updateStatus(nextStatus: IncidentStatus) {
     if (!incident || !canWrite) {
       feedback.warning(
-        "Action protegee",
+        "Action protégée",
         "Votre role ne permet pas de modifier ce dossier incident."
       );
       return;
@@ -250,7 +250,7 @@ export default function IncidentDetailPage() {
       );
       setIncident(response.incident);
       feedback.success(
-        "Statut incident mis a jour",
+        "Statut incident mis à jour",
         `Le dossier est maintenant ${statusLabel(nextStatus).toLowerCase()}.`
       );
     } catch (err) {
@@ -260,7 +260,7 @@ export default function IncidentDetailPage() {
       );
       setError(message);
       feedback.error(err, {
-        title: "Mise a jour refusee",
+        title: "Mise à jour refusee",
         fallback: message,
       });
     } finally {
@@ -340,8 +340,8 @@ export default function IncidentDetailPage() {
             </h1>
             <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-slate-300">
               {siteDisplay(site, incident)} - signale le {formatMoment(incident.createdAtIso)}.
-              Cette fiche sert a piloter le traitement, tracer les commentaires
-              et cloturer proprement le dossier.
+              Cette fiche sert a piloter le traitement, tracér les commentaires
+              et clôturer proprement le dossier.
             </p>
           </div>
 
@@ -394,14 +394,14 @@ export default function IncidentDetailPage() {
                   Description terrain
                 </p>
                 <p className="mt-3 whitespace-pre-wrap text-base font-semibold leading-7 text-foreground">
-                  {incident.description || "Aucune description renseignee."}
+                  {incident.description || "Aucune description renseignée."}
                 </p>
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
                 <InfoTile icon={MapPin} label="Site" value={siteDisplay(site, incident)} />
                 <InfoTile icon={Clock3} label="Cree le" value={formatMoment(incident.createdAtIso)} />
-                <InfoTile icon={RefreshCw} label="Mis a jour" value={formatMoment(incident.updatedAtIso)} />
+                <InfoTile icon={RefreshCw} label="Mis à jour" value={formatMoment(incident.updatedAtIso)} />
               </div>
 
               {incident.tags.length > 0 ? (
@@ -436,7 +436,7 @@ export default function IncidentDetailPage() {
             <CardHeader className="border-b bg-muted/20">
               <CardTitle className="flex items-center gap-2 text-xl font-black">
                 <Siren className="h-5 w-5 text-primary" />
-                Traitement operationnel
+                Traitement opérationnel
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 p-5">
@@ -496,8 +496,8 @@ export default function IncidentDetailPage() {
                   <p className="font-black text-foreground">Definition du fini</p>
                   <p className="mt-1 text-sm font-medium leading-6 text-muted-foreground">
                     Un incident est vraiment termine quand le statut est clos,
-                    la decision est visible dans les commentaires et le site ou
-                    le client concerne sait quoi retenir.
+                    la décision est visible dans les commentaires et le site ou
+                    le client concerné sait quoi retenir.
                   </p>
                 </div>
               </div>

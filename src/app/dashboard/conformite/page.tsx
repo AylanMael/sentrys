@@ -51,7 +51,7 @@ type ComplianceOverrideItem = {
   sentAtIso: string | null;
   sentBy: string | null;
   complianceOverrideReason: string | null;
-  complianceOverrideDetail: string | null;
+  complianceOverrideDétail: string | null;
   complianceResolutionStatus: ResolutionStatus;
   complianceResolutionNote: string | null;
   complianceResolutionAtIso: string | null;
@@ -66,7 +66,7 @@ type ComplianceOverrideResponse = {
 
 const STATUS_OPTIONS: Array<{ value: ResolutionStatus | "all"; label: string }> = [
   { value: "all", label: "Tous les statuts" },
-  { value: "to_regularize", label: "A regulariser" },
+  { value: "to_regularize", label: "A régulariser" },
   { value: "regularized", label: "Regularise" },
   { value: "accepted_exception", label: "Accepte exceptionnellement" },
 ];
@@ -74,7 +74,7 @@ const STATUS_OPTIONS: Array<{ value: ResolutionStatus | "all"; label: string }> 
 function statusLabel(status: ResolutionStatus) {
   if (status === "regularized") return "Regularise";
   if (status === "accepted_exception") return "Accepte exception";
-  return "A regulariser";
+  return "A régulariser";
 }
 
 function statusClass(status: ResolutionStatus) {
@@ -90,10 +90,10 @@ function statusClass(status: ResolutionStatus) {
 }
 
 function formatDateTime(value: string | null) {
-  if (!value) return "Non renseigne";
+  if (!value) return "Non renseigné";
 
   const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "Non renseigne";
+  if (!Number.isFinite(date.getTime())) return "Non renseigné";
 
   return new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
@@ -160,7 +160,7 @@ export default function ComplianceRegistryPage() {
       setError(
         err instanceof Error
           ? err.message
-          : "Impossible de charger le registre conformite."
+          : "Impossible de charger le registre conformité."
       );
     } finally {
       setLoading(false);
@@ -190,7 +190,7 @@ export default function ComplianceRegistryPage() {
         setError(
           err instanceof Error
             ? err.message
-            : "Impossible de mettre a jour cette exception."
+            : "Impossible de mettre à jour cette exception."
         );
       } finally {
         setSavingId(null);
@@ -217,11 +217,11 @@ export default function ComplianceRegistryPage() {
                 Registre exploitation
               </Badge>
               <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">
-                Exceptions conformite
+                Exceptions conformité
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-200">
-                Chaque planning force est suivi ici : motif, agent, periode,
-                responsable et statut de regularisation.
+                Chaque planning force est suivi ici : motif, agent, période,
+                responsable et statut de régularisation.
               </p>
               {agentId && (
                 <Badge className="mt-3 rounded-full border-sky-300/30 bg-sky-300/10 text-[10px] font-black uppercase tracking-[0.16em] text-sky-100 hover:bg-sky-300/10">
@@ -245,7 +245,7 @@ export default function ComplianceRegistryPage() {
 
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Total force" value={stats.total ?? 0} tone="slate" />
-        <MetricCard label="A regulariser" value={openCount} tone="amber" />
+        <MetricCard label="A régulariser" value={openCount} tone="amber" />
         <MetricCard label="Regularises" value={stats.regularized ?? 0} tone="emerald" />
         <MetricCard
           label="Acceptes exception"
@@ -300,11 +300,11 @@ export default function ComplianceRegistryPage() {
             <div className="flex flex-col items-center justify-center px-5 py-20 text-center">
               <ShieldCheck className="h-10 w-10 text-emerald-500" />
               <h2 className="mt-4 text-xl font-black">
-                Aucun forcage a traiter
+                Aucun forçage à traiter
               </h2>
               <p className="mt-2 max-w-md text-sm text-muted-foreground">
                 Le registre est vide pour ces filtres. C'est plutot bon signe :
-                le planning reste sous controle.
+                le planning reste sous contrôle.
               </p>
             </div>
           ) : (
@@ -347,16 +347,16 @@ export default function ComplianceRegistryPage() {
                         <InfoBlock
                           label="Blocage initial"
                           value={
-                            item.complianceOverrideDetail ||
-                            "Detail conformite non renseigne"
+                            item.complianceOverrideDétail ||
+                            "Détail conformité non renseigné"
                           }
                           tone="red"
                         />
                         <InfoBlock
-                          label="Motif du forcage"
+                          label="Motif du forçage"
                           value={
                             item.complianceOverrideReason ||
-                            "Motif non renseigne"
+                            "Motif non renseigné"
                           }
                           tone="sky"
                         />
@@ -375,7 +375,7 @@ export default function ComplianceRegistryPage() {
 
                       {item.complianceResolutionAtIso && (
                         <p className="text-xs font-semibold text-muted-foreground">
-                          Derniere decision :{" "}
+                          Derniere décision :{" "}
                           {formatDateTime(item.complianceResolutionAtIso)}
                           {item.complianceResolutionByEmail
                             ? ` par ${item.complianceResolutionByEmail}`
@@ -393,7 +393,7 @@ export default function ComplianceRegistryPage() {
                             [item.id]: event.target.value,
                           }))
                         }
-                        placeholder="Note de regularisation, piece recue, decision responsable..."
+                        placeholder="Note de régularisation, pièce reçue, décision responsable..."
                         rows={3}
                         className="resize-none rounded-2xl"
                       />
@@ -406,7 +406,7 @@ export default function ComplianceRegistryPage() {
                           disabled={savingId === item.id}
                           className="rounded-xl border-amber-500/30 bg-amber-500/10 font-black text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
                         >
-                          A regulariser
+                          A régulariser
                         </Button>
                         <Button
                           type="button"
@@ -454,7 +454,7 @@ export default function ComplianceRegistryPage() {
           {!loading && items.length > 0 && (
             <div className="border-t bg-muted/20 p-4 text-sm font-semibold text-muted-foreground">
               {items.length} exception(s) affichee(s). {openCount} restent a
-              regulariser, {closedCount} sont fermees ou acceptees.
+              régulariser, {closedCount} sont fermées ou acceptees.
             </div>
           )}
         </CardContent>

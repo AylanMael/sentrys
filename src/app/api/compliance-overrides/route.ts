@@ -61,7 +61,7 @@ function normalizeStatus(value: unknown): ResolutionStatus {
 }
 
 function periodLabel(fromIso: string | null, toIsoValue: string | null) {
-  if (!fromIso || !toIsoValue) return "Periode non renseignee";
+  if (!fromIso || !toIsoValue) return "Periode non renseignée";
 
   const formatter = new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
@@ -96,7 +96,7 @@ function pickOverride(doc: FirebaseFirestore.DocumentSnapshot) {
     sentAtIso: toIso(data.sentAt) ?? clean(data.sentAtIso) ?? null,
     sentBy: clean(data.sentBy) || null,
     complianceOverrideReason: clean(data.complianceOverrideReason) || null,
-    complianceOverrideDetail: clean(data.complianceOverrideDetail) || null,
+    complianceOverrideDétail: clean(data.complianceOverrideDétail) || null,
     complianceResolutionStatus: normalizeStatus(
       data.complianceResolutionStatus
     ),
@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
         item.agentEmail,
         item.agentPhone,
         item.complianceOverrideReason,
-        item.complianceOverrideDetail,
+        item.complianceOverrideDétail,
         item.siteNames.join(" "),
       ]
         .join(" ")
@@ -233,7 +233,7 @@ export async function PATCH(req: NextRequest) {
     action: "compliance.override.updated",
     entityType: "assignment",
     entityId: id,
-    message: `Exception conformite ${status} pour ${clean(data.agentName) || "agent"}`,
+    message: `Exception conformité ${status} pour ${clean(data.agentName) || "agent"}`,
     severity: status === "to_regularize" ? "warning" : "info",
     meta: {
       dispatchId: id,

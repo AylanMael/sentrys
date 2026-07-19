@@ -54,16 +54,16 @@ import {
   type SitePlanningTemplateEntry,
 } from "@/lib/planning/site-templates";
 
-type GenerationTarget = "visible_period" | "next_week" | "next_month";
+type GénérationTarget = "visible_period" | "next_week" | "next_month";
 
-type GenerationOperation = {
+type GénérationOperation = {
   type: "create";
   data: Record<string, unknown>;
   sourceEntryIndex: number;
   sourceEntrySignature: string;
 };
 
-interface GenerationConflict {
+interface GénérationConflict {
   operationIndex: number;
   agentId: string;
   agentName: string;
@@ -72,7 +72,7 @@ interface GenerationConflict {
   reason: string;
 }
 
-interface GenerationResult {
+interface GénérationResult {
   createdCount: number;
   assignedCount: number;
   openCount: number;
@@ -84,7 +84,7 @@ interface GenerationResult {
 }
 
 interface ConflictResolutionSuggestion {
-  conflict: GenerationConflict;
+  conflict: GénérationConflict;
   sourceEntryIndex: number;
   sourceEntrySignature: string;
   replacementAgentId: string | null;
@@ -93,7 +93,7 @@ interface ConflictResolutionSuggestion {
 }
 
 const GENERATION_TARGETS: Array<{
-  value: GenerationTarget;
+  value: GénérationTarget;
   title: string;
   description: string;
 }> = [
@@ -105,7 +105,7 @@ const GENERATION_TARGETS: Array<{
   {
     value: "next_week",
     title: "Semaine prochaine",
-    description: "Genere directement la semaine suivante a partir du modele.",
+    description: "Genere directement la semaine suivante a partir du modèle.",
   },
   {
     value: "next_month",
@@ -120,12 +120,12 @@ const ASSISTANT_STEPS = [
   {
     key: "site",
     title: "1. Site",
-    description: "Choisir le perimetre a remplir.",
+    description: "Choisir le périmètre a remplir.",
   },
   {
     key: "model",
-    title: "2. Modele",
-    description: "Definir les jours et horaires recurrents.",
+    title: "2. Modèle",
+    description: "Definir les jours et horaires reçurrents.",
   },
   {
     key: "agents",
@@ -134,8 +134,8 @@ const ASSISTANT_STEPS = [
   },
   {
     key: "control",
-    title: "4. Controle",
-    description: "Verifier, puis generer sans conflit.",
+    title: "4. Contrôle",
+    description: "Vérifier, puis générér sans conflit.",
   },
 ] as const;
 
@@ -179,14 +179,14 @@ function buildEntrySignature(entry: SitePlanningTemplateEntry) {
 }
 
 function getOperationString(
-  operation: GenerationOperation | undefined,
+  operation: GénérationOperation | undefined,
   key: string
 ) {
   const value = operation?.data[key];
   return typeof value === "string" ? value : "";
 }
 
-function getOperationAssignedAgentId(operation: GenerationOperation | undefined) {
+function getOperationAssignedAgentId(operation: GénérationOperation | undefined) {
   const assigned = operation?.data.assignedAgentIds;
   if (!Array.isArray(assigned) || assigned.length === 0) return null;
   const [agentId] = assigned;
@@ -248,14 +248,14 @@ export const SiteTemplateSheet: React.FC = () => {
   const [entries, setEntries] = React.useState<SitePlanningTemplateEntry[]>([
     createEmptyEntry(),
   ]);
-  const [target, setTarget] = React.useState<GenerationTarget>("visible_period");
+  const [target, setTarget] = React.useState<GénérationTarget>("visible_period");
   const [bulkAgentId, setBulkAgentId] = React.useState("__none");
   const [skipDuplicates, setSkipDuplicates] = React.useState(true);
   const [loading, setLoading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [generating, setGenerating] = React.useState(false);
-  const [lastGenerationResult, setLastGenerationResult] =
-    React.useState<GenerationResult | null>(null);
+  const [lastGénérationResult, setLastGénérationResult] =
+    React.useState<GénérationResult | null>(null);
   const initializedRef = React.useRef(false);
 
   const agentLabel = React.useCallback(
@@ -340,7 +340,7 @@ export const SiteTemplateSheet: React.FC = () => {
   React.useEffect(() => {
     if (!siteTemplateOpen) {
       initializedRef.current = false;
-      setLastGenerationResult(null);
+      setLastGénérationResult(null);
       return;
     }
 
@@ -349,7 +349,7 @@ export const SiteTemplateSheet: React.FC = () => {
 
   const handleSiteChange = React.useCallback(
     (nextSiteId: string) => {
-      setLastGenerationResult(null);
+      setLastGénérationResult(null);
       hydrateForm(nextSiteId, templates);
     },
     [hydrateForm, templates]
@@ -360,7 +360,7 @@ export const SiteTemplateSheet: React.FC = () => {
       index: number,
       patch: Partial<SitePlanningTemplateEntry>
     ) => {
-      setLastGenerationResult(null);
+      setLastGénérationResult(null);
       setEntries((current) =>
         current.map((entry, entryIndex) =>
           entryIndex === index ? { ...entry, ...patch } : entry
@@ -371,12 +371,12 @@ export const SiteTemplateSheet: React.FC = () => {
   );
 
   const addEntry = React.useCallback(() => {
-    setLastGenerationResult(null);
+    setLastGénérationResult(null);
     setEntries((current) => [...current, createEmptyEntry()]);
   }, []);
 
   const duplicateEntry = React.useCallback((index: number) => {
-    setLastGenerationResult(null);
+    setLastGénérationResult(null);
     setEntries((current) => {
       const source = current[index];
       if (!source) return current;
@@ -386,7 +386,7 @@ export const SiteTemplateSheet: React.FC = () => {
 
   const duplicateEntryToWeekdays = React.useCallback(
     (index: number) => {
-      setLastGenerationResult(null);
+      setLastGénérationResult(null);
       setEntries((current) => {
         const source = current[index];
         if (!source) return current;
@@ -407,14 +407,14 @@ export const SiteTemplateSheet: React.FC = () => {
       toast({
         title: "Ligne propagee",
         description:
-          "La ligne a ete copiee sur les jours ouvrés manquants, sans doublon identique.",
+          "La ligne a été copiee sur les jours ouvrés manquants, sans doublon identique.",
       });
     },
     [toast]
   );
 
   const removeEntry = React.useCallback((index: number) => {
-    setLastGenerationResult(null);
+    setLastGénérationResult(null);
     setEntries((current) =>
       current.length <= 1
         ? [createEmptyEntry()]
@@ -425,7 +425,7 @@ export const SiteTemplateSheet: React.FC = () => {
   const applyAgentToAllEntries = React.useCallback(() => {
     const assignedAgentId = bulkAgentId === "__none" ? null : bulkAgentId;
 
-    setLastGenerationResult(null);
+    setLastGénérationResult(null);
     setEntries((current) =>
       current.map((entry) => ({
         ...entry,
@@ -436,19 +436,19 @@ export const SiteTemplateSheet: React.FC = () => {
     toast({
       title: assignedAgentId ? "Agent applique" : "Affectations retirees",
       description: assignedAgentId
-        ? "Le meme agent est maintenant preaffecte sur toutes les lignes du modele."
-        : "Toutes les lignes du modele repassent en vacations a pourvoir.",
+        ? "Le meme agent est maintenant preaffecte sur toutes les lignes du modèle."
+        : "Toutes les lignes du modèle repassent en vacations a pourvoir.",
     });
   }, [bulkAgentId, toast]);
 
   const loadWeekdayPreset = React.useCallback(() => {
     const preset = createWeekdayPreset();
-    setLastGenerationResult(null);
+    setLastGénérationResult(null);
     setEntries(preset);
     toast({
-      title: "Modele charge",
+      title: "Modèle charge",
       description:
-        "Le standard Lun-Ven 08:00-18:00 est pret. Tu peux affecter un agent, puis generer le planning.",
+        "Le standard Lun-Ven 08:00-18:00 est prêt. Tu peux affecter un agent, puis générér le planning.",
     });
   }, [toast]);
 
@@ -519,7 +519,7 @@ export const SiteTemplateSheet: React.FC = () => {
         if (!quiet) {
           toast({
             title: "Planning type enregistre",
-            description: "Le modele du site est pret a etre reutilise.",
+            description: "Le modèle du site est prêt a être reutilisé.",
           });
         }
 
@@ -560,7 +560,7 @@ export const SiteTemplateSheet: React.FC = () => {
         )
       );
 
-      const operations: GenerationOperation[] = [];
+      const operations: GénérationOperation[] = [];
       let skipped = 0;
 
       const pushOperation = (
@@ -664,8 +664,8 @@ export const SiteTemplateSheet: React.FC = () => {
   );
 
   const analyzeOperationConflicts = React.useCallback(
-    (operations: GenerationOperation[]) => {
-      const conflicts: GenerationConflict[] = [];
+    (operations: GénérationOperation[]) => {
+      const conflicts: GénérationConflict[] = [];
       const generatedByAgent = new Map<
         string,
         Array<{ startAt: string; endAt: string; operationIndex: number }>
@@ -718,7 +718,7 @@ export const SiteTemplateSheet: React.FC = () => {
             agentName,
             startAt,
             endAt,
-            reason: "Chevauchement avec une autre ligne du modele",
+            reason: "Chevauchement avec une autre ligne du modèle",
           });
           conflicts.push({
             operationIndex: internalConflict.operationIndex,
@@ -726,7 +726,7 @@ export const SiteTemplateSheet: React.FC = () => {
             agentName,
             startAt: internalConflict.startAt,
             endAt: internalConflict.endAt,
-            reason: "Chevauchement avec une autre ligne du modele",
+            reason: "Chevauchement avec une autre ligne du modèle",
           });
         }
 
@@ -747,14 +747,14 @@ export const SiteTemplateSheet: React.FC = () => {
     [entries]
   );
 
-  const generationPreview = React.useMemo(() => {
+  const générationPreview = React.useMemo(() => {
     if (!selectedSiteId || previewEntries.length === 0) {
       return {
-        operations: [] as GenerationOperation[],
+        operations: [] as GénérationOperation[],
         skipped: 0,
         assignedCount: 0,
         openCount: 0,
-        conflicts: [] as GenerationConflict[],
+        conflicts: [] as GénérationConflict[],
       };
     }
 
@@ -818,13 +818,13 @@ export const SiteTemplateSheet: React.FC = () => {
   const conflictOperationCount = React.useMemo(
     () =>
       new Set(
-        generationPreview.conflicts.map((conflict) => conflict.operationIndex)
+        générationPreview.conflicts.map((conflict) => conflict.operationIndex)
       ).size,
-    [generationPreview.conflicts]
+    [générationPreview.conflicts]
   );
 
   const safeOperationCount = Math.max(
-    generationPreview.operations.length - conflictOperationCount,
+    générationPreview.operations.length - conflictOperationCount,
     0
   );
   const hasModelLines = previewEntries.length > 0;
@@ -837,8 +837,8 @@ export const SiteTemplateSheet: React.FC = () => {
     model: hasModelLines,
     agents: allLinesAssigned,
     control:
-      generationPreview.operations.length > 0 &&
-      generationPreview.conflicts.length === 0,
+      générationPreview.operations.length > 0 &&
+      générationPreview.conflicts.length === 0,
   };
 
   const assistantNextAction = React.useMemo(() => {
@@ -846,7 +846,7 @@ export const SiteTemplateSheet: React.FC = () => {
       return {
         title: "Commence par choisir le site.",
         description:
-          "Le planning type est toujours rattache a un site operationnel.",
+          "Le planning type est toujours rattaché a un site opérationnel.",
       };
     }
 
@@ -854,7 +854,7 @@ export const SiteTemplateSheet: React.FC = () => {
       return {
         title: "Charge une semaine standard.",
         description:
-          "Le modele Lun-Ven 08:00-18:00 couvre la majorite des sites simples.",
+          "Le modèle Lun-Ven 08:00-18:00 couvre la majorite des sites simples.",
       };
     }
 
@@ -862,25 +862,25 @@ export const SiteTemplateSheet: React.FC = () => {
       return {
         title: "Affecte les agents habituels si tu les connais.",
         description:
-          "Sinon, tu peux generer des vacations a pourvoir et les distribuer ensuite.",
+          "Sinon, tu peux générér des vacations a pourvoir et les distribuer ensuite.",
       };
     }
 
-    if (generationPreview.conflicts.length > 0) {
+    if (générationPreview.conflicts.length > 0) {
       return {
-        title: "Des conflits sont detectes.",
+        title: "Des conflits sont détectés.",
         description:
-          "Utilise le mode sans conflits pour creer uniquement les vacations propres.",
+          "Utilise le mode sans conflits pour créer uniquement les vacations propres.",
       };
     }
 
     return {
-      title: "Tout est pret pour remplir le planning.",
+      title: "Tout est prêt pour remplir le planning.",
       description:
-        "Verifie la periode cible, puis lance la generation en confiance.",
+        "Verifie la période cible, puis lance la génération en confiance.",
     };
   }, [
-    generationPreview.conflicts.length,
+    générationPreview.conflicts.length,
     hasAssignedAgents,
     hasModelLines,
     previewEntries.length,
@@ -888,12 +888,12 @@ export const SiteTemplateSheet: React.FC = () => {
   ]);
 
   const conflictResolutionSuggestions = React.useMemo(() => {
-    if (generationPreview.conflicts.length === 0) {
+    if (générationPreview.conflicts.length === 0) {
       return [] as ConflictResolutionSuggestion[];
     }
 
-    const uniqueConflicts = new Map<number, GenerationConflict>();
-    generationPreview.conflicts.forEach((conflict) => {
+    const uniqueConflicts = new Map<number, GénérationConflict>();
+    générationPreview.conflicts.forEach((conflict) => {
       if (!uniqueConflicts.has(conflict.operationIndex)) {
         uniqueConflicts.set(conflict.operationIndex, conflict);
       }
@@ -904,7 +904,7 @@ export const SiteTemplateSheet: React.FC = () => {
     );
 
     return Array.from(uniqueConflicts.values()).map((conflict) => {
-      const operation = generationPreview.operations[conflict.operationIndex];
+      const operation = générationPreview.operations[conflict.operationIndex];
       const currentAgentId = getOperationAssignedAgentId(operation);
       const startAt = getOperationString(operation, "startAt");
       const endAt = getOperationString(operation, "endAt");
@@ -946,7 +946,7 @@ export const SiteTemplateSheet: React.FC = () => {
 
           if (existingConflict) return false;
 
-          return !generationPreview.operations.some((otherOperation, index) => {
+          return !générationPreview.operations.some((otherOperation, index) => {
             if (index === conflict.operationIndex) return false;
             if (getOperationAssignedAgentId(otherOperation) !== agent.id) {
               return false;
@@ -981,14 +981,14 @@ export const SiteTemplateSheet: React.FC = () => {
           ? qualification
             ? "Disponible et qualification compatible sur ce creneau."
             : "Disponible sur ce creneau, sans chevauchement connu."
-          : "Aucun agent compatible libre detecte automatiquement.",
+          : "Aucun agent compatible libre détecté automatiquement.",
       };
     });
   }, [
     agentLabel,
     agents,
-    generationPreview.conflicts,
-    generationPreview.operations,
+    générationPreview.conflicts,
+    générationPreview.operations,
     vacations,
   ]);
 
@@ -996,7 +996,7 @@ export const SiteTemplateSheet: React.FC = () => {
     (suggestion: ConflictResolutionSuggestion) => {
       if (!suggestion.replacementAgentId) return;
 
-      setLastGenerationResult(null);
+      setLastGénérationResult(null);
       setEntries((current) => {
         const indexFromSignature = current.findIndex(
           (entry) => buildEntrySignature(entry) === suggestion.sourceEntrySignature
@@ -1017,7 +1017,7 @@ export const SiteTemplateSheet: React.FC = () => {
 
       toast({
         title: "Remplacant applique",
-        description: `${suggestion.replacementAgentName} est maintenant prevu sur cette ligne du modele.`,
+        description: `${suggestion.replacementAgentName} est maintenant prevu sur cette ligne du modèle.`,
       });
     },
     [toast]
@@ -1049,12 +1049,12 @@ export const SiteTemplateSheet: React.FC = () => {
 
       if (finalOperations.length === 0) {
         toast({
-          title: options.safeOnly ? "Aucune vacation sure" : "Aucune creation",
+          title: options.safeOnly ? "Aucune vacation sure" : "Aucune création",
           description: options.safeOnly
-            ? "Toutes les vacations preaffectees ont un conflit. Corrige les agents ou genere en mode manuel."
+            ? "Toutes les vacations preaffectees ont un conflit. Corrige les agents ou généré en mode manuel."
             : skipped > 0
-              ? "Tout existe deja sur la periode cible."
-              : "Le planning type ne produit aucune vacation sur cette periode.",
+              ? "Tout existe deja sur la période cible."
+              : "Le planning type ne produit aucune vacation sur cette période.",
         });
         return false;
       }
@@ -1070,14 +1070,14 @@ export const SiteTemplateSheet: React.FC = () => {
         );
 
         if (!response?.ok) {
-          throw new Error(response?.error || "Impossible de generer le planning.");
+          throw new Error(response?.error || "Impossible de générér le planning.");
         }
 
         await refresh();
         setMode("site");
         setAgentId("all");
         setSiteId(selectedSiteId);
-        setLastGenerationResult({
+        setLastGénérationResult({
           createdCount: finalOperations.length,
           assignedCount: assignedCreated,
           openCount: openCreated,
@@ -1088,12 +1088,12 @@ export const SiteTemplateSheet: React.FC = () => {
           safeOnly: Boolean(options.safeOnly),
         });
         toast({
-          title: options.safeOnly ? "Vacations sures generees" : "Planning genere",
+          title: options.safeOnly ? "Vacations sures générées" : "Planning généré",
           description: [
-            `${finalOperations.length} vacation(s) creees`,
+            `${finalOperations.length} vacation(s) créées`,
             skipped > 0 ? `${skipped} doublon(s) ignore(s)` : null,
             conflictSkipped > 0
-              ? `${conflictSkipped} conflit(s) laisse(s) a arbitrer`
+              ? `${conflictSkipped} conflit(s) laisse(s) à arbitrer`
               : null,
           ]
             .filter(Boolean)
@@ -1107,7 +1107,7 @@ export const SiteTemplateSheet: React.FC = () => {
           description:
             error instanceof Error
               ? error.message
-              : "Impossible de generer le planning type.",
+              : "Impossible de générér le planning type.",
         });
         return false;
       } finally {
@@ -1150,14 +1150,14 @@ export const SiteTemplateSheet: React.FC = () => {
 
   const applyWeekdayPreset = React.useCallback(async () => {
     const preset = createWeekdayPreset();
-    setLastGenerationResult(null);
+    setLastGénérationResult(null);
     setEntries(preset);
 
     if (!selectedSiteId) {
       toast({
-        title: "Modele charge",
+        title: "Modèle charge",
         description:
-          "Le standard Lun-Ven 08:00-18:00 a ete charge dans le panneau. Choisis un site puis genere le planning.",
+          "Le standard Lun-Ven 08:00-18:00 a été charge dans le panneau. Choisis un site puis généré le planning.",
       });
       return;
     }
@@ -1289,8 +1289,8 @@ export const SiteTemplateSheet: React.FC = () => {
                   </div>
                 </div>
                 <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  On avance dans l&apos;ordre : site, modele, agents, controle.
-                  L&apos;objectif est simple : creer vite, proprement, et laisser
+                  On avance dans l&apos;ordre : site, modèle, agents, controle.
+                  L&apos;objectif est simple : créer vite, proprement, et laisser
                   les exceptions visibles au lieu de les cacher.
                 </p>
               </div>
@@ -1312,7 +1312,7 @@ export const SiteTemplateSheet: React.FC = () => {
               {ASSISTANT_STEPS.map((step) => {
                 const done = assistantStepState[step.key];
                 const isWarning =
-                  step.key === "control" && generationPreview.conflicts.length > 0;
+                  step.key === "control" && générationPreview.conflicts.length > 0;
 
                 return (
                   <div
@@ -1357,7 +1357,7 @@ export const SiteTemplateSheet: React.FC = () => {
               </div>
               <div className="rounded-2xl border border-border/50 bg-background/80 p-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
-                  Modele
+                  Modèle
                 </p>
                 <p className="mt-1 text-sm font-black text-foreground">
                   {previewEntries.length} ligne(s)
@@ -1374,16 +1374,16 @@ export const SiteTemplateSheet: React.FC = () => {
               <div
                 className={cn(
                   "rounded-2xl border p-3",
-                  generationPreview.conflicts.length > 0
+                  générationPreview.conflicts.length > 0
                     ? "border-amber-500/30 bg-amber-500/10"
                     : "border-emerald-500/30 bg-emerald-500/10"
                 )}
               >
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
-                  Generation sure
+                  Génération sure
                 </p>
                 <p className="mt-1 text-sm font-black text-foreground">
-                  {safeOperationCount}/{generationPreview.operations.length} propre(s)
+                  {safeOperationCount}/{générationPreview.operations.length} propre(s)
                 </p>
               </div>
             </div>
@@ -1424,7 +1424,7 @@ export const SiteTemplateSheet: React.FC = () => {
                   loading ||
                   saving ||
                   generating ||
-                  generationPreview.operations.length === 0
+                  générationPreview.operations.length === 0
                 }
                 className="rounded-xl font-black"
               >
@@ -1478,7 +1478,7 @@ export const SiteTemplateSheet: React.FC = () => {
                 disabled={loading || saving || generating}
               >
                 <CopyPlus className="mr-2 h-4 w-4" />
-                Charger le modele Lun-Ven 08:00-18:00
+                Charger le modèle Lun-Ven 08:00-18:00
               </Button>
               <Button
                 type="button"
@@ -1499,14 +1499,14 @@ export const SiteTemplateSheet: React.FC = () => {
                 automatiquement prolongee au lendemain.
               </p>
               <p className="text-xs text-muted-foreground">
-                Tu peux preaffecter un agent sur chaque ligne pour generer un planning deja distribue.
+                Tu peux preaffecter un agent sur chaque ligne pour générér un planning deja distribue.
               </p>
             </div>
 
             <div className="md:col-span-2 rounded-2xl border border-border/50 bg-background p-3">
               <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div className="min-w-0 flex-1 space-y-2">
-                  <Label>Agent rapide pour tout le modele</Label>
+                  <Label>Agent rapide pour tout le modèle</Label>
                   <Select value={bulkAgentId} onValueChange={setBulkAgentId}>
                     <SelectTrigger className="bg-background">
                       <SelectValue placeholder="Choisir un agent" />
@@ -1548,7 +1548,7 @@ export const SiteTemplateSheet: React.FC = () => {
                   Lignes du planning type
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Une ligne = un poste recurrent sur un jour donne.
+                  Une ligne = un poste reçurrent sur un jour donne.
                 </p>
               </div>
               <Button type="button" variant="outline" onClick={addEntry}>
@@ -1706,7 +1706,7 @@ export const SiteTemplateSheet: React.FC = () => {
                         </SelectContent>
                       </Select>
                       <p className="text-[11px] text-muted-foreground">
-                        Laisse vide pour creer une vacation a pourvoir.
+                        Laisse vide pour créer une vacation a pourvoir.
                       </p>
                     </div>
 
@@ -1746,7 +1746,7 @@ export const SiteTemplateSheet: React.FC = () => {
                       onChange={(event) =>
                         updateEntry(index, { notes: event.target.value || null })
                       }
-                      placeholder="Consignes recurrentes, acces, materiel, point de passage..."
+                      placeholder="Consignes reçurrentes, accès, matériel, point de passage..."
                       className="min-h-[84px]"
                     />
                   </div>
@@ -1766,7 +1766,7 @@ export const SiteTemplateSheet: React.FC = () => {
                 Projection
               </h3>
               <p className="text-sm text-muted-foreground">
-                Enregistre le modele puis genere directement les vacations sur la periode cible.
+                Enregistre le modèle puis généré directement les vacations sur la période cible.
               </p>
             </div>
 
@@ -1774,10 +1774,10 @@ export const SiteTemplateSheet: React.FC = () => {
               <div className="rounded-2xl border border-border/50 bg-background p-4">
                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
                   <CalendarRange className="h-4 w-4" />
-                  Creation
+                  Création
                 </div>
                 <p className="mt-2 text-2xl font-black text-foreground">
-                  {generationPreview.operations.length}
+                  {générationPreview.operations.length}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   vacation(s) sur {previewTargetLabel.toLowerCase()}
@@ -1790,10 +1790,10 @@ export const SiteTemplateSheet: React.FC = () => {
                   Affectees
                 </div>
                 <p className="mt-2 text-2xl font-black text-emerald-600">
-                  {generationPreview.assignedCount}
+                  {générationPreview.assignedCount}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {generationPreview.openCount} restera/restent a pourvoir
+                  {générationPreview.openCount} restera/restent a pourvoir
                 </p>
               </div>
 
@@ -1803,7 +1803,7 @@ export const SiteTemplateSheet: React.FC = () => {
                   Doublons
                 </div>
                 <p className="mt-2 text-2xl font-black text-slate-700 dark:text-slate-200">
-                  {generationPreview.skipped}
+                  {générationPreview.skipped}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   ignore(s) si deja presents
@@ -1812,7 +1812,7 @@ export const SiteTemplateSheet: React.FC = () => {
 
               <div
                 className={`rounded-2xl border p-4 ${
-                  generationPreview.conflicts.length > 0
+                  générationPreview.conflicts.length > 0
                     ? "border-amber-500/30 bg-amber-500/10"
                     : "border-border/50 bg-background"
                 }`}
@@ -1823,25 +1823,25 @@ export const SiteTemplateSheet: React.FC = () => {
                 </div>
                 <p
                   className={`mt-2 text-2xl font-black ${
-                    generationPreview.conflicts.length > 0
+                    générationPreview.conflicts.length > 0
                       ? "text-amber-700 dark:text-amber-300"
                       : "text-emerald-600"
                   }`}
                 >
-                  {generationPreview.conflicts.length}
+                  {générationPreview.conflicts.length}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  chevauchement(s) agent detecte(s)
+                  chevauchement(s) agent détecté(s)
                 </p>
               </div>
             </div>
 
-            {(previewAgents.length > 0 || generationPreview.conflicts.length > 0) && (
+            {(previewAgents.length > 0 || générationPreview.conflicts.length > 0) && (
               <div className="mb-4 rounded-2xl border border-border/50 bg-background p-4">
                 {previewAgents.length > 0 && (
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">
-                      Agents preaffectes dans ce modele
+                      Agents preaffectes dans ce modèle
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {previewAgents.map((agentName) => (
@@ -1856,13 +1856,13 @@ export const SiteTemplateSheet: React.FC = () => {
                   </div>
                 )}
 
-                {generationPreview.conflicts.length > 0 && (
+                {générationPreview.conflicts.length > 0 && (
                   <div className={previewAgents.length > 0 ? "mt-4" : ""}>
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
-                      Points a verifier avant generation
+                      Points à vérifier avant génération
                     </p>
                     <div className="mt-2 space-y-2">
-                      {generationPreview.conflicts.slice(0, 4).map((conflict, index) => (
+                      {générationPreview.conflicts.slice(0, 4).map((conflict, index) => (
                         <div
                           key={`${conflict.agentId}-${conflict.startAt}-${index}`}
                           className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
@@ -1888,9 +1888,9 @@ export const SiteTemplateSheet: React.FC = () => {
                           {conflict.reason}
                         </div>
                       ))}
-                      {generationPreview.conflicts.length > 4 && (
+                      {générationPreview.conflicts.length > 4 && (
                         <p className="text-xs font-semibold text-muted-foreground">
-                          +{generationPreview.conflicts.length - 4} autre(s) conflit(s) potentiel(s).
+                          +{générationPreview.conflicts.length - 4} autre(s) conflit(s) potentiel(s).
                         </p>
                       )}
                     </div>
@@ -1908,7 +1908,7 @@ export const SiteTemplateSheet: React.FC = () => {
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Sentrys propose un remplacant libre pour les lignes qui
-                      bloquent. Un clic applique le remplaçant sur la ligne du modele.
+                      bloquent. Un clic applique le remplaçant sur la ligne du modèle.
                     </p>
                   </div>
                   <div className="rounded-full border border-amber-500/30 bg-background px-3 py-1 text-xs font-black text-amber-700 dark:text-amber-300">
@@ -1925,7 +1925,7 @@ export const SiteTemplateSheet: React.FC = () => {
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div className="min-w-0">
                           <p className="text-sm font-black text-foreground">
-                            {suggestion.conflict.agentName} bloque le{" "}
+                            {suggestion.conflict.agentName} bloqué le{" "}
                             {new Date(suggestion.conflict.startAt).toLocaleDateString("fr-FR", {
                               weekday: "short",
                               day: "2-digit",
@@ -1981,10 +1981,10 @@ export const SiteTemplateSheet: React.FC = () => {
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-sm font-black text-foreground">
-                    Mode facile : creer seulement ce qui est propre
+                    Mode facile : créer seulement ce qui est propre
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Si des agents sont deja occupes, Sentrys peut generer les vacations sans conflit et te laisser seulement les cas a arbitrer.
+                    Si des agents sont deja occupes, Sentrys peut générér les vacations sans conflit et te laisser seulement les cas à arbitrer.
                   </p>
                 </div>
                 <Button
@@ -1997,7 +1997,7 @@ export const SiteTemplateSheet: React.FC = () => {
                     loading ||
                     saving ||
                     generating ||
-                    generationPreview.operations.length === 0
+                    générationPreview.operations.length === 0
                   }
                   className="shrink-0 border-primary/30 bg-background font-bold text-primary hover:bg-primary/10"
                 >
@@ -2017,7 +2017,7 @@ export const SiteTemplateSheet: React.FC = () => {
                   key={option.value}
                   type="button"
                   onClick={() => {
-                    setLastGenerationResult(null);
+                    setLastGénérationResult(null);
                     setTarget(option.value);
                   }}
                   className={`rounded-2xl border p-4 text-left transition-all ${
@@ -2048,13 +2048,13 @@ export const SiteTemplateSheet: React.FC = () => {
                   Ignorer les doublons
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Ne recree pas une vacation identique si elle existe deja sur la periode cible.
+                  Ne recréé pas une vacation identique si elle existe deja sur la période cible.
                 </p>
               </div>
             </div>
           </div>
 
-          {lastGenerationResult && (
+          {lastGénérationResult && (
             <div className="rounded-[1.75rem] border border-emerald-500/30 bg-emerald-500/10 p-4 shadow-sm">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
@@ -2067,14 +2067,14 @@ export const SiteTemplateSheet: React.FC = () => {
                         Remplissage termine
                       </p>
                       <h3 className="text-lg font-black text-foreground">
-                        {lastGenerationResult.siteName} est pret a controler.
+                        {lastGénérationResult.siteName} est prêt a contrôler.
                       </h3>
                     </div>
                   </div>
                   <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                    Sentrys a genere le planning sur {lastGenerationResult.targetLabel.toLowerCase()}.
+                    Sentrys a généré le planning sur {lastGénérationResult.targetLabel.toLowerCase()}.
                     Le resultat reste visible ici pour que l&apos;exploitant sache
-                    exactement ce qui vient d&apos;etre cree.
+                    exactement ce qui vient d&apos;etre créé.
                   </p>
                 </div>
 
@@ -2084,13 +2084,13 @@ export const SiteTemplateSheet: React.FC = () => {
                     onClick={showGeneratedPlanning}
                     className="rounded-xl font-black"
                   >
-                    Voir le planning genere
+                    Voir le planning généré
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={reviewOpenVacations}
-                    disabled={lastGenerationResult.openCount === 0}
+                    disabled={lastGénérationResult.openCount === 0}
                     className="rounded-xl bg-background/80 font-bold"
                   >
                     Traiter les vacations a pourvoir
@@ -2104,7 +2104,7 @@ export const SiteTemplateSheet: React.FC = () => {
                     Creees
                   </p>
                   <p className="mt-1 text-2xl font-black text-foreground">
-                    {lastGenerationResult.createdCount}
+                    {lastGénérationResult.createdCount}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border/50 bg-background/80 p-3">
@@ -2112,7 +2112,7 @@ export const SiteTemplateSheet: React.FC = () => {
                     Affectees
                   </p>
                   <p className="mt-1 text-2xl font-black text-emerald-600">
-                    {lastGenerationResult.assignedCount}
+                    {lastGénérationResult.assignedCount}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border/50 bg-background/80 p-3">
@@ -2122,26 +2122,26 @@ export const SiteTemplateSheet: React.FC = () => {
                   <p
                     className={cn(
                       "mt-1 text-2xl font-black",
-                      lastGenerationResult.openCount > 0
+                      lastGénérationResult.openCount > 0
                         ? "text-amber-600"
                         : "text-emerald-600"
                     )}
                   >
-                    {lastGenerationResult.openCount}
+                    {lastGénérationResult.openCount}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border/50 bg-background/80 p-3">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
-                    Doublons evites
+                    Doublons évites
                   </p>
                   <p className="mt-1 text-2xl font-black text-slate-700 dark:text-slate-200">
-                    {lastGenerationResult.skippedCount}
+                    {lastGénérationResult.skippedCount}
                   </p>
                 </div>
                 <div
                   className={cn(
                     "rounded-2xl border p-3",
-                    lastGenerationResult.conflictSkippedCount > 0
+                    lastGénérationResult.conflictSkippedCount > 0
                       ? "border-amber-500/30 bg-amber-500/10"
                       : "border-border/50 bg-background/80"
                   )}
@@ -2152,19 +2152,19 @@ export const SiteTemplateSheet: React.FC = () => {
                   <p
                     className={cn(
                       "mt-1 text-2xl font-black",
-                      lastGenerationResult.conflictSkippedCount > 0
+                      lastGénérationResult.conflictSkippedCount > 0
                         ? "text-amber-600"
                         : "text-emerald-600"
                     )}
                   >
-                    {lastGenerationResult.conflictSkippedCount}
+                    {lastGénérationResult.conflictSkippedCount}
                   </p>
                 </div>
               </div>
 
-              {lastGenerationResult.safeOnly && (
+              {lastGénérationResult.safeOnly && (
                 <p className="mt-3 rounded-2xl border border-primary/20 bg-background/70 px-3 py-2 text-xs font-semibold text-muted-foreground">
-                  Mode prudent utilise : seules les vacations sans conflit agent ont ete creees.
+                  Mode prudent utilisé : seules les vacations sans conflit agent ont ete créées.
                 </p>
               )}
             </div>
@@ -2193,7 +2193,7 @@ export const SiteTemplateSheet: React.FC = () => {
             ) : (
               <Save className="mr-2 h-4 w-4" />
             )}
-            Enregistrer le modele
+            Enregistrer le modèle
           </Button>
           <Button
             type="button"
@@ -2205,7 +2205,7 @@ export const SiteTemplateSheet: React.FC = () => {
               loading ||
               saving ||
               generating ||
-              generationPreview.operations.length === 0
+              générationPreview.operations.length === 0
             }
           >
             {generating ? (
@@ -2227,7 +2227,7 @@ export const SiteTemplateSheet: React.FC = () => {
             ) : (
               <CalendarRange className="mr-2 h-4 w-4" />
             )}
-            Enregistrer et generer
+            Enregistrer et générér
           </Button>
         </SheetFooter>
       </SheetContent>

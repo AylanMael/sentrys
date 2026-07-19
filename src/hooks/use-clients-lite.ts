@@ -41,7 +41,7 @@ export function useClientsLite(opts?: UseClientsLiteOpts) {
   const [error, setError] = useState<string | null>(null);
   const [indexUrl, setIndexUrl] = useState<string | null>(null);
 
-  // permet de relancer manuellement sans changer les deps
+  // permet de relancéer manuellement sans changer les deps
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = () => setRefreshKey((x) => x + 1);
 

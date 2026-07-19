@@ -94,12 +94,12 @@ export async function GET(req: NextRequest) {
   let decoded: { uid: string; email?: string; name?: string };
 
   try {
-    const verified = await getAuth().verifyIdToken(token);
+    const vérifiéd = await getAuth().verifyIdToken(token);
 
     decoded = {
-      uid: verified.uid,
-      email: (verified as { email?: string }).email,
-      name: (verified as { name?: string }).name,
+      uid: vérifiéd.uid,
+      email: (vérifiéd as { email?: string }).email,
+      name: (vérifiéd as { name?: string }).name,
     };
   } catch (error) {
     console.error("[me] verifyIdToken failed for token:", token.slice(0, 10) + "...", error);

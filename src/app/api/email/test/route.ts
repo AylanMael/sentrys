@@ -40,7 +40,7 @@ function testEmailHtml(input: {
   agencyName: string;
   senderEmail: string;
   replyTo: string;
-  statusDetail: string;
+  statusDétail: string;
 }) {
   return `
     <html>
@@ -62,8 +62,8 @@ function testEmailHtml(input: {
                     </p>
                     <p style="margin:0 0 18px;font-size:15px;line-height:1.6;">
                       Ceci est un message de test emis par <strong>${escapeHtml(input.agencyName)}</strong>
-                      depuis Sentrys. Il sert a verifier l'identite expediteur avant la diffusion
-                      reelle des plannings agents et clients.
+                      depuis Sentrys. Il sert à vérifier l'identité expediteur avant la diffusion
+                      réelle des plannings agents et clients.
                     </p>
                     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:18px 0;">
                       <tr>
@@ -76,13 +76,13 @@ function testEmailHtml(input: {
                       </tr>
                     </table>
                     <p style="margin:18px 0 0;padding:14px 16px;border-radius:14px;background:#ecfeff;color:#155e75;font-size:13px;line-height:1.5;">
-                      ${escapeHtml(input.statusDetail)}
+                      ${escapeHtml(input.statusDétail)}
                     </p>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding:16px 28px;background:#f9fafb;color:#6b7280;font-size:12px;">
-                    Document technique Sentrys - aucune action n'est requise si vous avez bien recu ce message.
+                    Document technique Sentrys - aucune action n'est requise si vous avez bien reçu ce message.
                   </td>
                 </tr>
               </table>
@@ -126,8 +126,8 @@ export async function POST(req: NextRequest) {
     auth.email ??
     profile.email;
   const agencyName = profile.displayName || "Votre agence";
-  const statusDetail = readiness.liveReady
-    ? "Configuration prete : ce test tente un envoi reel via Brevo."
+  const statusDétail = readiness.liveReady
+    ? "Configuration prête : ce test tente un envoi réel via Brevo."
     : readiness.detail;
 
   const delivery = await sendAgencyTransactionalEmail({
@@ -142,13 +142,13 @@ export async function POST(req: NextRequest) {
       agencyName,
       senderEmail: identity.fromEmail,
       replyTo: identity.replyTo,
-      statusDetail,
+      statusDétail,
     }),
     textContent: [
       `Test Sentrys - ${agencyName}`,
       `Expediteur: ${identity.fromEmail}`,
       `Reply-To: ${identity.replyTo}`,
-      statusDetail,
+      statusDétail,
     ].join("\n"),
     tags: ["sentrys", "email-test", auth.tenantId],
   });
@@ -163,10 +163,10 @@ export async function POST(req: NextRequest) {
     entityId: auth.tenantId,
     message:
       delivery.status === "sent"
-        ? "Email de test envoye"
+        ? "Email de test envoyé"
         : delivery.status === "simulated"
-          ? "Email de test simule"
-          : "Email de test non envoye",
+          ? "Email de test simulé"
+          : "Email de test non envoyé",
     severity: delivery.ok ? "info" : "warning",
     meta: {
       readiness,

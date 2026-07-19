@@ -75,7 +75,7 @@ function formatRange(from?: string | null, to?: string | null) {
 }
 
 function formatSentAt(value?: string | null) {
-  if (!value) return "Planning diffuse";
+  if (!value) return "Planning diffusé";
 
   return new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
@@ -165,7 +165,7 @@ export default function AgentPlanningPage() {
       setActionError(
         ackError instanceof Error
           ? ackError.message
-          : "Impossible de confirmer la reception."
+          : "Impossible de confirmer la réception."
       );
     } finally {
       setAcknowledgingId(null);
@@ -193,10 +193,10 @@ export default function AgentPlanningPage() {
               Portail agent
             </Badge>
             <h1 className="mt-3 text-3xl font-black tracking-tight">
-              Mes plannings diffuses
+              Mes plannings diffusés
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Retrouvez ici les plannings envoyes par l&apos;exploitation pour votre
+              Retrouvez ici les plannings envoyés par l&apos;exploitation pour votre
               portail agent.
             </p>
           </div>
@@ -251,9 +251,9 @@ export default function AgentPlanningPage() {
         <Card className="border-dashed">
           <CardContent className="flex min-h-[220px] flex-col items-center justify-center p-8 text-center">
             <Send className="h-10 w-10 text-muted-foreground" />
-            <p className="mt-4 text-lg font-black">Aucun planning diffuse</p>
+            <p className="mt-4 text-lg font-black">Aucun planning diffusé</p>
             <p className="mt-2 max-w-md text-sm text-muted-foreground">
-              L&apos;exploitation n&apos;a pas encore envoye de planning dans votre
+              L&apos;exploitation n&apos;a pas encore envoyé de planning dans votre
               portail.
             </p>
           </CardContent>

@@ -6,6 +6,7 @@ import {
   requireTenantUser,
 } from "@/app/api/_utils/withTenant";
 import { adminBucket, adminDb } from "@/lib/firebase/admin";
+import { listPlatformAuditEvents } from "@/lib/platform/audit-log";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,12 @@ type TenantOverview = {
   };
   riskLevel: "ok" | "watch" | "critical";
   riskReasons: string[];
+  onboarding: {
+    status: string;
+    completion: number;
+    activationRequested: boolean;
+    readyToActivate: boolean;
+  };
 };
 
 function json(status: number, body: unknown) {
@@ -60,15 +67,110 @@ function currentMonthRange() {
   return { from, to };
 }
 
-async function countQuery(query: FirebaseFirestore.Query) {
+async function countQuery(
+  query: FirebaseFirestore.Query,
+  fallbackCount?: () => Promise<number>
+) {
   try {
     const snapshot = await query.count().get();
     const count = snapshot.data().count;
     return Number.isFinite(count) ? count : 0;
-  } catch {
-    const fallback = await query.limit(1000).get();
-    return fallback.size;
+  } catch (error) {
+    if (fallbackCount) {
+      try {
+        return await fallbackCount();
+      } catch (fallbackError) {
+        console.warn("[platform.overview] fallback count failed", {
+          error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+        });
+      }
+    }
+
+    try {
+      const fallback = await query.limit(1000).get();
+      return fallback.size;
+    } catch (fallbackError) {
+      console.warn("[platform.overview] count failed", {
+        error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+        initialError: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
   }
+}
+
+function asDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+
+  const timestamp = value as { toDate?: () => Date };
+  if (typeof timestamp.toDate === "function") {
+    const date = timestamp.toDate();
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+
+  return null;
+}
+
+function isInRange(value: unknown, from: Date, to: Date) {
+  const date = asDate(value);
+  if (!date) return false;
+
+  return date >= from && date < to;
+}
+
+async function countTenantVacationsMonth(
+  tenantId: string,
+  from: Date,
+  to: Date
+) {
+  return countQuery(
+    adminDb
+      .collection("vacations")
+      .where("tenantId", "==", tenantId)
+      .where("startAt", ">=", from.toISOString())
+      .where("startAt", "<", to.toISOString()),
+    async () => {
+      const snapshot = await adminDb
+        .collection("vacations")
+        .where("tenantId", "==", tenantId)
+        .limit(5000)
+        .get();
+
+      return snapshot.docs.reduce((count, doc) => {
+        const data = doc.data() as Record<string, unknown>;
+        return count + (isInRange(data.startAt, from, to) ? 1 : 0);
+      }, 0);
+    }
+  );
+}
+
+async function countTenantOpenIncidents(tenantId: string) {
+  const openStatuses = new Set(["open", "investigating"]);
+
+  return countQuery(
+    adminDb
+      .collection("incidents")
+      .where("tenantId", "==", tenantId)
+      .where("status", "in", Array.from(openStatuses)),
+    async () => {
+      const snapshot = await adminDb
+        .collection("incidents")
+        .where("tenantId", "==", tenantId)
+        .limit(5000)
+        .get();
+
+      return snapshot.docs.reduce((count, doc) => {
+        const data = doc.data() as Record<string, unknown>;
+        const status = text(data.status).toLowerCase();
+        return count + (openStatuses.has(status) ? 1 : 0);
+      }, 0);
+    }
+  );
 }
 
 function tenantName(id: string, data: Record<string, unknown>) {
@@ -105,6 +207,49 @@ function tenantOwnerEmail(data: Record<string, unknown>) {
   );
 }
 
+function onboardingForTenant(input: {
+  status: string;
+  tenantData: Record<string, unknown>;
+  users: number;
+  clients: number;
+  sites: number;
+}) {
+  const onboarding = input.tenantData.onboarding as
+    | Record<string, unknown>
+    | undefined;
+  const owner = input.tenantData.owner as Record<string, unknown> | undefined;
+  const onboardingStatus =
+    text(onboarding?.status) ||
+    (["active", "trialing", "trial", "ok"].includes(input.status)
+      ? "active"
+      : "pending_setup");
+  const ownerEmail =
+    tenantOwnerEmail(input.tenantData) || text(onboarding?.ownerEmail) || null;
+  const ownerUid =
+    text(input.tenantData.ownerUid) ||
+    text(owner?.uid) ||
+    text(onboarding?.ownerUid) ||
+    null;
+
+  const checks = [
+    Boolean(tenantName("tenant", input.tenantData) && ownerEmail),
+    Boolean(ownerUid || input.users > 0),
+    input.clients > 0,
+    input.sites > 0,
+  ];
+  const completion = Math.round(
+    (checks.filter(Boolean).length / checks.length) * 100
+  );
+  const readyToActivate = checks.every(Boolean);
+
+  return {
+    status: onboardingStatus,
+    completion,
+    activationRequested: onboardingStatus === "activation_requested",
+    readyToActivate,
+  };
+}
+
 function riskForTenant(input: {
   status: string;
   users: number;
@@ -139,8 +284,8 @@ export async function GET(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
 
-  if (!isSuperAdmin(auth.role)) {
-    return forbidden("Super admin SaaS required");
+  if (!isSuperAdmin(auth.role) || auth.tenantId !== "platform") {
+    return forbidden("Super admin SaaS platform required");
   }
 
   const maxRaw = Number(req.nextUrl.searchParams.get("max") ?? 80);
@@ -190,19 +335,12 @@ export async function GET(req: NextRequest) {
           countQuery(
             adminDb.collection("clients").where("tenantId", "==", tenantId)
           ),
-          countQuery(
-            adminDb
-              .collection("vacations")
-              .where("tenantId", "==", tenantId)
-              .where("startAt", ">=", monthRange.from.toISOString())
-              .where("startAt", "<", monthRange.to.toISOString())
+          countTenantVacationsMonth(
+            tenantId,
+            monthRange.from,
+            monthRange.to
           ),
-          countQuery(
-            adminDb
-              .collection("incidents")
-              .where("tenantId", "==", tenantId)
-              .where("status", "in", ["open", "investigating"])
-          ),
+          countTenantOpenIncidents(tenantId),
         ]);
 
         const risk = riskForTenant({
@@ -211,6 +349,13 @@ export async function GET(req: NextRequest) {
           agents,
           sites,
           openIncidents,
+        });
+        const onboarding = onboardingForTenant({
+          status,
+          tenantData: data,
+          users,
+          clients,
+          sites,
         });
 
         return {
@@ -230,6 +375,7 @@ export async function GET(req: NextRequest) {
             openIncidents,
           },
           ...risk,
+          onboarding,
         } satisfies TenantOverview;
       })
     );
@@ -248,6 +394,10 @@ export async function GET(req: NextRequest) {
         acc.clients += tenant.counters.clients;
         acc.vacationsMonth += tenant.counters.vacationsMonth;
         acc.openIncidents += tenant.counters.openIncidents;
+        if (tenant.onboarding.activationRequested) acc.activationRequests += 1;
+        if (!["active", "trial", "trialing", "ok"].includes(tenant.status)) {
+          acc.onboardingTenants += 1;
+        }
         return acc;
       },
       {
@@ -261,6 +411,8 @@ export async function GET(req: NextRequest) {
         clients: 0,
         vacationsMonth: 0,
         openIncidents: 0,
+        activationRequests: 0,
+        onboardingTenants: 0,
       }
     );
 
@@ -271,8 +423,19 @@ export async function GET(req: NextRequest) {
               id: "critical-tenants",
               tone: "critical",
               title: "Agences en risque critique",
-              detail: `${summary.criticalTenants} agence(s) necessitent une verification support.`,
+              detail: `${summary.criticalTenants} agence(s) nécessitent une verification support.`,
               href: "#tenants",
+            },
+          ]
+        : []),
+      ...(summary.activationRequests > 0
+        ? [
+            {
+              id: "activation-requests",
+              tone: "warning",
+              title: "Demandes d'activation",
+              detail: `${summary.activationRequests} agence(s) attendent une validation VSW Digital.`,
+              href: "#onboarding-requests",
             },
           ]
         : []),
@@ -292,10 +455,17 @@ export async function GET(req: NextRequest) {
         tone: "info",
         title: "Impersonation non activee",
         detail:
-          "L'acces support agence doit rester bloque tant que platformAuditLog et motif obligatoire ne sont pas finalises.",
+          "L'accès support agence doit rester bloqué tant que platformAuditLog et motif obligatoire ne sont pas finalises.",
         href: "#guardrails",
       },
     ];
+
+    const auditLog = await listPlatformAuditEvents({ limit: 8 }).catch((auditError) => {
+      console.warn("[platform.overview] audit log unavailable", {
+        error: auditError instanceof Error ? auditError.message : String(auditError),
+      });
+      return [];
+    });
 
     return json(200, {
       ok: true,
@@ -315,6 +485,7 @@ export async function GET(req: NextRequest) {
       summary,
       tenants,
       signals,
+      auditLog,
     });
   } catch (error) {
     console.error("[platform.overview] error", error);

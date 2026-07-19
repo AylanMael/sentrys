@@ -140,7 +140,7 @@ export const PlanningHeader: React.FC = () => {
           acc[status] += 1;
           return acc;
         },
-        { draft: 0, published: 0, modified: 0 }
+        { draft: 0, published: 0, modifiéd: 0 }
       ),
     [filteredVacations]
   );
@@ -173,7 +173,7 @@ export const PlanningHeader: React.FC = () => {
       toast({
         variant: "destructive",
         title: "Periode manquante",
-        description: "Choisis une periode dans le planning avant d'imprimer.",
+        description: "Choisis une période dans le planning avant d'imprimer.",
       });
       return;
     }
@@ -182,7 +182,7 @@ export const PlanningHeader: React.FC = () => {
       toast({
         variant: "destructive",
         title: "Aucun site",
-        description: "Cree au moins un site avant de generer un PDF site.",
+        description: "Cree au moins un site avant de générér un PDF site.",
       });
       return;
     }
@@ -239,12 +239,12 @@ export const PlanningHeader: React.FC = () => {
                       {publicationCounts.draft > 1 ? "s" : ""}
                     </Badge>
                   )}
-                  {publicationCounts.modified > 0 && (
+                  {publicationCounts.modifiéd > 0 && (
                     <Badge
                       variant="outline"
                       className="h-6 rounded-full border-amber-500/30 bg-amber-500/10 px-2.5 text-[11px] font-black text-amber-700 dark:text-amber-300"
                     >
-                      {publicationCounts.modified} a republier
+                      {publicationCounts.modifiéd} a republiér
                     </Badge>
                   )}
                   {selectionLabel && (

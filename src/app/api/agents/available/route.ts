@@ -239,7 +239,7 @@ function workloadLevel(projectedWeekHours: number): AvailableAgentItem["workload
 function reasonLabel(reason: AvailabilityReason) {
   const labels: Record<AvailabilityReason, string> = {
     inactive: "Agent inactif",
-    not_allowed_on_site: "Non rattache au site",
+    not_allowed_on_site: "Non rattaché au site",
     overlap: "Deja affecte sur ce creneau",
     rest_11h: "Repos legal 11h non respecte",
     projected_over_60h: "Depassement 60h semaine",
@@ -518,7 +518,7 @@ export async function GET(req: NextRequest) {
         itemWarnings.push(...compliance.warningAlerts.map((alert) => alert.title));
       }
       if (distanceKm === null) {
-        itemWarnings.push("Distance non calculee : coordonnees agent absentes");
+        itemWarnings.push("Distance non calculee : coordonnées agent absentes");
       }
 
       let score = 82;

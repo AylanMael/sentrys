@@ -251,7 +251,7 @@ export default function TarifsPage() {
           <Accordion type="single" collapsible className="space-y-4">
             {[
               { q: "Puis-je changer de plan à tout moment ?", a: "Oui. Vous pouvez passer d'un plan à un autre instantanément depuis votre tableau de bord. La facturation sera proratisée automatiquement." },
-              { q: "Comment fonctionne le multi-sociétés (Growth) ?", a: "Le plan Growth débloque l'architecture multi-tenant. Vous pouvez créer des sous-comptes isolés pour vos différentes filiales tout en gardant une vision d'ensemble centralisée." },
+              { q: "Comment fonctionne le multi-sociétés (Growth) ?", a: "Le plan Growth débloqué l'architecture multi-tenant. Vous pouvez créer des sous-comptes isolés pour vos différentes filiales tout en gardant une vision d'ensemble centralisée." },
               { q: "Quelles sont les méthodes de paiement ?", a: "Nous acceptons toutes les cartes de crédit via Stripe. Pour les plans Growth, le paiement par virement SEPA est également disponible." },
             ].map((faq, i) => (
               <AccordionItem key={i} value={`item-${i}`} className="border rounded-2xl px-8 bg-card shadow-sm data-[state=open]:ring-1 ring-primary/20">

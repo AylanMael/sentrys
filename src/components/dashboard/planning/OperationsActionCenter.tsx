@@ -132,7 +132,7 @@ export const OperationsActionCenter: React.FC = () => {
     setActiveVacationId,
     setAssignOpen,
     setReplaceOpen,
-    setDetailsOpen,
+    setDétailsOpen,
     setMode,
     setSiteId,
     setAgentId,
@@ -175,7 +175,7 @@ export const OperationsActionCenter: React.FC = () => {
       if (panel === "assign") {
         setMode("site");
         setAssignOpen(true);
-        setDetailsOpen(false);
+        setDétailsOpen(false);
         return;
       }
 
@@ -183,17 +183,17 @@ export const OperationsActionCenter: React.FC = () => {
         setMode("agent");
         setAgentId("all");
         setReplaceOpen(true);
-        setDetailsOpen(false);
+        setDétailsOpen(false);
         return;
       }
 
-      setDetailsOpen(true);
+      setDétailsOpen(true);
     },
     [
       setActiveVacationId,
       setAgentId,
       setAssignOpen,
-      setDetailsOpen,
+      setDétailsOpen,
       setMode,
       setReplaceOpen,
       setSiteId,
@@ -406,9 +406,9 @@ export const OperationsActionCenter: React.FC = () => {
         priority: 42,
         tone: "amber",
         icon: ShieldAlert,
-        title: "Presence SST a verifier",
+        title: "Presence SST à vérifier",
         description: `${getVacationLabel(sstWarningVacation)} est une vacation collective sans agent SST identifie.`,
-        meta: sstWarningVacation.siteName || "Site a verifier",
+        meta: sstWarningVacation.siteName || "Site à vérifier",
         actionLabel: "Affecter",
         busyVacationId: sstWarningVacation.id,
         onAction: () => openVacation(sstWarningVacation, "assign"),
@@ -499,8 +499,8 @@ export const OperationsActionCenter: React.FC = () => {
         tone: "amber",
         icon: MapPinOff,
         title: "Site sans couverture",
-        description: `${uncoveredSite.name} n'a aucune vacation sur la periode visible.`,
-        meta: "A verifier avant publication",
+        description: `${uncoveredSite.name} n'a aucune vacation sur la période visible.`,
+        meta: "A vérifier avant publication",
         actionLabel: "Voir site",
         onAction: () => {
           setMode("site");
@@ -524,11 +524,11 @@ export const OperationsActionCenter: React.FC = () => {
         priority: hasBlocking ? 80 : 5,
         tone: hasBlocking ? "sky" : "emerald",
         icon: hasBlocking ? Eye : Send,
-        title: hasBlocking ? "Periode a valider" : "Periode prete a publier",
-        description: `${draftCount} vacation(s) non publiee(s) dans la vue actuelle.`,
+        title: hasBlocking ? "Periode a valider" : "Periode prête a publiér",
+        description: `${draftCount} vacation(s) non publiée(s) dans la vue actuelle.`,
         meta: hasBlocking
-          ? "Controle recommande avant envoi"
-          : "Aucun blocage prioritaire detecte",
+          ? "Contrôle recommande avant envoi"
+          : "Aucun blocage prioritaire détecté",
         actionLabel: hasBlocking ? "Valider" : "Publier",
         onAction: hasBlocking ? () => setValidationOpen(true) : handlePublish,
       });
@@ -588,7 +588,7 @@ export const OperationsActionCenter: React.FC = () => {
                   Centre d&apos;actions exploitation
                 </p>
                 <h3 className="text-base font-black text-foreground">
-                  Les urgences a traiter maintenant
+                  Les urgences à traiter maintenant
                 </h3>
               </div>
               <Button

@@ -83,24 +83,24 @@ const PERIOD_STATUS_META: Record<
     description: "Calcul de travail, pas encore controle.",
   },
   checked: {
-    label: "Controle",
+    label: "Contrôle",
     tone: "border-sky-300 bg-sky-100 text-sky-800",
     description: "Les variables ont ete controlees par l'exploitation.",
   },
   validated: {
     label: "Valide",
     tone: "border-emerald-300 bg-emerald-100 text-emerald-800",
-    description: "La periode est prete pour verrouillage.",
+    description: "La période est prête pour verrouillage.",
   },
   locked: {
     label: "Verrouille",
     tone: "border-amber-300 bg-amber-100 text-amber-900",
-    description: "La periode est gelee avant export paie.",
+    description: "La période est gelée avant export paie.",
   },
   exported: {
     label: "Exporte",
     tone: "border-violet-300 bg-violet-100 text-violet-800",
-    description: "La pre-paie a ete transmise ou marquee exportee.",
+    description: "La pré-paie a été transmise ou marquée exportée.",
   },
 };
 
@@ -112,7 +112,7 @@ const PERIOD_ACTION_META: Record<
   }
 > = {
   check: {
-    label: "Controler",
+    label: "Contrôler",
     icon: CheckCircle2,
   },
   validate: {
@@ -185,17 +185,17 @@ const RUBRIC_FIELDS: Array<{
   },
 ];
 
-type PrepaieView = "controle" | "donnees" | "cycle" | "reglages";
+type PrepaieView = "controle" | "données" | "cycle" | "réglages";
 
 const PREPAIE_VIEWS: Array<{
   id: PrepaieView;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: "controle", label: "Controle", icon: ShieldCheck },
-  { id: "donnees", label: "Donnees", icon: FileSpreadsheet },
+  { id: "controle", label: "Contrôle", icon: ShieldCheck },
+  { id: "données", label: "Données", icon: FileSpreadsheet },
   { id: "cycle", label: "Cycle", icon: History },
-  { id: "reglages", label: "Reglages", icon: Settings2 },
+  { id: "réglages", label: "Reglages", icon: Settings2 },
 ];
 type PrepayPreflightVerdict = "ready" | "warning" | "blocking";
 type PrepayPreflightSeverity = "ok" | "warning" | "blocking";
@@ -225,10 +225,10 @@ const PREFLIGHT_META: Record<
     tone: "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-100",
     title: "Export paie propre",
     description:
-      "Le CSV cabinet et la synthese PDF peuvent etre transmis au gestionnaire de paie.",
+      "Le CSV cabinet et la synthese PDF peuvent être transmis au gestionnaire de paie.",
   },
   warning: {
-    label: "A verifier",
+    label: "A vérifier",
     tone: "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100",
     title: "Transmission possible avec vigilance",
     description:
@@ -239,7 +239,7 @@ const PREFLIGHT_META: Record<
     tone: "border-red-500/30 bg-red-500/10 text-red-800 dark:text-red-100",
     title: "Ne pas transmettre en l'etat",
     description:
-      "Des donnees critiques risquent de fausser l'import paie ou la paie finale.",
+      "Des données critiques risquent de fausser l'import paie ou la paie finale.",
   },
 };
 
@@ -349,8 +349,8 @@ function buildPrepayPreflight(
         {
           id: "missing-report",
           severity: "blocking",
-          title: "Calcul pre-paie absent",
-          description: "Lancez le calcul avant de preparer un export paie.",
+          title: "Calcul pré-paie absent",
+          description: "Lancez le calcul avant de préparer un export paie.",
           action: "Cliquer sur Calculer.",
         },
       ],
@@ -362,8 +362,8 @@ function buildPrepayPreflight(
       id: "empty-report",
       severity: "blocking",
       title: "Aucune ligne agent",
-      description: "La periode ne contient aucune ligne de pre-paie exploitable.",
-      action: "Verifier la periode et les vacations planifiees.",
+      description: "La période ne contient aucune ligne de pré-paie exploitable.",
+      action: "Vérifier la période et les vacations planifiées.",
     });
   }
 
@@ -372,10 +372,10 @@ function buildPrepayPreflight(
     items.push({
       id: "period-unlocked",
       severity: "blocking",
-      title: "Periode non verrouillee",
+      title: "Periode non verrouillée",
       description:
-        "Le cycle pre-paie doit etre verrouille avant transmission au cabinet.",
-      action: "Controler, valider puis verrouiller la periode.",
+        "Le cycle pré-paie doit être verrouille avant transmission au cabinet.",
+      action: "Contrôler, valider puis verrouiller la période.",
     });
   } else {
     items.push({
@@ -383,15 +383,15 @@ function buildPrepayPreflight(
       severity: "ok",
       title:
         periodStatus === "exported"
-          ? "Periode deja marquee exportee"
-          : "Periode verrouillee",
+          ? "Periode deja marquée exportée"
+          : "Periode verrouillée",
       description:
         periodStatus === "exported"
-          ? "La periode a deja ete transmise ou marquee comme exportee."
-          : "La periode est gelee pour l'export paie.",
+          ? "La période a deja été transmise ou marquée comme exportée."
+          : "La période est gelée pour l'export paie.",
       action:
         periodStatus === "exported"
-          ? "Verifier qu'il ne s'agit pas d'un deuxieme envoi."
+          ? "Vérifier qu'il ne s'agit pas d'un deuxieme envoi."
           : undefined,
     });
   }
@@ -400,9 +400,9 @@ function buildPrepayPreflight(
     items.push({
       id: "already-exported",
       severity: "warning",
-      title: "Export deja trace",
+      title: "Export deja tracé",
       description:
-        "Un nouvel envoi peut creer une confusion chez le gestionnaire de paie.",
+        "Un nouvel envoi peut créer une confusion chez le gestionnaire de paie.",
       action: "Renvoyer seulement si le cabinet le demande.",
     });
   }
@@ -412,7 +412,7 @@ function buildPrepayPreflight(
       id: "unassigned-vacations",
       severity: "blocking",
       title: "Vacations sans agent",
-      description: `${report.summary.unassignedVacationCount} vacation(s) ne sont rattachees a aucun agent.`,
+      description: `${report.summary.unassignedVacationCount} vacation(s) ne sont rattachées a aucun agent.`,
       action: "Affecter les vacations avant export.",
     });
   }
@@ -421,8 +421,8 @@ function buildPrepayPreflight(
     items.push({
       id: "draft-vacations",
       severity: "blocking",
-      title: "Vacations non publiees",
-      description: `${report.summary.draftVacationCount} vacation(s) sont encore en brouillon ou modifiees depuis publication.`,
+      title: "Vacations non publiées",
+      description: `${report.summary.draftVacationCount} vacation(s) sont encore en brouillon ou modifiées depuis publication.`,
       action: "Publier ou valider les corrections planning.",
     });
   }
@@ -432,9 +432,9 @@ function buildPrepayPreflight(
     items.push({
       id: "agent-anomalies",
       severity: "blocking",
-      title: "Anomalies agent a traiter",
+      title: "Anomalies agent à traiter",
       description: `${anomalousRows.length} agent(s) comportent des anomalies : repos, chevauchement, absence ou publication.`,
-      action: "Ouvrir les lignes agent et regulariser les points listes.",
+      action: "Ouvrir les lignes agent et régulariser les points listes.",
     });
   }
 
@@ -446,7 +446,7 @@ function buildPrepayPreflight(
       id: "missing-payroll-id",
       severity: "blocking",
       title: "Matricules paie manquants",
-      description: `${missingPayrollRows.length} agent(s) utilisent encore l'ID technique au lieu du matricule paie.`,
+      description: `${missingPayrollRows.length} agent(s) utilisént encore l'ID technique au lieu du matricule paie.`,
       action: "Renseigner le matricule dans la fiche agent.",
     });
   }
@@ -457,7 +457,7 @@ function buildPrepayPreflight(
       id: "empty-rubrics",
       severity: "blocking",
       title: "Codes rubriques vides",
-      description: `Codes a completer : ${emptyRubrics.join(", ")}.`,
+      description: `Codes a compléter : ${emptyRubrics.join(", ")}.`,
       action: "Renseigner les codes fournis par le cabinet.",
     });
   }
@@ -467,8 +467,8 @@ function buildPrepayPreflight(
     items.push({
       id: "default-rubrics",
       severity: "warning",
-      title: "Codes rubriques par defaut",
-      description: `${defaultRubrics.length} code(s) sont encore sur le mapping SENTRYS par defaut.`,
+      title: "Codes rubriques par défaut",
+      description: `${defaultRubrics.length} code(s) sont encore sur le mapping SENTRYS par défaut.`,
       action: "Remplacer par les codes exacts du cabinet si import direct.",
     });
   }
@@ -524,9 +524,9 @@ function buildPrepayPreflight(
     items.push({
       id: "ready",
       severity: "ok",
-      title: "Controle pre-vol valide",
+      title: "Contrôle pre-vol valide",
       description:
-        "Aucun blocage detecte sur la periode, les matricules et les rubriques.",
+        "Aucun blocage détecté sur la période, les matricules et les rubriques.",
       action: "Transmettre CSV cabinet + PDF synthese.",
     });
   }
@@ -582,23 +582,23 @@ export default function PrepaiePage() {
       setPeriod(periodResponse.period);
       if (!quiet && prepayResponse.report.summary.agentCount > 0) {
         feedback.success(
-          "Pre-paie calculee",
+          "Pré-paie calculee",
           `${prepayResponse.report.summary.agentCount} agent(s) et ${prepayResponse.report.summary.vacationCount} vacation(s) analyses.`
         );
       } else if (!quiet) {
         feedback.info(
-          "Pre-paie calculee",
-          "Aucune vacation agent trouvee sur cette periode."
+          "Pré-paie calculee",
+          "Aucune vacation agent trouvée sur cette période."
         );
       }
     } catch (err) {
       const message = getApiErrorMessage(
         err,
-        "Impossible de calculer la pre-paie."
+        "Impossible de calculer la pré-paie."
       );
       setError(message);
       feedback.error(err, {
-        title: "Calcul pre-paie impossible",
+        title: "Calcul pré-paie impossible",
         fallback: message,
       });
     } finally {
@@ -637,13 +637,13 @@ export default function PrepaiePage() {
       setSettings(response.settings);
       await loadReport(true);
       feedback.success(
-        "Parametres enregistres",
-        "Les exports pre-paie utiliseront ces reglages."
+        "Paramètres enregistres",
+        "Les exports pré-paie utiliséront ces réglages."
       );
     } catch (err) {
       const message = getApiErrorMessage(
         err,
-        "Impossible d'enregistrer les parametres pre-paie."
+        "Impossible d'enregistrer les paramètres pré-paie."
       );
       setError(message);
       feedback.error(err, {
@@ -682,16 +682,16 @@ export default function PrepaiePage() {
       setPeriod(response.period);
       feedback.success(
         PERIOD_ACTION_META[action].label,
-        "Le cycle pre-paie est a jour et journalise."
+        "Le cycle pré-paie est à jour et journalise."
       );
     } catch (err) {
       const message = getApiErrorMessage(
         err,
-        "Impossible de mettre a jour le cycle pre-paie."
+        "Impossible de mettre à jour le cycle pré-paie."
       );
       setError(message);
       feedback.error(err, {
-        title: "Cycle pre-paie bloque",
+        title: "Cycle pré-paie bloqué",
         fallback: message,
       });
     } finally {
@@ -751,7 +751,7 @@ export default function PrepaiePage() {
         (currentPeriodStatus === "locked"
           ? "Telecharger CSV cabinet + PDF synthese."
           : currentPeriodActions[0]
-            ? `${PERIOD_ACTION_META[currentPeriodActions[0]].label} la periode.`
+            ? `${PERIOD_ACTION_META[currentPeriodActions[0]].label} la période.`
             : "Aucune action urgente.");
 
   const statCards = [
@@ -988,7 +988,7 @@ export default function PrepaiePage() {
           icon={AlertTriangle}
           tone="danger"
           compact
-          title="Erreur pre-paie"
+          title="Erreur pré-paie"
           description={error}
           className="text-left"
         />
@@ -997,7 +997,7 @@ export default function PrepaiePage() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className={cn("rounded-[1.25rem] border p-4 shadow-sm", currentPeriodMeta.tone)}>
           <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
-            Statut periode
+            Statut période
           </p>
           <p className="mt-1 text-xl font-black">{currentPeriodMeta.label}</p>
           <p className="mt-1 line-clamp-2 text-xs font-semibold opacity-75">
@@ -1112,7 +1112,7 @@ export default function PrepaiePage() {
                 ) : (
                   <ShieldCheck className="h-5 w-5" />
                 )}
-                Controle avant export paie
+                Contrôle avant export paie
               </CardTitle>
               <CardDescription className="mt-2 text-current/75">
                 {preflightMeta.description}
@@ -1192,7 +1192,7 @@ export default function PrepaiePage() {
       </Card>
 
       <div className="grid gap-5">
-        <Card className={cn("overflow-hidden rounded-[1.5rem] border-border/60 shadow-sm", prepaieView !== "donnees" && "hidden")}>
+        <Card className={cn("overflow-hidden rounded-[1.5rem] border-border/60 shadow-sm", prepaieView !== "données" && "hidden")}>
           <CardHeader className="border-b bg-muted/20">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -1230,13 +1230,13 @@ export default function PrepaiePage() {
                 {loading && !report ? (
                   <TableRow>
                     <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
-                      Calcul de la pre-paie...
+                      Calcul de la pré-paie...
                     </TableCell>
                   </TableRow>
                 ) : !report || report.rows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
-                      Aucun agent avec vacation sur cette periode.
+                      Aucun agent avec vacation sur cette période.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1248,7 +1248,7 @@ export default function PrepaiePage() {
                             {row.agentName}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {row.vacationCount} vacation(s) &middot; {row.siteNames.join(", ") || "Site non renseigne"}
+                            {row.vacationCount} vacation(s) &middot; {row.siteNames.join(", ") || "Site non renseigné"}
                           </p>
                         </div>
                       </TableCell>
@@ -1290,10 +1290,10 @@ export default function PrepaiePage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-black">
                 <FileCheck2 className="h-5 w-5 text-sky-700 dark:text-sky-300" />
-                Cycle mensuel pre-paie
+                Cycle mensuel pré-paie
               </CardTitle>
               <CardDescription>
-                Controle, validation, verrouillage et trace d'export.
+                Contrôle, validation, verrouillage et tracé d'export.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1301,7 +1301,7 @@ export default function PrepaiePage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
-                      Statut periode
+                      Statut période
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
                       {currentPeriodMeta.description}
@@ -1422,11 +1422,11 @@ export default function PrepaiePage() {
             </CardContent>
           </Card>
 
-          <Card className={cn("rounded-[1.5rem] border-emerald-500/20 bg-emerald-500/5", prepaieView !== "reglages" && "hidden")}>
+          <Card className={cn("rounded-[1.5rem] border-emerald-500/20 bg-emerald-500/5", prepaieView !== "réglages" && "hidden")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-black">
                 <Settings2 className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
-                Parametres pre-paie
+                Paramètres pré-paie
               </CardTitle>
               <CardDescription>
                 Taux indicatifs par agence. A valider avec le gestionnaire paie.
@@ -1617,7 +1617,7 @@ export default function PrepaiePage() {
                     <p className="text-sm font-black">Export cabinet paie</p>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
                       Renseigner ici les codes rubriques fournis par le
-                      gestionnaire de paie. Le CSV cabinet utilisera ces codes.
+                      gestionnaire de paie. Le CSV cabinet utiliséra ces codes.
                     </p>
                   </div>
                   <Badge variant="outline" className="rounded-full font-black">
@@ -1705,15 +1705,15 @@ export default function PrepaiePage() {
             </CardContent>
           </Card>
 
-          <Card className={cn("rounded-[1.5rem] border-amber-500/30 bg-amber-500/10", prepaieView !== "controle" && prepaieView !== "reglages" && "hidden")}>
+          <Card className={cn("rounded-[1.5rem] border-amber-500/30 bg-amber-500/10", prepaieView !== "controle" && prepaieView !== "réglages" && "hidden")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-black text-amber-900 dark:text-amber-100">
                 <ShieldCheck className="h-5 w-5" />
                 Prudence paie France
               </CardTitle>
               <CardDescription className="text-amber-900/80 dark:text-amber-100/80">
-                Ce module prepare les variables. La paie finale depend de la
-                convention, des accords, du contrat et des taux valides.
+                Ce module prépare les variables. La paie finale dépend de la
+                convention, des accords, du contrat et des taux validés.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-amber-950 dark:text-amber-50">
@@ -1729,7 +1729,7 @@ export default function PrepaiePage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-black">
                 <CalendarRange className="h-5 w-5 text-primary" />
-                Points a regulariser
+                Points à régulariser
               </CardTitle>
               <CardDescription>
                 A traiter avant export paie definitif.
@@ -1743,7 +1743,7 @@ export default function PrepaiePage() {
               )}
               {criticalRows.length === 0 && report?.summary.unassignedVacationCount === 0 ? (
                 <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200">
-                  Aucun point bloquant detecte sur les lignes agent.
+                  Aucun point bloquant détecté sur les lignes agent.
                 </div>
               ) : (
                 criticalRows.slice(0, 8).map((row) => (

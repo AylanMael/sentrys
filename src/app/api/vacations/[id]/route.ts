@@ -272,14 +272,14 @@ export async function PATCH(
 
         if (!ignore) {
           return bad("Overlapping agent assignments", {
-            code: "overlap_detected",
+            code: "overlap_détectéd",
             overlaps,
             hint: "Set ignoreOverlaps:true (admin/owner/super_admin only) to bypass as warning.",
           });
         }
 
         warnings.push({
-          code: "overlap_detected",
+          code: "overlap_détectéd",
           overlaps,
           bypassed: true,
         });
@@ -361,7 +361,7 @@ export async function PATCH(
         );
       }
       if (err?.code === "OPT_LOCK") {
-        return conflict("Vacation modified by someone else", {
+        return conflict("Vacation modifiéd by someone else", {
           code: "optimistic_lock",
           currentUpdatedAtIso: err?.currentUpdatedAtIso ?? null,
           hint: "Reload the vacation and retry with the latest updatedAtIso.",

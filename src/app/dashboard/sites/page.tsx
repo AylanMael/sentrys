@@ -219,7 +219,7 @@ export default function SitesPage() {
           err?.message?.includes("requires an index")
             ? "Index Firestore requis pour la liste des sites (tenantId + accessUids + createdAt)."
             : err?.message?.includes("Missing or insufficient permissions")
-              ? "Permissions Firestore insuffisantes (règles sites)."
+              ? "Permissions Firestore insuffisantés (règles sites)."
               : "Impossible de charger les sites.";
 
         toast({
@@ -306,7 +306,7 @@ export default function SitesPage() {
     (site: any) => Number(site?.riskLevel ?? 3) >= 4
   ).length;
   const missingGpsSitesCount = filtered.filter((site: any) => !hasCoordinates(site)).length;
-  const creationInitialValues = useMemo(
+  const créationInitialValues = useMemo(
     () =>
       clientIdParam
         ? ({
@@ -383,20 +383,20 @@ export default function SitesPage() {
 
         toast({
           title: "Erreur",
-          description: isQuota ? res.error : (res.error ?? "Creation impossible."),
+          description: isQuota ? res.error : (res.error ?? "Création impossible."),
           variant: "destructive",
         });
         return;
       }
 
       toast({
-        title: "Site cree",
+        title: "Site créé",
         description: "Le site est enregistré.",
       });
 
       setOpen(false);
     } catch (e: any) {
-      const message = e?.message ?? "Creation impossible.";
+      const message = e?.message ?? "Création impossible.";
       const isQuota = String(message).toLowerCase().includes("quota atteint");
 
       if (!isQuota) {
@@ -404,7 +404,7 @@ export default function SitesPage() {
       }
       toast({
         title: isQuota ? "Quota de sites atteint" : "Erreur",
-        description: e?.message ?? "Creation impossible.",
+        description: e?.message ?? "Création impossible.",
         variant: "destructive",
       });
     } finally {
@@ -430,7 +430,7 @@ export default function SitesPage() {
                 Lieux d intervention
               </Badge>
               <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground">
-                {clientIdParam ? "Sites du client" : "Sites operationnels"}
+                {clientIdParam ? "Sites du client" : "Sites opérationnels"}
               </h1>
               <p className="mt-1 text-sm font-semibold text-muted-foreground">
                 {clientNameParam || "Pilotez les sites, risques, consignes et affectations terrain."}
@@ -465,8 +465,8 @@ export default function SitesPage() {
                 </div>
                 <div className="p-6 md:p-8 bg-background">
                   <SiteForm
-                    initialValues={creationInitialValues}
-                    submitLabel="Creer le site"
+                    initialValues={créationInitialValues}
+                    submitLabel="Créer le site"
                     onSubmit={createSite}
                     isSubmitting={saving}
                   />
@@ -483,7 +483,7 @@ export default function SitesPage() {
         <SiteMetric label="Sites filtres" value={filtered.length} detail="Portefeuille courant" />
         <SiteMetric label="Actifs" value={activeSitesCount} detail={`${inactiveSitesCount} inactif(s)`} tone="success" />
         <SiteMetric label="Risque eleve" value={highRiskSitesCount} detail="Niveaux 4 et 5" tone="warning" />
-        <SiteMetric label="GPS manquant" value={missingGpsSitesCount} detail="A completer pour le pointage" tone={missingGpsSitesCount > 0 ? "danger" : "success"} />
+        <SiteMetric label="GPS manquant" value={missingGpsSitesCount} detail="A compléter pour le pointage" tone={missingGpsSitesCount > 0 ? "danger" : "success"} />
       </div>
       <div className="rounded-[1.5rem] border bg-card/80 p-4 shadow-sm">
 

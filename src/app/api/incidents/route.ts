@@ -224,7 +224,7 @@ export async function POST(req: NextRequest) {
   // VALIDATION ZOD
   const validation = IncidentCreateSchema.safeParse(rawBody);
   if (!validation.success) {
-    return bad("Données invalides", { detail: validation.error.format() });
+    return bad("Données invalidés", { detail: validation.error.format() });
   }
 
   const values = validation.data;

@@ -35,7 +35,7 @@ const steps: RecetteStep[] = [
   {
     id: "dashboard",
     title: "Dashboard et cockpit",
-    objective: "Comprendre en 5 secondes l'etat de la journee et la prochaine action.",
+    objective: "Comprendre en 5 secondes l'etat de là journee et la prochaine action.",
     href: "/dashboard",
     actionLabel: "Tester le dashboard",
     tone: "critical",
@@ -46,29 +46,29 @@ const steps: RecetteStep[] = [
       "Un responsable novice sait ou cliquer ensuite.",
     ],
     success:
-      "Le responsable sait quoi faire maintenant : couvrir, traiter, publier, diffuser ou suivre.",
+      "Le responsable sait quoi faire maintenant : couvrir, traiter, publiér, diffuser ou suivre.",
   },
   {
     id: "planning",
     title: "Planning exploitation",
-    objective: "Creer, corriger, dupliquer et propager les vacations sans friction.",
+    objective: "Créer, corriger, dupliquer et propager les vacations sans friction.",
     href: "/dashboard/planning",
     actionLabel: "Tester le planning",
     tone: "critical",
     icon: CalendarDays,
     checks: [
-      "Creation par defaut 08:00 - 18:00.",
+      "Création par défaut 08:00 - 18:00.",
       "Modification horaire par pas de 30 minutes.",
       "Duplication, propagation semaine et planning type comprehensibles.",
-      "Conflits agents detectes et forcages traces.",
+      "Conflits agents détectés et forçages tracés.",
     ],
     success:
-      "Une semaine type peut etre construite, ajustee et publiee sans assistance.",
+      "Une semaine type peut être construite, ajustee et publiée sans assistance.",
   },
   {
     id: "pdf",
     title: "PDF agent, site et client",
-    objective: "Verifier que les documents terrain sont lisibles et presentables.",
+    objective: "Vérifier que les documents terrain sont lisibles et presentables.",
     href: "/dashboard/planning",
     actionLabel: "Tester les PDF",
     tone: "critical",
@@ -84,18 +84,18 @@ const steps: RecetteStep[] = [
   {
     id: "diffusion",
     title: "Diffusion et accusés",
-    objective: "Preparer l'envoi agent/client et conserver une trace exploitable.",
+    objective: "Preparer l'envoi agent/client et conserver une tracé exploitable.",
     href: "/dashboard/planning",
     actionLabel: "Tester diffusion",
     tone: "warning",
     icon: Send,
     checks: [
       "Selection des agents planifies.",
-      "Historique : envoye a qui, quand, par quel canal.",
-      "Relance des plannings non accuses.",
+      "Historique : envoyé a qui, quand, par quel canal.",
+      "Relance des plannings non accusés.",
     ],
     success:
-      "L'exploitation peut prouver qu'un planning a ete prepare, envoye ou relance.",
+      "L'exploitation peut prouver qu'un planning a été préparé, envoyé ou relancée.",
   },
   {
     id: "conduite",
@@ -107,22 +107,22 @@ const steps: RecetteStep[] = [
     icon: RadioTower,
     checks: [
       "Passage d'un signal : nouveau, vu, en cours, traite.",
-      "Creation d'une note main courante.",
+      "Création d'une note main courante.",
       "Export CSV et impression PDF du registre.",
     ],
     success:
-      "Chaque decision sensible laisse une trace claire pour l'exploitation.",
+      "Chaque décision sensible laisse une tracé claire pour l'exploitation.",
   },
   {
     id: "prepaie",
-    title: "Pre-paie",
+    title: "Pré-paie",
     objective: "Sortir un dossier paie controlable avant transmission cabinet.",
     href: "/dashboard/prepaie",
-    actionLabel: "Tester pre-paie",
+    actionLabel: "Tester pré-paie",
     tone: "warning",
     icon: Calculator,
     checks: [
-      "Calcul mensuel sur les vacations publiees.",
+      "Calcul mensuel sur les vacations publiées.",
       "Anomalies visibles avant export.",
       "CSV detail, CSV cabinet et synthese PDF telechargeables.",
     ],
@@ -131,29 +131,29 @@ const steps: RecetteStep[] = [
   },
   {
     id: "security",
-    title: "Roles et securite",
-    objective: "Verifier que chaque utilisateur accede uniquement a ce qu'il doit voir.",
+    title: "Rôles et sécurité",
+    objective: "Vérifier que chaque utilisateur accede uniquement a ce qu'il doit voir.",
     href: "/dashboard/settings",
-    actionLabel: "Controler securite",
+    actionLabel: "Contrôler securite",
     tone: "ready",
     icon: LockKeyhole,
     checks: [
       "Compte admin, exploitation, viewer et agent.",
-      "Actions sensibles bloquees cote API.",
+      "Actions sensibles bloquées cote API.",
       "Firestore et Storage cloisonnes par agence.",
     ],
     success:
-      "Aucune donnee d'une agence ou d'un agent n'est accessible hors autorisation.",
+      "Aucune donnée d'une agence ou d'un agent n'est accessible hors autorisation.",
   },
 ];
 
 const goNoGo = [
   "Le build production passe serveur dev arrete.",
-  "Le planning se cree, se corrige et se diffuse sans assistance.",
+  "Le planning se crée, se corrige et se diffuse sans assistance.",
   "Les PDF agent, site et client sont lisibles en 5 secondes.",
-  "Le registre de conduite retrace les decisions sensibles.",
-  "La pre-paie exporte un dossier utilisable par le cabinet.",
-  "Les roles et regles Firebase bloquent les acces non autorises.",
+  "Le registre de conduite retracé les décisions sensibles.",
+  "La pré-paie exporte un dossier utilisable par le cabinet.",
+  "Les rôles et règles Firebase bloquent les accès non autorisés.",
 ];
 
 function toneClass(tone: RecetteTone) {
@@ -169,7 +169,7 @@ function toneClass(tone: RecetteTone) {
 function toneLabel(tone: RecetteTone) {
   if (tone === "critical") return "Critique MVP";
   if (tone === "warning") return "A stabiliser";
-  return "Controle final";
+  return "Contrôle final";
 }
 
 export default function RecetteMvpPage() {

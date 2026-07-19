@@ -99,7 +99,7 @@ function initials(name: string) {
 function statusLabel(status: ComplianceStatus) {
   if (status === "ok") return "Dossier OK";
   if (status === "info") return "A suivre";
-  if (status === "warning") return "A controler";
+  if (status === "warning") return "A contrôler";
   return "Bloquant";
 }
 
@@ -196,7 +196,7 @@ export const AIAssistSheet: React.FC = () => {
         setDiagnostic(
           blockedCount > 0
             ? `${blockedCount} profil(s) analyse(s), aucun agent strictement affectable sans risque.`
-            : "Aucun agent rattache au site ou disponible pour cette plage."
+            : "Aucun agent rattaché au site ou disponible pour cette plage."
         );
       }
     } catch (error) {

@@ -109,7 +109,7 @@ function siteTypeLabel(v: Site["siteType"]) {
   return map[v] ?? "Autre";
 }
 
-export default function ClientDetailPage() {
+export default function ClientDétailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params?.id;
@@ -577,7 +577,7 @@ export default function ClientDetailPage() {
                         variant="outline"
                         className="rounded-full border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300"
                       >
-                        {siteStats.withoutAddress} adresse(s) a completer
+                        {siteStats.withoutAddress} adresse(s) a compléter
                       </Badge>
                     )}
                   </>

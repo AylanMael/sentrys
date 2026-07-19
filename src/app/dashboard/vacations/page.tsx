@@ -462,7 +462,7 @@ export default function VacationsPage() {
 
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
       toast({
-        title: "Dates invalides",
+        title: "Dates invalidés",
         variant: "destructive",
       });
       return;

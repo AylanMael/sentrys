@@ -77,7 +77,7 @@ function actorLabel(state: OperationSignalState) {
     state.updatedByName ||
     state.updatedByEmail ||
     state.updatedByRole ||
-    "Non renseigne"
+    "Non renseigné"
   );
 }
 
@@ -86,7 +86,7 @@ function eventActorLabel(event: OperationSignalState["events"][number]) {
     event.actorName ||
     event.actorEmail ||
     event.actorRole ||
-    "Non renseigne"
+    "Non renseigné"
   );
 }
 
@@ -96,7 +96,7 @@ function kindLabel(kind: string | null) {
   if (kind === "start") return "Prise de service";
   if (kind === "incident") return "Incident";
   if (kind === "dispatch") return "Diffusion";
-  if (kind === "compliance") return "Conformite";
+  if (kind === "compliance") return "Conformité";
   if (kind === "publication") return "Publication";
   return "Signal";
 }
@@ -348,7 +348,7 @@ function ConduitePrintContent() {
                       {agencyProfile.displayName}
                     </p>
                     <h1 className="mt-1 text-3xl font-black">
-                      Registre de conduite operationnelle
+                      Registre de conduite opérationnelle
                     </h1>
                     <p className="mt-2 text-sm font-semibold text-slate-300">
                       Periode : {period}
@@ -380,7 +380,7 @@ function ConduitePrintContent() {
                   </p>
                   <p className="mt-1 text-xs font-semibold text-slate-500">
                     Le document reprend exactement les signaux de conduite
-                    visibles pour cette periode et ces filtres.
+                    visibles pour cette période et ces filtres.
                   </p>
                 </div>
               </section>
@@ -409,7 +409,7 @@ function ConduitePrintContent() {
                           Responsable
                         </th>
                         <th className="w-[27%] border border-slate-200 p-2">
-                          Observation / trace
+                          Observation / tracé
                         </th>
                       </tr>
                     </thead>
@@ -446,7 +446,7 @@ function ConduitePrintContent() {
                           <td className="border border-slate-200 p-2">
                             <p className="font-black">{actorLabel(state)}</p>
                             <p className="mt-1 text-[9px] font-semibold text-slate-500">
-                              {state.updatedByRole || "role non renseigne"}
+                              {state.updatedByRole || "role non renseigné"}
                             </p>
                           </td>
                           <td className="border border-slate-200 p-2">
@@ -463,7 +463,7 @@ function ConduitePrintContent() {
                                   </p>
                                 ))}
                                 {state.events.length > 3 ? (
-                                  <p>+ {state.events.length - 3} trace(s)</p>
+                                  <p>+ {state.events.length - 3} tracé(s)</p>
                                 ) : null}
                               </div>
                             ) : null}
@@ -477,7 +477,7 @@ function ConduitePrintContent() {
 
               <footer className="border-t border-slate-200 bg-slate-50 px-6 py-4 text-[10px] font-semibold text-slate-500">
                 {agencyProfile.footerNote ||
-                  "Document genere par Sentrys. Les informations doivent etre verifiees avant transmission officielle."}
+                  "Document généré par Sentrys. Les informations doivent être vérifiées avant transmission officielle."}
               </footer>
             </>
           )}

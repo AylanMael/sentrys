@@ -695,7 +695,6 @@ export async function GET(
     return json(500, {
       ok: false,
       error: "Impossible de charger la fiche agence SaaS.",
-      details: error instanceof Error ? error.message : String(error),
     });
   }
 }
@@ -1235,7 +1234,7 @@ export async function PATCH(
             handleCodeInApp: false,
           });
         } catch (error) {
-          resetLinkError = error instanceof Error ? error.message : String(error);
+          resetLinkError = "RESET_LINK_UNAVAILABLE";
           console.warn("[platform.owner.invite] reset link skipped", error);
         }
 

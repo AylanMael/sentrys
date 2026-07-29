@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-import { apiFetch } from "@/lib/api/client-fetch";
+import { apiFetch, openAuthenticatedFile } from "@/lib/api/client-fetch";
+import { SecureAgentPhoto } from "@/components/agents/secure-agent-photo";
 import { useAuth } from "@/lib/auth-provider";
 import { canManageAgents, normalizeRole } from "@/lib/auth/role";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useAppFeedback } from "@/hooks/use-app-feedback";
 import { cn } from "@/lib/utils";
 import {
@@ -28,16 +40,15 @@ import {
 } from "@/lib/agents/profile";
 import {
   ArrowLeft,
+  ChevronRight,
   Loader2,
   Mail,
   Phone,
   UserCircle,
   Save,
   Power,
-  ShieldCheck,
   CalendarDays,
   MapPin,
-  Camera,
   ExternalLink,
   FileText,
   FileBadge2,
@@ -46,10 +57,8 @@ import {
   UploadCloud,
   AlertTriangle,
   CheckCircle2,
-  Clock3,
   FileUp,
-  ShieldAlert,
-  FileWarning,
+
 } from "lucide-react";
 
 type Agent = {
@@ -105,13 +114,6 @@ type OperationalVerdict = {
   title: string;
   detail: string;
   action: string;
-};
-
-type DocumentCheck = {
-  id: string;
-  label: string;
-  detail: string;
-  tone: "success" | "warning" | "danger" | "info";
 };
 
 type ResolutionStatus =
@@ -183,58 +185,20 @@ function formatFileSize(size: number | null | undefined) {
   return `${(size / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
-function formatDateTime(value: string | null) {
-  if (!value) return "Non renseigné";
-
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "Non renseigné";
-
-  return new Intl.DateTimeFormat("fr-FR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
 function createEquipmentItem(): AgentEquipmentItem {
   return {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     label: "",
     category: "uniform",
-    reference: null,
-    assignedAt: new Date().toISOString().slice(0, 10),
-    expectedReturnAt: null,
-    returnedAt: null,
     status: "assigned",
-    condition: "Bon etat",
-    notes: null,
+    assignedAt: new Date().toISOString().slice(0, 10),
   };
 }
-
 function equipmentStatusClass(status: AgentEquipmentItem["status"]) {
   if (status === "returned") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
   if (status === "damaged") return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
   if (status === "lost") return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300";
   return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
-}
-
-function complianceOverrideStatusLabel(status: ResolutionStatus) {
-  if (status === "regularized") return "Regularise";
-  if (status === "accepted_exception") return "Exception acceptee";
-  return "A régulariser";
-}
-
-function complianceOverrideStatusClass(status: ResolutionStatus) {
-  if (status === "regularized") {
-    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
-  }
-
-  if (status === "accepted_exception") {
-    return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
-  }
-
-  return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
 }
 
 function getAgentCompleteness(agent: Agent) {
@@ -352,6 +316,17 @@ function getAgentComplianceAlerts(agent: Agent): ComplianceAlert[] {
   return alerts;
 }
 
+function correctionTabForAlert(alertId: string | null | undefined) {
+  if (!alertId) return "profil";
+  if (alertId.startsWith("doc-")) return "documents";
+  if (
+    alertId.startsWith("card-") ||
+    alertId === "qualifications"
+  ) {
+    return "conformite";
+  }
+  return "profil";
+}
 function getOperationalVerdict(
   agent: Agent,
   alerts: ComplianceAlert[],
@@ -421,75 +396,6 @@ function operationalVerdictClass(tone: OperationalVerdict["tone"]) {
   return "border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100";
 }
 
-function operationalVerdictBadgeClass(tone: OperationalVerdict["tone"]) {
-  if (tone === "blocked") return "bg-red-600 text-white hover:bg-red-600";
-  if (tone === "watch") return "bg-amber-500 text-amber-950 hover:bg-amber-500";
-  return "bg-emerald-600 text-white hover:bg-emerald-600";
-}
-
-function getDocumentChecklist(agent: Agent): DocumentCheck[] {
-  const documents = agent.documents ?? [];
-  const hasProfessionalCardDocument = documents.some(
-    (document) => document.kind === "professional_card"
-  );
-  const hasIdentityDocument = documents.some((document) => document.kind === "identity");
-  const cardDays = daysUntil(agent.professionalCardExpiresAt);
-
-  return [
-    {
-      id: "photo",
-      label: "Photo",
-      detail: agent.photoUrl ? "Identifiable" : "A ajouter",
-      tone: agent.photoUrl ? "success" : "info",
-    },
-    {
-      id: "contact",
-      label: "Contact",
-      detail: agent.phone || agent.email ? "Joignable" : "Absent",
-      tone: agent.phone || agent.email ? "success" : "warning",
-    },
-    {
-      id: "card",
-      label: "Carte pro",
-      detail:
-        cardDays === null
-          ? "A vérifier"
-          : cardDays < 0
-            ? "Expiree"
-            : cardDays <= 60
-              ? "Bientot expirée"
-              : "Valide",
-      tone:
-        cardDays === null
-          ? "warning"
-          : cardDays < 0
-            ? "danger"
-            : cardDays <= 60
-              ? "warning"
-              : "success",
-    },
-    {
-      id: "card-doc",
-      label: "Copie carte",
-      detail: hasProfessionalCardDocument ? "Archivee" : "Manquante",
-      tone: hasProfessionalCardDocument ? "success" : "warning",
-    },
-    {
-      id: "identity",
-      label: "Identité",
-      detail: hasIdentityDocument ? "Archivee" : "A archiver",
-      tone: hasIdentityDocument ? "success" : "info",
-    },
-  ];
-}
-
-function documentCheckClass(tone: DocumentCheck["tone"]) {
-  if (tone === "danger") return "border-red-500/30 bg-red-500/10 text-red-800 dark:text-red-200";
-  if (tone === "warning") return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200";
-  if (tone === "info") return "border-sky-500/25 bg-sky-500/10 text-sky-800 dark:text-sky-200";
-  return "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200";
-}
-
 export default function AgentDétailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -505,8 +411,10 @@ export default function AgentDétailPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("profil");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
   const [agent, setAgent] = useState<Agent | null>(null);
   const [complianceOverrides, setComplianceOverrides] = useState<
     ComplianceOverrideItem[]
@@ -517,7 +425,6 @@ export default function AgentDétailPage() {
     useState<string | null>(null);
   const [documentLabel, setDocumentLabel] = useState("");
   const [documentKind, setDocumentKind] = useState("professional_card");
-  const [documentUrl, setDocumentUrl] = useState("");
   const [documentExpiresAt, setDocumentExpiresAt] = useState("");
   const [documentFile, setDocumentFile] = useState<File | null>(null);
 
@@ -621,30 +528,6 @@ export default function AgentDétailPage() {
     });
   }
 
-  function addDocument() {
-    if (!agent || !documentUrl.trim()) return;
-
-    const nextDocument: AgentDocumentItem = {
-      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-      label: documentLabel.trim() || "Document",
-      url: documentUrl.trim(),
-      kind: documentKind,
-      expiresAt: documentExpiresAt.trim() || null,
-      fileName: null,
-      mimeType: null,
-      size: null,
-      uploadedAt: new Date().toISOString(),
-    };
-
-    setAgent({
-      ...agent,
-      documents: [...(agent.documents ?? []), nextDocument],
-    });
-    setDocumentLabel("");
-    setDocumentUrl("");
-    setDocumentExpiresAt("");
-  }
-
   async function uploadDocument() {
     if (!agent || !documentFile || !canWrite) return;
 
@@ -673,7 +556,6 @@ export default function AgentDétailPage() {
           : current
       );
       setDocumentLabel("");
-      setDocumentUrl("");
       setDocumentExpiresAt("");
       setDocumentFile(null);
       feedback.success(
@@ -690,13 +572,37 @@ export default function AgentDétailPage() {
     }
   }
 
-  function removeDocument(documentId: string) {
-    if (!agent) return;
+  async function deleteDocument(documentId: string) {
+    if (!agent || !canWrite) return;
 
-    setAgent({
-      ...agent,
-      documents: (agent.documents ?? []).filter((document) => document.id !== documentId),
-    });
+    setDeletingDocumentId(documentId);
+    try {
+      await apiFetch<{ ok: boolean; documentId: string }>(
+        `/api/agents/${id}/documents`,
+        { method: "DELETE", body: { documentId } }
+      );
+      setAgent((current) =>
+        current
+          ? {
+              ...current,
+              documents: (current.documents ?? []).filter(
+                (document) => document.id !== documentId
+              ),
+            }
+          : current
+      );
+      feedback.success(
+        "Document supprime",
+        "Le document a ete retire du dossier RH."
+      );
+    } catch (error) {
+      feedback.error(error, {
+        title: "Suppression impossible",
+        fallback: "Impossible de supprimer ce document.",
+      });
+    } finally {
+      setDeletingDocumentId(null);
+    }
   }
   function addEquipmentItem() {
     setAgent((current) =>
@@ -828,17 +734,36 @@ export default function AgentDétailPage() {
   const openComplianceOverrides = complianceOverrides.filter(
     (item) => item.complianceResolutionStatus === "to_regularize"
   );
-  const closedComplianceOverrides =
-    complianceOverrides.length - openComplianceOverrides.length;
   const operationalVerdict = getOperationalVerdict(
     agent,
     complianceAlerts,
     openComplianceOverrides.length
   );
-  const documentChecklist = getDocumentChecklist(agent);
-  const qualificationsCount = (agent.qualifications ?? []).length;
   const equipmentItems = agent.equipmentItems ?? [];
   const assignedEquipmentCount = equipmentItems.filter((item) => item.status === "assigned").length;
+  const prioritizedAlerts = [...complianceAlerts].sort((left, right) => {
+    const rank = (tone: ComplianceAlert["tone"]) =>
+      tone === "danger" ? 0 : tone === "warning" ? 1 : 2;
+    return rank(left.tone) - rank(right.tone);
+  });
+  const primaryAlert = prioritizedAlerts[0] ?? null;
+  const primaryCorrectionTab =
+    agent.status !== "active"
+      ? "profil"
+      : openComplianceOverrides.length > 0
+        ? "conformite"
+        : correctionTabForAlert(primaryAlert?.id);
+  const canBePlanned = operationalVerdict.tone !== "blocked";
+
+  function openCorrection(tab: string) {
+    setActiveTab(tab);
+    window.requestAnimationFrame(() => {
+      document.getElementById("agent-workspace")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-12 w-full max-w-6xl mx-auto">
@@ -880,7 +805,7 @@ export default function AgentDétailPage() {
               Fiche agent
             </h1>
             <p className="mt-1 text-sm font-medium text-muted-foreground">
-              {agentName} - passeport exploitation
+              {agentName} - dossier opérationnel
             </p>
           </div>
         </div>
@@ -907,460 +832,107 @@ export default function AgentDétailPage() {
         </div>
       </div>
 
-      <section className="grid gap-5">
-        <Card className={cn("overflow-hidden rounded-[2rem] border shadow-sm", operationalVerdictClass(operationalVerdict.tone))}>
-          <CardContent className="p-6 md:p-7">
-            <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-              <div className="max-w-2xl">
-                <Badge className={cn("mb-4 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em]", operationalVerdictBadgeClass(operationalVerdict.tone))}>
-                  {operationalVerdict.label}
-                </Badge>
-                <h2 className="text-3xl font-black tracking-tight">
-                  {operationalVerdict.title}
-                </h2>
-                <p className="mt-2 text-sm font-semibold opacity-80">
-                  {operationalVerdict.detail}
-                </p>
-                <p className="mt-3 rounded-2xl bg-background/60 px-4 py-3 text-sm font-bold shadow-sm ring-1 ring-black/5 dark:bg-background/20">
-                  {operationalVerdict.action}
-                </p>
-              </div>
-
-              <div className="grid min-w-[220px] grid-cols-3 gap-2 rounded-2xl bg-background/55 p-2 text-center shadow-sm ring-1 ring-black/5 dark:bg-background/20">
-                <div className="rounded-xl p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] opacity-60">Dossier</p>
-                  <p className="mt-1 text-2xl font-black">{completeness}%</p>
-                </div>
-                <div className="rounded-xl p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] opacity-60">Alertes</p>
-                  <p className="mt-1 text-2xl font-black">{complianceAlerts.length}</p>
-                </div>
-                <div className="rounded-xl p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] opacity-60">Habil.</p>
-                  <p className="mt-1 text-2xl font-black">{qualificationsCount}</p>
-                </div>
+      <section aria-label="Décision opérationnelle" className="grid gap-4 lg:grid-cols-[0.9fr_1.25fr_1fr]">
+        <Card className={cn("rounded-[1.5rem] border shadow-sm", operationalVerdictClass(operationalVerdict.tone))}>
+          <CardContent className="p-5 md:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.15em] opacity-70">
+              Peut-il être planifié ?
+            </p>
+            <div className="mt-4 flex items-center gap-3">
+              {canBePlanned ? (
+                <CheckCircle2 className="h-9 w-9 shrink-0" />
+              ) : (
+                <AlertTriangle className="h-9 w-9 shrink-0" />
+              )}
+              <div>
+                <p className="text-2xl font-black">{canBePlanned ? "Oui" : "Non"}</p>
+                <p className="text-sm font-bold opacity-80">{operationalVerdict.label}</p>
               </div>
             </div>
-
-            <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-              {documentChecklist.map((item) => (
-                <div
-                  key={item.id}
-                  className={cn("rounded-2xl border px-3 py-3 shadow-sm", documentCheckClass(item.tone))}
-                >
-                  <div className="flex items-center gap-2">
-                    {item.tone === "success" ? (
-                      <CheckCircle2 className="h-4 w-4" />
-                    ) : item.tone === "danger" ? (
-                      <AlertTriangle className="h-4 w-4" />
-                    ) : item.tone === "warning" ? (
-                      <Clock3 className="h-4 w-4" />
-                    ) : (
-                      <ShieldCheck className="h-4 w-4" />
-                    )}
-                    <p className="text-xs font-black uppercase tracking-[0.12em]">
-                      {item.label}
-                    </p>
-                  </div>
-                  <p className="mt-1 text-sm font-bold opacity-80">{item.detail}</p>
-                </div>
-              ))}
-            </div>
+            <p className="mt-4 text-sm font-semibold opacity-80">{operationalVerdict.detail}</p>
           </CardContent>
         </Card>
 
-        <Card className="hidden rounded-[2rem] border-border/60 shadow-sm">
-          <CardContent className="flex h-full flex-col justify-between gap-5 p-6 md:p-7">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.16em] text-muted-foreground">
-                <Phone className="h-4 w-4" />
-                Contact rapide
+        <Card className="rounded-[1.5rem] shadow-sm">
+          <CardContent className="p-5 md:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.15em] text-muted-foreground">
+                  Que manque-t-il ?
+                </p>
+                <p className="mt-1 text-lg font-black">
+                  {prioritizedAlerts.length === 0
+                    ? "Dossier essentiel complet"
+                    : `${prioritizedAlerts.length} point${prioritizedAlerts.length > 1 ? "s" : ""} à traiter`}
+                </p>
               </div>
-              <h2 className="mt-3 text-2xl font-black tracking-tight text-foreground">
-                {agentName}
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                {agent.employeeNumber ? `Matricule ${agent.employeeNumber}` : "Matricule non renseigné"}
-              </p>
+              <Badge variant="outline" className="rounded-full font-black">
+                {completeness}%
+              </Badge>
             </div>
 
-            <div className="space-y-3">
-              {agent.phone ? (
-                <Button asChild variant="outline" className="h-12 w-full justify-start rounded-2xl font-bold">
-                  <a href={`tel:${agent.phone}`}>
-                    <Phone className="h-4 w-4" />
-                    {agent.phone}
-                  </a>
-                </Button>
-              ) : (
-                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-bold text-amber-800 dark:text-amber-200">
-                  Telephone a renseignér
-                </div>
-              )}
+            {prioritizedAlerts.length > 0 ? (
+              <div className="mt-4 space-y-2">
+                {prioritizedAlerts.slice(0, 3).map((alert) => (
+                  <button
+                    key={alert.id}
+                    type="button"
+                    onClick={() => openCorrection(correctionTabForAlert(alert.id))}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border bg-muted/20 px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold">{alert.title}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{alert.detail}</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
+                ))}
+                {prioritizedAlerts.length > 3 && (
+                  <p className="px-1 text-xs font-semibold text-muted-foreground">
+                    +{prioritizedAlerts.length - 3} autre{prioritizedAlerts.length - 3 > 1 ? "s" : ""} point{prioritizedAlerts.length - 3 > 1 ? "s" : ""}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">
+                Aucune anomalie essentielle détectée.
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-              {agent.email ? (
-                <Button asChild variant="outline" className="h-12 w-full justify-start rounded-2xl font-bold">
-                  <a href={`mailto:${agent.email}`}>
-                    <Mail className="h-4 w-4" />
-                    {agent.email}
-                  </a>
-                </Button>
-              ) : (
-                <div className="rounded-2xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm font-bold text-sky-800 dark:text-sky-200">
-                  Email a renseignér
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-2xl border bg-muted/25 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
-                Urgence
+        <Card className="rounded-[1.5rem] border-primary/20 bg-primary/5 shadow-sm">
+          <CardContent className="flex h-full flex-col p-5 md:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.15em] text-primary">
+              Action recommandée
+            </p>
+            <h2 className="mt-3 text-xl font-black">
+              {primaryAlert?.title ?? (openComplianceOverrides.length > 0 ? "Contrôler les exceptions" : "Dossier prêt")}
+            </h2>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">
+              {operationalVerdict.action}
+            </p>            {complianceOverridesLoading && (
+              <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Contrôle des exceptions en cours…
               </p>
-              <p className="mt-1 font-black text-foreground">
-                {agent.emergencyContactName || "Contact non renseigné"}
-              </p>
-              <p className="text-sm font-semibold text-muted-foreground">
-                {agent.emergencyContactPhone || "Telephone urgence absent"}
-              </p>
-            </div>
+            )}
+            {complianceOverridesError && (
+              <p className="mt-3 text-xs font-bold text-destructive">{complianceOverridesError}</p>
+            )}
+            <Button
+              type="button"
+              onClick={() => openCorrection(primaryCorrectionTab)}
+              className="mt-5 w-full rounded-xl font-black lg:mt-auto"
+            >
+              {primaryAlert || openComplianceOverrides.length > 0 ? "Corriger maintenant" : "Consulter le profil"}
+              <ChevronRight className="ml-2 h-4 w-4" />
+            </Button>
           </CardContent>
         </Card>
       </section>
 
-      <div className="grid lg:grid-cols-12 gap-8 items-start">
-        <div className="lg:col-span-4 space-y-6">
-          <Card className="border-border/50 rounded-2xl shadow-sm bg-card overflow-hidden">
-            <div className="h-24 bg-gradient-to-br from-primary/10 to-primary/5 w-full border-b border-border/50" />
-            <CardContent className="p-6 pt-0 flex flex-col items-center text-center relative">
-              <div className="h-24 w-24 rounded-full border-4 border-card bg-primary/10 flex items-center justify-center -mt-12 mb-4 shadow-lg shadow-black/5 relative overflow-hidden">
-                {agent.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={agent.photoUrl}
-                    alt={`Photo ${agent.firstName ?? ""} ${agent.lastName ?? ""}`}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <span className="text-3xl font-black tracking-widest text-primary/80">
-                    {initiales}
-                  </span>
-                )}
-              </div>
-
-              <h2 className="text-xl font-bold tracking-tight text-foreground line-clamp-1">
-                {agent.firstName || "Prénom"} {agent.lastName || "Nom"}
-              </h2>
-              <p className="text-sm font-medium text-muted-foreground mt-1">
-                Agent de sécurité
-              </p>
-
-              <div className="w-full flex justify-center gap-4 mt-6">
-                {agent.email ? (
-                  <a
-                    href={`mailto:${agent.email}`}
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
-                    title={agent.email}
-                  >
-                    <Mail className="h-4 w-4" />
-                  </a>
-                ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/30 text-muted-foreground/35" title="Email absent">
-                    <Mail className="h-4 w-4" />
-                  </div>
-                )}
-
-                {agent.phone ? (
-                  <a
-                    href={`tel:${agent.phone}`}
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
-                    title={agent.phone}
-                  >
-                    <Phone className="h-4 w-4" />
-                  </a>
-                ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/30 text-muted-foreground/35" title="Telephone absent">
-                    <Phone className="h-4 w-4" />
-                  </div>
-                )}
-              </div>
-
-              {canWrite && (
-                <div className="mt-5 w-full">
-                  <input
-                    id="agent-photo-upload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] ?? null;
-                      void uploadPhoto(file);
-                      event.target.value = "";
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full rounded-xl font-semibold"
-                    disabled={uploadingPhoto || saving}
-                    asChild
-                  >
-                    <label htmlFor="agent-photo-upload">
-                      {uploadingPhoto ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <UploadCloud className="mr-2 h-4 w-4" />
-                      )}
-                      Importer la photo
-                    </label>
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="hidden border-border/50 rounded-2xl shadow-sm bg-card overflow-hidden">
-            <div className="p-5 border-b border-border/50 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-primary" />
-                <h2 className="text-sm font-semibold text-foreground">
-                  Contrôle exploitation
-                </h2>
-              </div>
-              <Badge variant="outline" className="font-mono">
-                {completeness}%
-              </Badge>
-            </div>
-            <CardContent className="p-5 space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  <span>Dossier complet</span>
-                  <span>{completeness}%</span>
-                </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      completeness >= 85
-                        ? "bg-emerald-500"
-                        : completeness >= 60
-                          ? "bg-amber-500"
-                          : "bg-destructive"
-                    )}
-                    style={{ width: `${completeness}%` }}
-                  />
-                </div>
-              </div>
-
-              {complianceAlerts.length > 0 ? (
-                <div className="space-y-2">
-                  {complianceAlerts.slice(0, 5).map((alert) => (
-                    <div
-                      key={alert.id}
-                      className={cn(
-                        "rounded-xl border p-3 text-sm",
-                        alert.tone === "danger" &&
-                          "border-destructive/30 bg-destructive/10 text-destructive",
-                        alert.tone === "warning" &&
-                          "border-amber-300/60 bg-amber-50 text-amber-800",
-                        alert.tone === "info" &&
-                          "border-sky-300/60 bg-sky-50 text-sky-800"
-                      )}
-                    >
-                      <div className="flex items-start gap-2">
-                        {alert.tone === "danger" ? (
-                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                        ) : alert.tone === "warning" ? (
-                          <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />
-                        ) : (
-                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-                        )}
-                        <div>
-                          <p className="font-bold">{alert.title}</p>
-                          <p className="mt-0.5 text-xs opacity-80">{alert.detail}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {complianceAlerts.length > 5 && (
-                    <p className="text-xs font-semibold text-muted-foreground">
-                      +{complianceAlerts.length - 5} point(s) a compléter.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-emerald-300/60 bg-emerald-50 p-4 text-sm text-emerald-800">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <p className="font-bold">Dossier propre et exploitable</p>
-                  </div>
-                  <p className="mt-1 text-xs opacity-80">
-                    Les informations essentielles sont presentes pour planifier et diffuser.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="hidden border-border/50 rounded-2xl shadow-sm bg-card overflow-hidden">
-            <div className="p-5 border-b border-border/50 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <FileWarning className="h-4 w-4 text-primary" />
-                <h2 className="text-sm font-semibold text-foreground">
-                  Conformité planning
-                </h2>
-              </div>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "font-mono",
-                  openComplianceOverrides.length > 0 &&
-                    "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                )}
-              >
-                {openComplianceOverrides.length} ouvert
-              </Badge>
-            </div>
-            <CardContent className="p-5 space-y-4">
-              {complianceOverridesLoading ? (
-                <div className="flex items-center gap-3 rounded-xl border bg-muted/20 p-4 text-sm font-semibold text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  Chargement des exceptions...
-                </div>
-              ) : complianceOverridesError ? (
-                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-700 dark:text-red-300">
-                  {complianceOverridesError}
-                </div>
-              ) : complianceOverrides.length === 0 ? (
-                <div className="rounded-xl border border-emerald-300/60 bg-emerald-50 p-4 text-sm text-emerald-800">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <p className="font-bold">Aucune exception de planning</p>
-                  </div>
-                  <p className="mt-1 text-xs opacity-80">
-                    Aucun forçage conformité n'est rattaché a cet agent.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-200">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] opacity-70">
-                        A régulariser
-                      </p>
-                      <p className="mt-1 text-2xl font-black">
-                        {openComplianceOverrides.length}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-emerald-800 dark:text-emerald-200">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] opacity-70">
-                        Fermees
-                      </p>
-                      <p className="mt-1 text-2xl font-black">
-                        {closedComplianceOverrides}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {complianceOverrides.slice(0, 3).map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-xl border bg-muted/20 p-3 text-sm"
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em]",
-                              complianceOverrideStatusClass(
-                                item.complianceResolutionStatus
-                              )
-                            )}
-                          >
-                            {complianceOverrideStatusLabel(
-                              item.complianceResolutionStatus
-                            )}
-                          </Badge>
-                          <span className="text-[11px] font-semibold text-muted-foreground">
-                            {formatDateTime(item.sentAtIso)}
-                          </span>
-                        </div>
-                        <p className="mt-2 font-bold text-foreground">
-                          {item.complianceOverrideDétail ||
-                            "Blocage conformité non détaillé"}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {item.periodLabel} - {item.vacationCount} vacation(s)
-                        </p>
-                        {item.complianceOverrideReason && (
-                          <p className="mt-2 rounded-lg bg-background px-2 py-1 text-xs font-semibold text-muted-foreground">
-                            Motif : {item.complianceOverrideReason}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <Button asChild variant="outline" size="sm" className="rounded-xl">
-                      <a href={`/dashboard/conformite?agentId=${id}`}>
-                        Voir registre
-                      </a>
-                    </Button>
-                    {complianceOverrides[0] && (
-                      <Button asChild variant="ghost" size="sm" className="rounded-xl">
-                        <a href={`/agent-planning/print/${complianceOverrides[0].id}`}>
-                          Dernier PDF
-                          <ExternalLink className="ml-2 h-3.5 w-3.5" />
-                        </a>
-                      </Button>
-                    )}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="hidden border-border/50 rounded-2xl shadow-sm bg-card">
-            <div className="p-5 border-b border-border/50 flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold text-foreground">
-                Habilitations
-              </h2>
-            </div>
-            <CardContent className="p-5 space-y-3">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Carte pro</span>
-                <Badge variant="outline" className="font-mono">
-                  {agent.professionalCardNumber || "-"}
-                </Badge>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Expiration</span>
-                <Badge variant="outline" className="font-mono">
-                  {agent.professionalCardExpiresAt || "-"}
-                </Badge>
-              </div>
-              <div className="flex flex-wrap gap-1.5 pt-2">
-                {(agent.qualifications ?? []).length > 0 ? (
-                  (agent.qualifications ?? []).map((qualification) => (
-                    <Badge key={qualification} variant="secondary">
-                      {qualification}
-                    </Badge>
-                  ))
-                ) : (
-                  <span className="text-sm italic text-muted-foreground">
-                    Aucune qualification renseignée
-                  </span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-8">
-          <Tabs defaultValue="profil" className="space-y-6">
+      <div id="agent-workspace" className="scroll-mt-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <div className="overflow-x-auto rounded-2xl border bg-card p-2 shadow-sm">
               <TabsList className="h-auto w-max min-w-full justify-start gap-2 bg-transparent p-0">
                 <TabsTrigger value="profil" className="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-[0.12em]">Profil & contact</TabsTrigger>
@@ -1385,6 +957,47 @@ export default function AgentDétailPage() {
                   Consultation seule : vous ne pouvez pas modifier ce profil.
                 </div>
               )}
+              <div className="flex flex-col gap-4 rounded-2xl border bg-muted/15 p-4 sm:flex-row sm:items-center">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border bg-primary/10 text-xl font-black text-primary">
+                  {agent.photoUrl ? (
+                    <SecureAgentPhoto
+                      src={agent.photoUrl}
+                      alt={`Photo ${agentName}`}
+                      className="h-full w-full object-cover"
+                      fallback={initiales}
+                    />
+                  ) : (
+                    initiales
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-black">Photo d&apos;identification</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Utile pour reconnaître rapidement l&apos;agent dans le planning.
+                  </p>
+                </div>
+                {canWrite && (
+                  <>
+                    <input
+                      id="agent-photo-upload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        void uploadPhoto(file);
+                        event.target.value = "";
+                      }}
+                    />
+                    <Button asChild type="button" variant="outline" className="rounded-xl font-bold" disabled={uploadingPhoto}>
+                      <label htmlFor="agent-photo-upload">
+                        {uploadingPhoto ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                        {agent.photoUrl ? "Remplacer" : "Ajouter"}
+                      </label>
+                    </Button>
+                  </>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
@@ -1711,7 +1324,7 @@ export default function AgentDétailPage() {
                     Equipements individuels
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Tenues, badges, cles, radio, PTI/DATI et matériel remis a l'agent.
+                    Tenues, badges, cles, radio, PTI/DATI et matériel remis a l&apos;agent.
                   </p>
                 </div>
               </div>
@@ -1980,21 +1593,57 @@ export default function AgentDétailPage() {
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          <Button asChild variant="outline" size="sm">
-                            <a href={document.url} target="_blank" rel="noreferrer">
-                              <ExternalLink className="mr-2 h-4 w-4" />
-                              Ouvrir
-                            </a>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              void openAuthenticatedFile(document.url).catch((error) => {
+                                feedback.error(error, {
+                                  title: "Ouverture impossible",
+                                  fallback: "Impossible d'ouvrir ce document.",
+                                });
+                              });
+                            }}
+                          >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Ouvrir
                           </Button>
                           {canWrite && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeDocument(document.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  aria-label={`Supprimer ${document.label}`}
+                                  disabled={deletingDocumentId === document.id}
+                                >
+                                  {deletingDocumentId === document.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Supprimer ce document ?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    {document.label} sera retire du dossier RH et le fichier prive sera supprime. Cette action est irreversible.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => void deleteDocument(document.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Supprimer definitivement
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           )}
                         </div>
                       </div>
@@ -2098,24 +1747,6 @@ export default function AgentDétailPage() {
                     </Button>
                   </div>
 
-                  <div className="grid gap-3 border-t border-border/50 pt-4 md:grid-cols-[1fr_auto]">
-                    <Input
-                      value={documentUrl}
-                      onChange={(event) => setDocumentUrl(event.target.value)}
-                      placeholder="Ou coller une URL de document deja stocke"
-                      className="h-11 rounded-xl"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={addDocument}
-                      disabled={!documentUrl.trim()}
-                      className="rounded-xl font-semibold"
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Ajouter URL
-                    </Button>
-                  </div>
                 </div>
               )}
             </CardContent>
@@ -2123,32 +1754,7 @@ export default function AgentDétailPage() {
 
             </TabsContent>
           </Tabs>
-
-          <div className="hidden grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="border-border/50 rounded-2xl shadow-sm bg-card opacity-60 grayscale">
-              <div className="p-5 border-b border-border/50 flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">Adresse (À venir)</h2>
-              </div>
-              <CardContent className="p-5 flex items-center justify-center min-h-[100px] text-sm text-muted-foreground italic">
-                En cours de développement
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50 rounded-2xl shadow-sm bg-card opacity-60 grayscale">
-              <div className="p-5 border-b border-border/50 flex items-center gap-2">
-                <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">
-                  Disponibilités (À venir)
-                </h2>
-              </div>
-              <CardContent className="p-5 flex items-center justify-center min-h-[100px] text-sm text-muted-foreground italic">
-                En cours de développement
-              </CardContent>
-            </Card>
-          </div>
         </div>
-      </div>
     </div>
   );
 }

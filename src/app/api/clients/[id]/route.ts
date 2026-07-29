@@ -39,7 +39,7 @@ async function getContext(req: NextRequest) {
     return { ok: false as const, status: 401, error: "Missing token" };
   }
 
-  const decoded = await getAuth().verifyIdToken(token);
+  const decoded = await getAuth().verifyIdToken(token, true);
   const uid = decoded.uid;
 
   const tuSnap = await adminDb.collection("tenantUsers").doc(uid).get();
@@ -91,7 +91,6 @@ export async function GET(
     return json(500, {
       ok: false,
       error: "Internal error",
-      details: errorDétails(e),
     });
   }
 }

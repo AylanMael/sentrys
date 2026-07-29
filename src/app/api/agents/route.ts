@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { requireTenantUser } from "@/app/api/_utils/withTenant";
 import { assertWithinLimitsTx } from "@/lib/billing/limits";
@@ -11,6 +11,10 @@ import {
   normalizeAgentQualifications,
   type AgentProfileFields,
 } from "@/lib/agents/profile";
+import {
+  parseFirebaseStoragePath,
+  secureAgentFileUrl,
+} from "@/lib/uploads/agent-file-access";
 
 export const runtime = "nodejs";
 
@@ -55,7 +59,6 @@ function serverError(e: unknown, tag: string) {
   return json(500, {
     ok: false,
     error: "Internal error",
-    details: e instanceof Error ? e.message : String(e),
   });
 }
 
@@ -117,6 +120,7 @@ function pickProfile(d: Record<string, unknown>): AgentProfileFields {
 
   return {
     photoUrl: normalizeAgentProfileField(rawProfile.photoUrl),
+    photoPath: normalizeAgentProfileField(rawProfile.photoPath),
     employeeNumber: normalizeAgentProfileField(rawProfile.employeeNumber),
     birthDate: normalizeAgentProfileField(rawProfile.birthDate),
     addressLine1: normalizeAgentProfileField(rawProfile.addressLine1),
@@ -154,7 +158,48 @@ function parseMax(v: string | null, def = 50) {
   return Math.min(Math.floor(n), 200);
 }
 
-function normalizeMonthlyContractHours(value: unknown) {
+function parsePageSize(value: string | null) {
+  const parsed = Number(value ?? "");
+  if (!Number.isFinite(parsed) || parsed <= 0) return 25;
+  return Math.min(Math.floor(parsed), 100);
+}
+
+function encodeCursor(documentId: string, createdAt: Timestamp) {
+  return Buffer.from(
+    JSON.stringify({
+      id: documentId,
+      seconds: createdAt.seconds,
+      nanoseconds: createdAt.nanoseconds,
+    }),
+    "utf8"
+  ).toString("base64url");
+}
+
+function decodeCursor(value: string | null) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(value, "base64url").toString("utf8")
+    ) as { id?: unknown; seconds?: unknown; nanoseconds?: unknown };
+    const id = String(parsed.id ?? "").trim();
+    const seconds = Number(parsed.seconds);
+    const nanoseconds = Number(parsed.nanoseconds);
+    if (
+      !id ||
+      id.length > 1500 ||
+      id.includes("/") ||
+      !Number.isSafeInteger(seconds) ||
+      !Number.isInteger(nanoseconds) ||
+      nanoseconds < 0 ||
+      nanoseconds >= 1_000_000_000
+    ) {
+      return null;
+    }
+    return { id, createdAt: new Timestamp(seconds, nanoseconds) };
+  } catch {
+    return null;
+  }
+}function normalizeMonthlyContractHours(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 400) {
@@ -163,10 +208,20 @@ function normalizeMonthlyContractHours(value: unknown) {
   return Math.round(parsed * 100) / 100;
 }
 
-function pickAgent(d: Record<string, unknown>, id: string) {
+function pickAgent(d: Record<string, unknown>, id: string, includeSensitiveProfile = true) {
   const firstName = d.firstName as string | null ?? null;
   const lastName = d.lastName as string | null ?? null;
   const profile = pickProfile(d);
+  const storedPhotoPath = profile.photoPath || parseFirebaseStoragePath(profile.photoUrl);
+  const presentedPhotoUrl = storedPhotoPath
+    ? secureAgentFileUrl(id, "photo")
+    : profile.photoUrl;
+  const presentedDocuments = (profile.documents ?? []).map((document) => {
+    const storedPath = document.path || parseFirebaseStoragePath(document.url);
+    return storedPath
+      ? { ...document, path: storedPath, url: secureAgentFileUrl(id, document.id) }
+      : document;
+  });
 
   return {
     id,
@@ -177,17 +232,17 @@ function pickAgent(d: Record<string, unknown>, id: string) {
     phone: d.phone as string | null ?? null,
     monthlyContractHours:
       typeof d.monthlyContractHours === "number" ? d.monthlyContractHours : null,
-    photoUrl: profile.photoUrl,
-    employeeNumber: profile.employeeNumber,
-    birthDate: profile.birthDate,
-    addressLine1: profile.addressLine1,
-    addressLine2: profile.addressLine2,
-    professionalCardNumber: profile.professionalCardNumber,
-    professionalCardExpiresAt: profile.professionalCardExpiresAt,
-    emergencyContactName: profile.emergencyContactName,
-    emergencyContactPhone: profile.emergencyContactPhone,
-    documents: profile.documents,
-    notes: profile.notes,
+    photoUrl: includeSensitiveProfile ? presentedPhotoUrl : null,
+    employeeNumber: includeSensitiveProfile ? profile.employeeNumber : null,
+    birthDate: includeSensitiveProfile ? profile.birthDate : null,
+    addressLine1: includeSensitiveProfile ? profile.addressLine1 : null,
+    addressLine2: includeSensitiveProfile ? profile.addressLine2 : null,
+    professionalCardNumber: includeSensitiveProfile ? profile.professionalCardNumber : null,
+    professionalCardExpiresAt: includeSensitiveProfile ? profile.professionalCardExpiresAt : null,
+    emergencyContactName: includeSensitiveProfile ? profile.emergencyContactName : null,
+    emergencyContactPhone: includeSensitiveProfile ? profile.emergencyContactPhone : null,
+    documents: includeSensitiveProfile ? presentedDocuments : [],
+    notes: includeSensitiveProfile ? profile.notes : null,
     status: (d.status ?? "active") as AgentStatus,
     search: d.search as string | null ?? null,
     qualifications: profile.qualifications,
@@ -225,8 +280,100 @@ export async function GET(req: NextRequest) {
   const q = normalizeText(url.searchParams.get("q")).toLowerCase();
   const max = parseMax(url.searchParams.get("max"), 50);
   const fetchLimit = q ? Math.min(Math.max(max * 5, 100), 500) : max;
+  const includeSensitiveProfile = auth.role !== "viewer";
+  const paginated = url.searchParams.has("pageSize");
+  const pageSize = parsePageSize(url.searchParams.get("pageSize"));
+  const cursor = decodeCursor(url.searchParams.get("cursor"));
 
   try {
+    if (paginated && ids.length === 0) {
+      const matches: ReturnType<typeof pickAgent>[] = [];
+      const scanBatchSize = Math.max(100, pageSize * 2);
+      const maxScanBatches = 20;
+      let scanCursor = cursor;
+      let hasMore = false;
+      let lastScanned: { id: string; createdAt: Timestamp } | null = cursor;
+
+      for (let batchIndex = 0; batchIndex < maxScanBatches; batchIndex += 1) {
+        let pageQuery: FirebaseFirestore.Query = adminDb
+          .collection("agents")
+          .where("tenantId", "==", tenantId);
+        if (status !== "all") {
+          pageQuery = pageQuery.where("status", "==", status);
+        }
+        pageQuery = pageQuery
+          .orderBy("createdAt", "desc")
+          .orderBy(FieldPath.documentId(), "desc");
+        if (scanCursor) {
+          pageQuery = pageQuery.startAfter(scanCursor.createdAt, scanCursor.id);
+        }
+        pageQuery = pageQuery.limit(scanBatchSize);
+
+        const pageSnap = await pageQuery.get();
+        if (pageSnap.empty) {
+          hasMore = false;
+          break;
+        }
+
+        for (let index = 0; index < pageSnap.docs.length; index += 1) {
+          const document = pageSnap.docs[index];
+          const createdAt = document.get("createdAt");
+          if (!(createdAt instanceof Timestamp)) continue;
+          lastScanned = { id: document.id, createdAt };
+          const agent = pickAgent(
+            document.data() as Record<string, unknown>,
+            document.id,
+            includeSensitiveProfile
+          );
+          const haystack = String(
+            agent.search ??
+              buildSearch(
+                agent.firstName ?? "",
+                agent.lastName ?? "",
+                agent.email,
+                agent.phone,
+                agent.employeeNumber
+              )
+          ).toLowerCase();
+          if (!q || haystack.includes(q)) matches.push(agent);
+
+          if (matches.length >= pageSize) {
+            hasMore = index < pageSnap.docs.length - 1 || pageSnap.size === scanBatchSize;
+            break;
+          }
+        }
+
+        if (matches.length >= pageSize) break;
+        if (pageSnap.size < scanBatchSize) {
+          hasMore = false;
+          break;
+        }
+        const lastDocument = pageSnap.docs[pageSnap.docs.length - 1];
+        const lastCreatedAt = lastDocument.get("createdAt");
+        if (!(lastCreatedAt instanceof Timestamp)) {
+          hasMore = false;
+          break;
+        }
+        scanCursor = { id: lastDocument.id, createdAt: lastCreatedAt };
+        hasMore = true;
+      }
+
+      return json(200, {
+        ok: true,
+        tenantId,
+        count: matches.length,
+        agents: matches,
+        items: matches,
+        pageInfo: {
+          pageSize,
+          hasMore,
+          nextCursor:
+            hasMore && lastScanned
+              ? encodeCursor(lastScanned.id, lastScanned.createdAt)
+              : null,
+        },
+      });
+    }
     if (ids.length > 0) {
       const refs = ids.map((id) => adminDb.collection("agents").doc(id));
       const snaps = await adminDb.getAll(...refs);
@@ -239,7 +386,7 @@ export async function GET(req: NextRequest) {
         const d = snap.data() as Record<string, unknown>;
         if (d?.tenantId !== tenantId) return;
 
-        found.push(pickAgent(d, id));
+        found.push(pickAgent(d, id, includeSensitiveProfile));
       });
 
       const byId = new Map(found.map((a) => [a.id, a]));
@@ -279,7 +426,9 @@ export async function GET(req: NextRequest) {
     }
 
     const snap = await ref.get();
-    let agents = snap.docs.map((d) => pickAgent(d.data() as Record<string, unknown>, d.id));
+    let agents = snap.docs.map((d) =>
+      pickAgent(d.data() as Record<string, unknown>, d.id, includeSensitiveProfile)
+    );
 
     if (status !== "all") {
       agents.sort((a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0));

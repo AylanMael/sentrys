@@ -1,8 +1,7 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { dirname, join, relative, resolve } from "node:path";
 
 import { adminStorage } from "@/lib/firebase/admin";
 
@@ -16,7 +15,7 @@ type UploadTenantFileInput = {
 };
 
 export type TenantFileUploadResult = {
-  url: string;
+  url: null;
   path: string;
   storageMode: "firebase" | "local-dev";
   bucketName?: string | null;
@@ -24,12 +23,6 @@ export type TenantFileUploadResult = {
 
 export function sanitizeUploadFileName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(-90) || "upload";
-}
-
-function buildFirebaseDownloadUrl(bucketName: string, path: string, token: string) {
-  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
-    path
-  )}?alt=media&token=${token}`;
 }
 
 function storageBucketCandidates() {
@@ -57,13 +50,11 @@ async function uploadToFirebaseStorage({
   buffer,
   contentType,
   path,
-  token,
   metadata,
 }: {
   buffer: Buffer;
   contentType: string;
   path: string;
-  token: string;
   metadata: Record<string, string>;
 }) {
   let lastError: unknown = null;
@@ -77,16 +68,13 @@ async function uploadToFirebaseStorage({
         resumable: false,
         contentType,
         metadata: {
-          cacheControl: "public, max-age=3600",
-          metadata: {
-            ...metadata,
-            firebaseStorageDownloadTokens: token,
-          },
+          cacheControl: "private, no-store, max-age=0",
+          metadata,
         },
       });
 
       return {
-        url: buildFirebaseDownloadUrl(bucket.name, path, token),
+        url: null,
         path,
         storageMode: "firebase" as const,
         bucketName: bucket.name,
@@ -105,21 +93,21 @@ async function uploadToFirebaseStorage({
     : new Error("Firebase Storage upload failed");
 }
 
-async function saveToLocalPublicUpload({
+async function saveToLocalPrivateUpload({
   buffer,
   path,
 }: {
   buffer: Buffer;
   path: string;
 }) {
-  const relativePath = ["uploads", path].join("/");
-  const absolutePath = join(process.cwd(), "public", ...relativePath.split("/"));
+  const relativePath = [".private-uploads", path].join("/");
+  const absolutePath = join(process.cwd(), ...relativePath.split("/"));
 
   await mkdir(dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, buffer);
 
   return {
-    url: `/${relativePath}`,
+    url: null,
     path,
     storageMode: "local-dev" as const,
     bucketName: null,
@@ -136,7 +124,6 @@ export async function uploadTenantFile({
 }: UploadTenantFileInput): Promise<TenantFileUploadResult> {
   const safeName = `${Date.now()}-${sanitizeUploadFileName(originalName)}`;
   const path = ["tenants", tenantId, ...folderSegments, safeName].join("/");
-  const token = randomUUID();
   const cleanMetadata = Object.fromEntries(
     Object.entries({
       tenantId,
@@ -154,7 +141,6 @@ export async function uploadTenantFile({
       buffer,
       contentType,
       path,
-      token,
       metadata: cleanMetadata,
     });
   } catch (error) {
@@ -162,6 +148,51 @@ export async function uploadTenantFile({
       throw error;
     }
 
-    return saveToLocalPublicUpload({ buffer, path });
+    return saveToLocalPrivateUpload({ buffer, path });
   }
+}
+export async function deleteTenantFile({
+  path,
+  tenantId,
+}: {
+  path: string;
+  tenantId: string;
+}) {
+  const normalizedPath = String(path ?? "").trim().replace(/\\/g, "/");
+  const tenantPrefix = `tenants/${tenantId}/`;
+  if (
+    !normalizedPath.startsWith(tenantPrefix) ||
+    normalizedPath.includes("..") ||
+    normalizedPath.startsWith("/")
+  ) {
+    throw new Error("Invalid tenant storage path");
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    const privateRoot = resolve(process.cwd(), ".private-uploads");
+    const localPath = resolve(privateRoot, ...normalizedPath.split("/"));
+    const relativePath = relative(privateRoot, localPath);
+    if (!relativePath.startsWith("..") && !relativePath.includes(":\\")) {
+      try {
+        await unlink(localPath);
+        return { deleted: true, storageMode: "local-dev" as const };
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== "ENOENT") throw error;
+      }
+    }
+  }
+
+  let lastError: unknown = null;
+  for (const bucketName of storageBucketCandidates()) {
+    try {
+      await adminStorage.bucket(bucketName).file(normalizedPath).delete({ ignoreNotFound: true });
+      return { deleted: true, storageMode: "firebase" as const };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError) throw lastError;
+  return { deleted: false, storageMode: "firebase" as const };
 }

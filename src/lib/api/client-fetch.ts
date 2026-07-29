@@ -303,3 +303,38 @@ export async function apiFetch<T>(
 
   return payload as T;
 }
+export async function apiFetchBlob(url: string): Promise<Blob> {
+  const user = getAuth().currentUser;
+  if (!user) {
+    throw makeApiFetchError({ url, status: 401, rawMessage: "Not authenticated" });
+  }
+
+  const token = await user.getIdToken();
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as ApiError | null;
+    throw makeApiFetchError({
+      url,
+      status: response.status,
+      rawMessage: payload?.error || `HTTP ${response.status}`,
+    });
+  }
+
+  return response.blob();
+}
+
+export async function openAuthenticatedFile(url: string) {
+  if (!url.startsWith("/api/")) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  const blob = await apiFetchBlob(url);
+  const objectUrl = URL.createObjectURL(blob);
+  window.open(objectUrl, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}

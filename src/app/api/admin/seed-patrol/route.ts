@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireTenantUser } from "@/app/api/_utils/withTenant";
+import {
+  forbidden,
+  isAdminLike,
+  requireTenantUser,
+} from "@/app/api/_utils/withTenant";
 import { FieldValue } from "firebase-admin/firestore";
+import { blockSeedInProduction } from "@/lib/api/seed-guard";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  const productionBlock = blockSeedInProduction();
+  if (productionBlock) return productionBlock;
+
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
+  if (!isAdminLike(auth.role)) return forbidden("Forbidden");
 
   try {
     console.log("🌱 Internal Seeding for tenant:", auth.tenantId);
@@ -62,7 +71,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, message: "Seed successful", siteId, templateId });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("[seed-patrol] failed", error);
+    return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });
   }
 }

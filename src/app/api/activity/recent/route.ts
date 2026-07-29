@@ -13,11 +13,9 @@ function json(status: number, body: unknown) {
 
 function serverError(e: unknown, tag: string) {
   console.error(`[${tag}]`, e);
-  const message = e instanceof Error ? e.message : String(e);
   return json(500, {
     ok: false,
     error: "Internal error",
-    details: message,
   });
 }
 

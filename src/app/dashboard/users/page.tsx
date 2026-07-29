@@ -73,12 +73,26 @@ type TenantUserRow = {
   email: string | null;
   role: AppRole | null;
   roleLabel: string;
+  agentId: string | null;
   status: string;
   statusLabel: string;
   createdAtIso: string | null;
   updatedAtIso: string | null;
   isSelf: boolean;
   canEdit: boolean;
+  agentName: string | null;
+};
+
+type AgentOption = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  employeeNumber?: string | null;
+};
+
+type AgentsResponse = {
+  ok: boolean;
+  agents: AgentOption[];
 };
 
 type UsersResponse = {
@@ -91,6 +105,7 @@ type UsersResponse = {
     editableRoles: TenantRole[];
   };
   count: number;
+  linkedAgentIds: string[];
   users: TenantUserRow[];
 };
 
@@ -101,6 +116,7 @@ type InviteResponse = {
   name: string;
   role: TenantRole;
   roleLabel: string;
+  agentId: string | null;
   createdAuthUser: boolean;
   resetLink: string | null;
   resetLinkError: string | null;
@@ -122,7 +138,7 @@ const ROLE_RESTRICTIONS: Array<{
   {
     role: "owner",
     title: "Propriétaire",
-    detail: "Pilotage complet de l'agence et des droits sensibles.",
+    detail: "Pilotage complet de l&apos;agence et des droits sensibles.",
     permissions: ["Tout administrer", "Gerer utilisateurs", "Facturation", "Exports"],
   },
   {
@@ -166,6 +182,11 @@ function initials(name: string | null, email: string | null) {
     .map((part) => part.charAt(0))
     .join("")
     .toUpperCase();
+}
+
+function agentOptionLabel(agent: AgentOption) {
+  const name = `${agent.firstName ?? ""} ${agent.lastName ?? ""}`.trim();
+  return agent.employeeNumber ? `${name || agent.id} - ${agent.employeeNumber}` : name || agent.id;
 }
 
 function formatDate(value: string | null) {
@@ -222,6 +243,8 @@ export default function UsersPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState<TenantRole>("agent");
+  const [inviteAgentId, setInviteAgentId] = useState("");
+  const [agentOptions, setAgentOptions] = useState<AgentOption[]>([]);
   const [inviteSaving, setInviteSaving] = useState(false);
   const [inviteResult, setInviteResult] = useState<InviteResponse | null>(null);
 
@@ -230,6 +253,7 @@ export default function UsersPage() {
 
   const users = response?.users ?? [];
   const activeCount = users.filter((item) => item.status === "active").length;
+  const linkedAgentIds = new Set(response?.linkedAgentIds ?? []);
   const adminCount = users.filter((item) => {
     const role = normalizeRole(item.role);
     return item.status === "active" && (role === "owner" || role === "admin");
@@ -260,8 +284,12 @@ export default function UsersPage() {
 
       try {
         const params = new URLSearchParams({ status: statusFilter });
-        const data = await apiFetch<UsersResponse>(`/api/users?${params.toString()}`);
+        const [data, agentsData] = await Promise.all([
+          apiFetch<UsersResponse>(`/api/users?${params.toString()}`),
+          apiFetch<AgentsResponse>("/api/agents?status=active&max=200"),
+        ]);
         setResponse(data);
+        setAgentOptions(agentsData.agents ?? []);
 
         if (!quiet) {
           feedback.info(
@@ -293,7 +321,7 @@ export default function UsersPage() {
 
   async function updateUserAccess(
     target: TenantUserRow,
-    patch: { role?: TenantRole; status?: TenantStatus }
+    patch: { role?: TenantRole; status?: TenantStatus; agentId?: string }
   ) {
     if (!target.canEdit || target.isSelf) {
       feedback.warning(
@@ -334,6 +362,7 @@ export default function UsersPage() {
     setInviteEmail("");
     setInviteName("");
     setInviteRole(editableRoles.includes("agent") ? "agent" : editableRoles[0] ?? "agent");
+    setInviteAgentId("");
     setInviteResult(null);
   }
 
@@ -346,7 +375,12 @@ export default function UsersPage() {
     event.preventDefault();
 
     if (!inviteEmail.trim()) {
-      feedback.warning("Email requis", "Renseignez l'email de l'utilisateur a inviter.");
+      feedback.warning("Email requis", "Renseignez l'email de l&apos;utilisateur a inviter.");
+      return;
+    }
+
+    if (inviteRole === "agent" && !inviteAgentId) {
+      feedback.warning("Agent requis", "Selectionnez le dossier agent a rattacher.");
       return;
     }
 
@@ -376,7 +410,7 @@ export default function UsersPage() {
       setInviteName("");
       feedback.success(
         "Invitation préparée",
-        `${result.name} est rattaché à l'agence avec le role ${result.roleLabel}.`
+        `${result.name} est rattaché à l&apos;agence avec le role ${result.roleLabel}.`
       );
       await loadUsers(true);
     } catch (err) {
@@ -394,7 +428,7 @@ export default function UsersPage() {
 
     try {
       await navigator.clipboard.writeText(inviteResult.resetLink);
-      feedback.success("Lien copie", "Le lien d'activation est dans le presse-papiers.");
+      feedback.success("Lien copie", "Le lien d&apos;activation est dans le presse-papiers.");
     } catch {
       feedback.warning(
         "Copie impossible",
@@ -413,7 +447,7 @@ export default function UsersPage() {
         icon={LockKeyhole}
         tone="danger"
         title="Acces reserve aux administrateurs"
-        description="La gestion des utilisateurs permet de modifier les rôles et restrictions de l'agence. Elle est reservee aux propriétaires et administrateurs."
+        description="La gestion des utilisateurs permet de modifier les rôles et restrictions de l&apos;agence. Elle est reservee aux propriétaires et administrateurs."
       />
     );
   }
@@ -431,8 +465,8 @@ export default function UsersPage() {
               Utilisateurs, rôles et restrictions
             </h1>
             <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-slate-300">
-              Cet écran pilote les accès réels de l'agence. Chaque changement
-              est enregistre dans l'audit log et les rôles definissent les
+              Cet écran pilote les accès réels de l&apos;agence. Chaque changement
+              est enregistre dans l&apos;audit log et les rôles definissent les
               modules accessibles.
             </p>
           </div>
@@ -454,8 +488,8 @@ export default function UsersPage() {
                 Inviter un utilisateur
               </DialogTitle>
               <DialogDescription className="font-semibold leading-6">
-                Provisionne un compte Firebase Auth, rattaché l'utilisateur a
-                cette agence, puis prépare un lien d'activation testable.
+                Provisionne un compte Firebase Auth, rattaché l&apos;utilisateur a
+                cette agence, puis prépare un lien d&apos;activation testable.
               </DialogDescription>
             </DialogHeader>
 
@@ -512,9 +546,39 @@ export default function UsersPage() {
                 </Select>
                 <p className="text-xs font-semibold leading-5 text-muted-foreground">
                   Le role determine les modules visibles. Par prudence, évitez
-                  les droits administrateur si l'utilisateur n'en a pas besoin.
+                  les droits administrateur si l&apos;utilisateur n&apos;en a pas besoin.
                 </p>
               </div>
+
+              {inviteRole === "agent" ? (
+                <div className="space-y-2">
+                  <Label className="font-black">Dossier agent a rattacher</Label>
+                  <Select
+                    value={inviteAgentId}
+                    onValueChange={setInviteAgentId}
+                    disabled={inviteSaving}
+                  >
+                    <SelectTrigger className="h-12 rounded-2xl font-bold">
+                      <SelectValue placeholder="Selectionner un agent actif" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agentOptions.map((agent) => (
+                        <SelectItem
+                          key={agent.id}
+                          value={agent.id}
+                          disabled={linkedAgentIds.has(agent.id)}
+                        >
+                          {agentOptionLabel(agent)}
+                          {linkedAgentIds.has(agent.id) ? " - deja lie" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    Un dossier agent ne peut etre rattache qu&apos;a un seul compte.
+                  </p>
+                </div>
+              ) : null}
 
               {inviteResult ? (
                 <div className="rounded-3xl border border-emerald-500/25 bg-emerald-500/10 p-4">
@@ -549,7 +613,7 @@ export default function UsersPage() {
                         </div>
                       ) : (
                         <p className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-3 text-xs font-bold text-amber-800 dark:text-amber-200">
-                          Le lien d'activation n'a pas pu être généré. Le compte
+                          Le lien d&apos;activation n&apos;a pas pu être généré. Le compte
                           est créé, mais il faudra renvoyer un lien après
                           configuration Firebase Auth.
                         </p>
@@ -580,7 +644,7 @@ export default function UsersPage() {
                 ) : (
                   <Send className="mr-2 h-4 w-4" />
                 )}
-                Preparer l'invitation
+                Preparer l&apos;invitation
               </Button>
             </DialogFooter>
           </form>
@@ -608,7 +672,7 @@ export default function UsersPage() {
               <div>
                 <CardTitle className="flex items-center gap-2 text-xl font-black">
                   <UserCog className="h-5 w-5 text-primary" />
-                  Comptes de l'agence
+                  Comptes de l&apos;agence
                 </CardTitle>
                 <CardDescription>
                   Source : collection Firebase <strong>tenantUsers</strong>.
@@ -675,6 +739,7 @@ export default function UsersPage() {
                   <TableRow className="bg-muted/40">
                     <TableHead>Utilisateur</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Agent lie</TableHead>
                     <TableHead>Statut</TableHead>
                     <TableHead>Restrictions</TableHead>
                     <TableHead>Derniere mise à jour</TableHead>
@@ -738,7 +803,9 @@ export default function UsersPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {editableRoles.map((role) => (
+                                {editableRoles
+                                  .filter((role) => role !== "agent" || normalizedRole === "agent")
+                                  .map((role) => (
                                   <SelectItem key={role} value={role}>
                                     {getRoleLabel(role)}
                                   </SelectItem>
@@ -752,6 +819,43 @@ export default function UsersPage() {
                             >
                               {item.roleLabel}
                             </Badge>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="min-w-[220px]">
+                          {normalizedRole === "agent" ? (
+                            canEditRow ? (
+                              <Select
+                                value={item.agentId ?? ""}
+                                disabled={updating}
+                                onValueChange={(agentId) =>
+                                  void updateUserAccess(item, { agentId })
+                                }
+                              >
+                                <SelectTrigger className="h-10 rounded-2xl font-bold">
+                                  <SelectValue placeholder="Agent a rattacher" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {agentOptions.map((agent) => (
+                                    <SelectItem
+                                      key={agent.id}
+                                      value={agent.id}
+                                      disabled={
+                                        linkedAgentIds.has(agent.id) && agent.id !== item.agentId
+                                      }
+                                    >
+                                      {agentOptionLabel(agent)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <span className="text-sm font-semibold text-muted-foreground">
+                                {item.agentName ?? "Agent non lie"}
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-xs font-semibold text-muted-foreground">Non applicable</span>
                           )}
                         </TableCell>
 
@@ -821,7 +925,7 @@ export default function UsersPage() {
                 Restrictions par role
               </CardTitle>
               <CardDescription>
-                Lecture rapide des droits pour éviter les erreurs d'affectation.
+                Lecture rapide des droits pour éviter les erreurs d&apos;affectation.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -869,7 +973,7 @@ export default function UsersPage() {
                 <p className="mt-1 text-sm font-medium leading-6 text-muted-foreground">
                   Le dernier administrateur actif ne peut pas être retire. Votre
                   propre accès ne peut pas être modifié depuis cet écran. Les
-                  changements sont tracés dans l'audit log.
+                  changements sont tracés dans l&apos;audit log.
                 </p>
               </div>
             </CardContent>

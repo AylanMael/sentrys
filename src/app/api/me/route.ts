@@ -34,7 +34,6 @@ function serverError(error: unknown, tag: string) {
   return json(500, {
     ok: false,
     error: "Internal error",
-    details: error instanceof Error ? error.message : String(error),
   });
 }
 
@@ -94,7 +93,7 @@ export async function GET(req: NextRequest) {
   let decoded: { uid: string; email?: string; name?: string };
 
   try {
-    const vérifiéd = await getAuth().verifyIdToken(token);
+    const vérifiéd = await getAuth().verifyIdToken(token, true);
 
     decoded = {
       uid: vérifiéd.uid,

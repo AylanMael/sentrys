@@ -55,7 +55,7 @@ async function getContext(req: NextRequest) {
   const token = getToken(req);
   if (!token) return { ok: false as const, error: "Missing token" };
 
-  const decoded = await getAuth().verifyIdToken(token);
+  const decoded = await getAuth().verifyIdToken(token, true);
   const uid = decoded.uid;
 
   const tuSnap = await adminDb.collection("tenantUsers").doc(uid).get();
@@ -84,7 +84,7 @@ async function getContext(req: NextRequest) {
 function parseLimit(v: string | null) {
   const n = Number(v ?? 20);
   if (!Number.isFinite(n)) return 20;
-  return Math.max(1, Math.min(50, Math.floor(n)));
+  return Math.max(1, Math.min(200, Math.floor(n)));
 }
 
 // filtre local fallback
@@ -149,6 +149,26 @@ function buildSearch(input: Record<string, unknown>) {
     .replace(/\s+/g, " ");
 }
 
+function timestampMs(value: unknown) {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  const timestamp = value as { toDate?: () => Date };
+  if (typeof timestamp.toDate === "function") {
+    return timestamp.toDate().getTime();
+  }
+
+  return 0;
+}
+
+function clientSortMs(client: Record<string, unknown>) {
+  return timestampMs(client.updatedAt) || timestampMs(client.createdAt);
+}
+
 export async function GET(req: NextRequest) {
   try {
     const ctx = await getContext(req);
@@ -162,52 +182,44 @@ export async function GET(req: NextRequest) {
     const limit = parseLimit(searchParams.get("limit"));
     const cursor = decodeCursor(searchParams.get("cursor"));
 
-    // Base query (tenant scope)
-    let queryRef: FirebaseFirestore.Query = adminDb
+    // Index-safe and legacy-safe: some historical clients do not have createdAt.
+    // Firestore orderBy would hide those documents, so we filter and sort locally.
+    const snap = await adminDb
       .collection("clients")
-      .where("tenantId", "==", tenantId);
+      .where("tenantId", "==", tenantId)
+      .limit(500)
+      .get();
 
-    // status filter (si "all", pas de where)
-    if (status && status !== "all") {
-      queryRef = queryRef.where("status", "==", status);
-    }
+    const all = snap.docs.map((d): Record<string, unknown> => ({ id: d.id, ...d.data() }));
+    const filtered = all
+      .filter((client) => {
+        if (status && status !== "all" && normalizeStatus(client.status) !== status) {
+          return false;
+        }
+        return matchQ(client, q);
+      })
+      .sort((a, b) => {
+        const au = clientSortMs(a);
+        const bu = clientSortMs(b);
+        if (bu !== au) return bu - au;
+        return String(a.name ?? a.legalName ?? a.email ?? a.id ?? "").localeCompare(
+          String(b.name ?? b.legalName ?? b.email ?? b.id ?? ""),
+          "fr"
+        );
+      });
 
-    // Tri stable (createdAt desc)
-    queryRef = queryRef.orderBy("createdAt", "desc");
+    const startIndex = cursor?.id
+      ? Math.max(0, filtered.findIndex((client) => String(client.id ?? "") === cursor.id) + 1)
+      : 0;
+    const items = filtered.slice(startIndex, startIndex + limit);
 
-    // Cursor
-    // Comme on encode createdAtMs + id, on doit "startAfter(createdAt)" + fallback id.
-    // Firestore startAfter nécessite les mêmes orderBy. Donc on ajoute un orderBy "__name__".
-    queryRef = queryRef.orderBy("__name__", "desc");
-
-    if (cursor) {
-      const createdAt = new Date(cursor.createdAtMs);
-      queryRef = queryRef.startAfter(createdAt, cursor.id);
-    }
-
-    // On prend un peu plus que limit pour filtrer localement si q != "" (fallback)
-    const fetchSize = q ? Math.min(200, limit * 5) : limit;
-    queryRef = queryRef.limit(fetchSize);
-
-    const snap = await queryRef.get();
-
-    // map + filtre q en local
-    const raw = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    const filtered = q ? raw.filter((x) => matchQ(x, q)) : raw;
-
-    const items = filtered.slice(0, limit);
-
-    // nextCursor basé sur le dernier item RETOURNÉ (pas le dernier raw)
     let nextCursor: string | null = null;
-    if (items.length === limit) {
+    if (startIndex + limit < filtered.length && items.length > 0) {
       const last = items[items.length - 1] as Record<string, unknown>;
-      const ts = last.createdAt as { toDate?: () => Date } | undefined;
-      const createdAtMs =
-        ts && typeof ts.toDate === "function"
-          ? ts.toDate().getTime()
-          : Date.now();
-
-      nextCursor = encodeCursor({ createdAtMs, id: String(last.id ?? "") });
+      nextCursor = encodeCursor({
+        createdAtMs: clientSortMs(last),
+        id: String(last.id ?? ""),
+      });
     }
 
     return json(200, { ok: true, items, nextCursor });
@@ -216,7 +228,6 @@ export async function GET(req: NextRequest) {
     return json(500, {
       ok: false,
       error: "Internal error",
-      details: errorDétails(e),
     });
   }
 }
@@ -298,7 +309,6 @@ export async function POST(req: NextRequest) {
     return json(500, {
       ok: false,
       error: "Internal error",
-      details: errorDétails(e),
     });
   }
 }

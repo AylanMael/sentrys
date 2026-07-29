@@ -233,7 +233,6 @@ export async function POST(req: NextRequest) {
       error: alreadyExists
         ? "Une agence avec cet identifiant existe deja."
         : "Impossible de créer l'agence SaaS.",
-      details: error instanceof Error ? error.message : String(error),
     });
   }
 }

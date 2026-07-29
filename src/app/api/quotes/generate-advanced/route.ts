@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     const token = req.headers.get("authorization")?.replace("Bearer ", "");
     if (!token) return json(401, { ok: false, error: "Unauthorized" });
 
-    const decoded = await getAuth().verifyIdToken(token);
+    const decoded = await getAuth().verifyIdToken(token, true);
     const uid = decoded.uid;
 
     const tu = await getTenantUser(uid);
@@ -266,7 +266,6 @@ export async function POST(req: NextRequest) {
     return json(500, {
       ok: false,
       error: "Internal error",
-      details: e?.message ?? String(e),
     });
   }
 }

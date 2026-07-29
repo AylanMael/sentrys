@@ -48,6 +48,6 @@ export async function POST(req: NextRequest) {
 
   } catch (e: any) {
     console.error("[api/ai/schedule-risk] failed", e);
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });
   }
 }

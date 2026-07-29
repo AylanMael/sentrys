@@ -47,7 +47,7 @@ export async function requireAuth(req: NextRequest): Promise<AuthCtx> {
   const token = parseBearer(req);
   if (!token) throw new Error("Missing token");
 
-  const decoded = await getAuth().verifyIdToken(token);
+  const decoded = await getAuth().verifyIdToken(token, true);
 
   // 1) on tente d'abord les custom claims
   const decodedRecord = decoded as Record<string, unknown>;

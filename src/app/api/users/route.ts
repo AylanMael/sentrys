@@ -9,6 +9,12 @@ import {
   normalizeRole,
   type AppRole,
 } from "@/lib/auth/role";
+import {
+  assertAgentCanBeLinked,
+  loadAgentLinkContext,
+  releaseAgentLink,
+  reserveAgentLink,
+} from "@/lib/users/agent-link";
 
 export const runtime = "nodejs";
 
@@ -29,6 +35,7 @@ type TenantManagedStatus = (typeof TENANT_MANAGED_STATUSES)[number];
 type UpdateBody = {
   uid?: string;
   role?: TenantManagedRole;
+  agentId?: string | null;
   status?: TenantManagedStatus;
   reason?: string;
 };
@@ -37,6 +44,7 @@ type InviteBody = {
   email?: string;
   name?: string;
   role?: TenantManagedRole;
+  agentId?: string | null;
 };
 
 function json(status: number, body: unknown) {
@@ -141,6 +149,14 @@ export async function GET(req: NextRequest) {
       .limit(limit)
       .get();
 
+    const allLinkedAgentIds = Array.from(
+      new Set(
+        snap.docs
+          .map((doc) => normalizeText(doc.data().agentId))
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+
     const docs = snap.docs
       .map((doc) => {
         const data = doc.data() as Record<string, unknown>;
@@ -157,11 +173,29 @@ export async function GET(req: NextRequest) {
           roleLabel: getRoleLabel(role),
           status,
           statusLabel: statusLabel(status),
+          agentId: normalizeText(data.agentId),
           createdAtIso: toIso(data.createdAt),
           updatedAtIso: toIso(data.updatedAt),
         };
       })
       .filter((item) => statusFilter === "all" || item.status === statusFilter);
+
+    const linkedAgentIds = Array.from(
+      new Set(docs.map((item) => item.agentId).filter((id): id is string => Boolean(id)))
+    );
+    const linkedAgents = new Map<string, string>();
+    if (linkedAgentIds.length > 0) {
+      const agentSnaps = await adminDb.getAll(
+        ...linkedAgentIds.map((agentId) => adminDb.collection("agents").doc(agentId))
+      );
+      agentSnaps.forEach((agentSnap) => {
+        if (!agentSnap.exists) return;
+        const agent = agentSnap.data() as Record<string, unknown>;
+        if (agent.tenantId !== auth.tenantId) return;
+        const name = `${normalizeText(agent.firstName) ?? ""} ${normalizeText(agent.lastName) ?? ""}`.trim();
+        linkedAgents.set(agentSnap.id, name || agentSnap.id);
+      });
+    }
 
     let authUsers = new Map<string, { email: string | null; name: string | null }>();
 
@@ -201,6 +235,7 @@ export async function GET(req: NextRequest) {
           ...item,
           email,
           name,
+          agentName: item.agentId ? linkedAgents.get(item.agentId) ?? null : null,
           isSelf: item.uid === auth.uid,
           canEdit:
             item.uid !== auth.uid &&
@@ -227,6 +262,7 @@ export async function GET(req: NextRequest) {
         editableRoles: editableRolesFor(auth.role),
       },
       count: users.length,
+      linkedAgentIds: allLinkedAgentIds,
       users,
     });
   } catch (error) {
@@ -234,7 +270,6 @@ export async function GET(req: NextRequest) {
     return json(500, {
       ok: false,
       error: "Impossible de charger les utilisateurs.",
-      details: error instanceof Error ? error.message : String(error),
     });
   }
 }
@@ -257,9 +292,12 @@ export async function POST(req: NextRequest) {
   const email = normalizeEmail(body.email);
   const name = normalizeText(body.name);
   const role = normalizeRole(body.role);
+  const agentId = normalizeText(body.agentId);
 
   if (!email) return bad("Email valide requis.");
   if (!role || !isManagedRole(role)) return bad("Role invalide.");
+  if (role === "agent" && !agentId) return bad("Agent requis pour ce role.");
+  if (role !== "agent" && agentId) return bad("agentId est reserve au role agent.");
 
   const allowedRoles = editableRolesFor(auth.role);
   if (!allowedRoles.includes(role)) {
@@ -323,6 +361,18 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        const previousAgentId = normalizeText(existing?.agentId);
+        const desiredContext = agentId
+          ? await loadAgentLinkContext(tx, auth.tenantId, agentId)
+          : null;
+        const previousContext = previousAgentId && previousAgentId !== agentId
+          ? await loadAgentLinkContext(tx, auth.tenantId, previousAgentId)
+          : null;
+
+        if (desiredContext) {
+          assertAgentCanBeLinked(desiredContext, auth.tenantId, targetUid);
+        }
+
         const now = FieldValue.serverTimestamp();
         const payload = {
           uid: targetUid,
@@ -330,22 +380,32 @@ export async function POST(req: NextRequest) {
           email,
           name: finalName,
           role,
+          agentId,
           status: "active",
           invitedByUid: auth.uid,
           invitedByEmail: auth.email ?? null,
           invitedByName: auth.name ?? null,
           invitedAt: now,
           updatedAt: now,
+          ...(agentId ? { agentId } : {}),
         };
 
         if (existingSnap.exists) {
-          tx.update(userRef, payload);
+          tx.update(userRef, {
+            ...payload,
+            ...(!agentId ? { agentId: FieldValue.delete() } : {}),
+          });
         } else {
           tx.set(userRef, {
             ...payload,
             createdAt: now,
           });
         }
+
+        if (desiredContext) {
+          reserveAgentLink(tx, desiredContext, auth.tenantId, targetUid, auth.uid, now);
+        }
+        releaseAgentLink(tx, previousContext, targetUid);
 
         const auditRef = adminDb
           .collection("tenants")
@@ -360,6 +420,7 @@ export async function POST(req: NextRequest) {
           email,
           name: finalName,
           role,
+          agentId,
           createdAuthUser,
           actor: {
             uid: auth.uid,
@@ -391,7 +452,7 @@ export async function POST(req: NextRequest) {
         handleCodeInApp: false,
       });
     } catch (error) {
-      resetLinkError = error instanceof Error ? error.message : String(error);
+      resetLinkError = "RESET_LINK_UNAVAILABLE";
       console.warn("[users.POST] reset link skipped", error);
     }
 
@@ -411,6 +472,7 @@ export async function POST(req: NextRequest) {
       name: finalName,
       role,
       roleLabel: getRoleLabel(role),
+      agentId,
       createdAuthUser,
       resetLink,
       resetLinkError,
@@ -422,7 +484,7 @@ export async function POST(req: NextRequest) {
     const message = error instanceof Error ? error.message : String(error);
     const code = (error as { code?: string })?.code;
 
-    if (code === "TENANT_MISMATCH" || code === "PROTECTED_ADMIN") {
+    if (["TENANT_MISMATCH", "PROTECTED_ADMIN", "AGENT_NOT_FOUND", "AGENT_TENANT_MISMATCH", "AGENT_INACTIVE", "AGENT_ALREADY_LINKED"].includes(String(code))) {
       return bad(message);
     }
 
@@ -434,7 +496,6 @@ export async function POST(req: NextRequest) {
     return json(500, {
       ok: false,
       error: "Impossible d'inviter cet utilisateur.",
-      details: message,
     });
   }
 }
@@ -460,13 +521,14 @@ export async function PATCH(req: NextRequest) {
     ? String(body.status).trim().toLowerCase()
     : null;
   const reason = normalizeText(body.reason);
+  const requestedAgentId = normalizeText(body.agentId);
 
   if (!uid) return bad("uid requis.");
   if (uid === auth.uid) {
     return bad("Vous ne pouvez pas modifier votre propre accès depuis cet écran.");
   }
 
-  if (!role && !status) return bad("role ou statut requis.");
+  if (!role && !status && body.agentId === undefined) return bad("role, statut ou agentId requis.");
   if (role && !isManagedRole(role)) return bad("Role invalide.");
   if (status && !isManagedStatus(status)) return bad("Statut invalide.");
 
@@ -534,14 +596,54 @@ export async function PATCH(req: NextRequest) {
         }
       }
 
+      const beforeAgentId = normalizeText(before.agentId);
+      const nextAgentId = nextRole === "agent"
+        ? requestedAgentId ?? beforeAgentId
+        : null;
+
+      if (nextRole === "agent" && !nextAgentId) {
+        throw Object.assign(new Error("Agent requis pour ce role."), {
+          code: "AGENT_REQUIRED",
+        });
+      }
+      if (nextRole !== "agent" && requestedAgentId) {
+        throw Object.assign(new Error("agentId est reserve au role agent."), {
+          code: "AGENT_ROLE_MISMATCH",
+        });
+      }
+
+      const desiredContext = nextAgentId
+        ? await loadAgentLinkContext(tx, auth.tenantId, nextAgentId)
+        : null;
+      const previousContext = beforeAgentId && beforeAgentId !== nextAgentId
+        ? await loadAgentLinkContext(tx, auth.tenantId, beforeAgentId)
+        : null;
+
+      if (desiredContext) {
+        assertAgentCanBeLinked(desiredContext, auth.tenantId, uid);
+      }
+
       const patch: Record<string, unknown> = {
         updatedAt: FieldValue.serverTimestamp(),
       };
 
       if (role) patch.role = role;
       if (status) patch.status = status;
+      patch.agentId = nextAgentId ?? FieldValue.delete();
 
       tx.update(targetRef, patch);
+
+      if (desiredContext) {
+        reserveAgentLink(
+          tx,
+          desiredContext,
+          auth.tenantId,
+          uid,
+          auth.uid,
+          patch.updatedAt
+        );
+      }
+      releaseAgentLink(tx, previousContext, uid);
 
       const auditRef = adminDb
         .collection("tenants")
@@ -558,10 +660,12 @@ export async function PATCH(req: NextRequest) {
           status: beforeStatus,
           email: before.email ?? null,
           name: before.name ?? null,
+          agentId: beforeAgentId,
         },
         after: {
           role: role ?? beforeRole,
           status: status ?? beforeStatus,
+          agentId: nextAgentId,
         },
         reason,
         actor: {
@@ -580,6 +684,7 @@ export async function PATCH(req: NextRequest) {
       updated: {
         ...(role ? { role } : {}),
         ...(status ? { status } : {}),
+        agentId: requestedAgentId,
       },
     });
   } catch (error) {
@@ -590,7 +695,13 @@ export async function PATCH(req: NextRequest) {
       code === "NOT_FOUND" ||
       code === "TENANT_MISMATCH" ||
       code === "PROTECTED_ADMIN" ||
-      code === "LAST_ADMIN"
+      code === "LAST_ADMIN" ||
+      code === "AGENT_REQUIRED" ||
+      code === "AGENT_ROLE_MISMATCH" ||
+      code === "AGENT_NOT_FOUND" ||
+      code === "AGENT_TENANT_MISMATCH" ||
+      code === "AGENT_INACTIVE" ||
+      code === "AGENT_ALREADY_LINKED"
     ) {
       return bad(message);
     }
@@ -599,7 +710,6 @@ export async function PATCH(req: NextRequest) {
     return json(500, {
       ok: false,
       error: "Impossible de modifier l'utilisateur.",
-      details: message,
     });
   }
 }

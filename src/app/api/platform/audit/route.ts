@@ -56,7 +56,6 @@ export async function GET(req: NextRequest) {
     return json(500, {
       ok: false,
       error: "Impossible de charger le registre d'audit plateforme.",
-      details: error instanceof Error ? error.message : String(error),
     });
   }
 }
@@ -112,7 +111,6 @@ export async function POST(req: NextRequest) {
     return json(500, {
       ok: false,
       error: "Impossible d'ecrire dans le registre d'audit plateforme.",
-      details: error instanceof Error ? error.message : String(error),
     });
   }
 }

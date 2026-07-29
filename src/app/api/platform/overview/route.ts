@@ -492,7 +492,6 @@ export async function GET(req: NextRequest) {
     return json(500, {
       ok: false,
       error: "Impossible de charger le backoffice SaaS.",
-      details: error instanceof Error ? error.message : String(error),
     });
   }
 }

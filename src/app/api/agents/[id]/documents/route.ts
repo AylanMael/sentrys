@@ -9,19 +9,17 @@ import {
   normalizeAgentProfileField,
   type AgentDocumentItem,
 } from "@/lib/agents/profile";
-import { uploadTenantFile } from "@/lib/uploads/tenant-files";
+import { deleteTenantFile, uploadTenantFile } from "@/lib/uploads/tenant-files";
+import { parseFirebaseStoragePath, secureAgentFileUrl } from "@/lib/uploads/agent-file-access";
+import {
+  hasExpectedFileSignature,
+  isAllowedAgentDocumentMimeType,
+} from "@/lib/uploads/file-validation";
 
 export const runtime = "nodejs";
 
 const MAX_DOCUMENT_SIZE = 12 * 1024 * 1024;
-const ACCEPTED_DOCUMENT_TYPES = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-]);
+
 
 function json(status: number, body: unknown) {
   const res = NextResponse.json(body, { status });
@@ -38,7 +36,7 @@ function text(value: FormDataEntryValue | null) {
 }
 
 function isAcceptedDocument(file: File) {
-  return file.type.startsWith("image/") || ACCEPTED_DOCUMENT_TYPES.has(file.type);
+  return isAllowedAgentDocumentMimeType(file.type);
 }
 
 export async function POST(
@@ -105,8 +103,11 @@ export async function POST(
   const kind = normalizeAgentProfileField(formData.get("kind")) ?? "other";
   const expiresAt = normalizeAgentProfileField(formData.get("expiresAt"));
   const buffer = Buffer.from(await file.arrayBuffer());
+  if (!hasExpectedFileSignature(buffer, file.type)) {
+    return bad("File content does not match its declared type");
+  }
 
-  let uploadResult: { url: string; path: string; storageMode: string };
+  let uploadResult: { path: string; storageMode: string };
   try {
     uploadResult = await uploadTenantFile({
       buffer,
@@ -130,10 +131,12 @@ export async function POST(
     });
   }
 
-  const document: AgentDocumentItem = {
-    id: randomUUID(),
+  const documentId = randomUUID();
+  const storedDocument: AgentDocumentItem = {
+    id: documentId,
     label,
-    url: uploadResult.url,
+    url: "",
+    path: uploadResult.path,
     kind,
     expiresAt,
     fileName: file.name,
@@ -141,25 +144,147 @@ export async function POST(
     size: file.size,
     uploadedAt: new Date().toISOString(),
   };
+  const responseDocument: AgentDocumentItem = {
+    ...storedDocument,
+    url: secureAgentFileUrl(agentId, documentId),
+  };
 
-  const documents = [...previousDocuments, document];
+  try {
+    await adminDb.runTransaction(async (transaction) => {
+      const currentSnap = await transaction.get(agentRef);
+      if (!currentSnap.exists) throw new Error("AGENT_NOT_FOUND");
+      const currentAgent = currentSnap.data() as Record<string, unknown>;
+      if (currentAgent.tenantId !== auth.tenantId) throw new Error("AGENT_NOT_FOUND");
+      const currentProfile =
+        currentAgent.profile && typeof currentAgent.profile === "object"
+          ? (currentAgent.profile as Record<string, unknown>)
+          : {};
+      const currentDocuments = normalizeAgentDocuments(currentProfile.documents);
+      if (currentDocuments.length >= 30) throw new Error("DOCUMENT_LIMIT_REACHED");
 
-  await agentRef.set(
-    {
-      profile: {
-        ...previousProfile,
-        documents,
-      },
-      updatedAt: FieldValue.serverTimestamp(),
-      updatedBy: auth.uid,
-    },
-    { merge: true }
-  );
+      transaction.set(
+        agentRef,
+        {
+          profile: {
+            ...currentProfile,
+            documents: [...currentDocuments, storedDocument],
+          },
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: auth.uid,
+        },
+        { merge: true }
+      );
+    });
+  } catch (error) {
+    try {
+      await deleteTenantFile({ path: uploadResult.path, tenantId: auth.tenantId });
+    } catch (cleanupError) {
+      console.error("[agent-document.POST] rollback cleanup failed", cleanupError);
+    }
+    if ((error as Error).message === "DOCUMENT_LIMIT_REACHED") {
+      return bad("Maximum 30 documents per agent");
+    }
+    if ((error as Error).message === "AGENT_NOT_FOUND") {
+      return json(404, { ok: false, error: "Agent not found" });
+    }
+    console.error("[agent-document.POST] persistence failed", error);
+    return json(500, { ok: false, error: "Impossible d'archiver le document." });
+  }
 
   return json(200, {
     ok: true,
-    document,
+    document: responseDocument,
     path: uploadResult.path,
     storageMode: uploadResult.storageMode,
   });
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireTenantUser(req);
+  if (!auth.ok) return auth.res;
+  if (!canWrite(auth.role)) {
+    return json(403, { ok: false, error: "Action non autorisee." });
+  }
+
+  const { id } = await params;
+  const agentId = String(id ?? "").trim();
+  if (!agentId) return bad("Identifiant agent manquant.");
+
+  let documentId = "";
+  try {
+    const body = (await req.json()) as { documentId?: unknown };
+    documentId = String(body.documentId ?? "").trim();
+  } catch {
+    return bad("Corps JSON invalide.");
+  }
+  if (!documentId) return bad("Identifiant document manquant.");
+
+  const agentRef = adminDb.collection("agents").doc(agentId);
+  try {
+    const result = await adminDb.runTransaction(async (transaction) => {
+      const agentSnap = await transaction.get(agentRef);
+      if (!agentSnap.exists) return { status: "agent-not-found" as const, path: null };
+
+      const agent = agentSnap.data() as Record<string, unknown>;
+      if (agent.tenantId !== auth.tenantId) {
+        return { status: "agent-not-found" as const, path: null };
+      }
+
+      const previousProfile =
+        agent.profile && typeof agent.profile === "object"
+          ? (agent.profile as Record<string, unknown>)
+          : {};
+      const documents = normalizeAgentDocuments(previousProfile.documents);
+      const document = documents.find((item) => item.id === documentId);
+      if (!document) return { status: "document-not-found" as const, path: null };
+
+      transaction.set(
+        agentRef,
+        {
+          profile: {
+            ...previousProfile,
+            documents: documents.filter((item) => item.id !== documentId),
+          },
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: auth.uid,
+        },
+        { merge: true }
+      );
+
+      return {
+        status: "deleted" as const,
+        path: document.path || parseFirebaseStoragePath(document.url),
+      };
+    });
+
+    if (result.status === "agent-not-found") {
+      return json(404, { ok: false, error: "Agent introuvable." });
+    }
+    if (result.status === "document-not-found") {
+      return json(404, { ok: false, error: "Document introuvable." });
+    }
+
+    let storageCleanup = "not-required";
+    if (result.path) {
+      try {
+        await deleteTenantFile({ path: result.path, tenantId: auth.tenantId });
+        storageCleanup = "deleted";
+      } catch (error) {
+        storageCleanup = "pending";
+        console.error("[agent-document.DELETE] storage cleanup failed", {
+          agentId,
+          documentId,
+          error,
+        });
+      }
+    }
+
+    return json(200, { ok: true, documentId, storageCleanup });
+  } catch (error) {
+    console.error("[agent-document.DELETE] failed", { agentId, documentId, error });
+    return json(500, { ok: false, error: "Impossible de supprimer le document." });
+  }
 }

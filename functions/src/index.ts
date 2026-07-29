@@ -56,7 +56,7 @@ export const agentsAvailable = onRequest(async (req, res) => {
       return;
     }
 
-    const decoded = await getAuth().verifyIdToken(token);
+    const decoded = await getAuth().verifyIdToken(token, true);
     const tenantId = (decoded as any)?.tenantId as string | undefined;
     if (!tenantId) {
       json(res, 403, {ok: false, error: "Missing tenantId in token claims"});

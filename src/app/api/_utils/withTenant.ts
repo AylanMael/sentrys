@@ -22,6 +22,7 @@ export type TenantAuth =
       uid: string;
       tenantId: string;
       role: TenantRole;
+      agentId: string | null;
       email: string | null;
       name: string | null;
     }
@@ -132,7 +133,7 @@ export async function requireTenantUser(req: NextRequest): Promise<TenantAuth> {
   if (!token) return { ok: false, res: unauthorized("Missing token") };
 
   try {
-    const decoded = await getAuth().verifyIdToken(token);
+    const decoded = await getAuth().verifyIdToken(token, true);
     const uid = decoded.uid;
 
     let email: string | null =
@@ -184,13 +185,14 @@ export async function requireTenantUser(req: NextRequest): Promise<TenantAuth> {
       uid,
       tenantId,
       role,
+      agentId: normalizeText(tu?.agentId),
       email,
       name,
     };
-  } catch (e: unknown) {
+  } catch {
     return {
       ok: false,
-      res: unauthorized("Invalid token", { details: e instanceof Error ? e.message : String(e) }),
+      res: unauthorized("Invalid token"),
     };
   }
 }

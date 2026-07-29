@@ -21,6 +21,10 @@ import {
   PhoneCall,
   Mail,
   ChevronRight,
+  CheckCircle2,
+  ClipboardCheck,
+  FileWarning,
+  Navigation,
 } from "lucide-react";
 import {
   collection,
@@ -129,6 +133,86 @@ function uniq(arr: string[]) {
 function agentLabel(a: AgentApi) {
   const name = `${a.firstName ?? ""} ${a.lastName ?? ""}`.trim();
   return name || a.email || a.id;
+}
+
+function hasText(value: unknown) {
+  return String(value ?? "").trim().length > 0;
+}
+
+function hasGeo(site: Site) {
+  return Number.isFinite(Number((site as any).latitude)) && Number.isFinite(Number((site as any).longitude));
+}
+
+function siteAddress(site: Site) {
+  return [(site as any).address, (site as any).postalCode, (site as any).city]
+    .filter((value) => hasText(value))
+    .join(" ");
+}
+
+function buildSiteReadiness(input: {
+  site: Site;
+  agentCount: number;
+  contactCount: number;
+}) {
+  const site = input.site;
+  const riskLevel = Number((site as any).riskLevel ?? 0);
+  const items = [
+    {
+      key: "identity",
+      label: "Identite site",
+      ok: hasText((site as any).name) && (hasText((site as any).clientName) || hasText((site as any).clientId)),
+      detail: hasText((site as any).clientName) ? String((site as any).clientName) : "Client a rattacher",
+      action: "Renseigner le client et le nom du site.",
+    },
+    {
+      key: "address",
+      label: "Adresse terrain",
+      ok: hasText(siteAddress(site)),
+      detail: siteAddress(site) || "Adresse absente",
+      action: "Completer adresse, ville et code postal.",
+    },
+    {
+      key: "geo",
+      label: "Pointage GPS",
+      ok: hasGeo(site),
+      detail: hasGeo(site) ? "Coordonnees GPS pretes" : "GPS manquant",
+      action: "Ajouter latitude et longitude pour fiabiliser le pointage.",
+    },
+    {
+      key: "contacts",
+      label: "Urgence client",
+      ok: input.contactCount > 0,
+      detail: input.contactCount > 0 ? input.contactCount + " contact(s)" : "Aucun contact",
+      action: "Ajouter au moins un contact d'urgence client.",
+    },
+    {
+      key: "instructions",
+      label: "Consignes",
+      ok: String((site as any).instructions ?? "").trim().length >= 12,
+      detail: hasText((site as any).instructions) ? "Consignes disponibles" : "Consignes absentes",
+      action: "Ajouter les consignes permanentes du site.",
+    },
+    {
+      key: "team",
+      label: "Equipe connue",
+      ok: input.agentCount > 0,
+      detail: input.agentCount > 0 ? input.agentCount + " agent(s) affecte(s)" : "Aucun agent affecte",
+      action: "Affecter un vivier d'agents habituels.",
+    },
+    {
+      key: "risk",
+      label: "Risque",
+      ok: riskLevel >= 1 && riskLevel <= 5,
+      detail: riskLevel ? "Niveau " + riskLevel : "Non evalue",
+      action: "Qualifier le niveau de risque du site.",
+    },
+  ];
+
+  const done = items.filter((item) => item.ok).length;
+  const score = Math.round((done / items.length) * 100);
+  const nextAction = items.find((item) => !item.ok)?.action ?? "Dossier terrain pret pour exploitation.";
+
+  return { items, done, total: items.length, score, nextAction };
 }
 
 export default function SiteDétailPage() {
@@ -561,6 +645,17 @@ export default function SiteDétailPage() {
 
   const siteAgentIds = safeArr((site as any).agentIds);
   const emergencyContacts = safeEmergencyContacts((site as any).emergencyContacts);
+  const siteReadiness = buildSiteReadiness({
+    site,
+    agentCount: siteAgentIds.length,
+    contactCount: emergencyContacts.length,
+  });
+  const readinessTone =
+    siteReadiness.score >= 85
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : siteReadiness.score >= 60
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-red-200 bg-red-50 text-red-800";
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto pb-12 w-full">
@@ -638,6 +733,105 @@ export default function SiteDétailPage() {
           )}
         </div>
       </div>
+
+      <Card className="overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-white via-slate-50 to-blue-50 shadow-sm">
+        <CardContent className="p-5 md:p-6">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-2xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm">
+                  <ClipboardCheck className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700">
+                    Dossier terrain
+                  </p>
+                  <h2 className="text-xl font-black tracking-tight text-slate-950">
+                    Pret pour exploitation ?
+                  </h2>
+                </div>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Cette lecture rapide indique si le site peut etre planifie, transmis aux agents et gere en incident sans chercher les informations critiques.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border bg-white/85 p-4 shadow-sm xl:min-w-[280px]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                    Completion
+                  </p>
+                  <p className="mt-1 text-3xl font-black text-slate-950">
+                    {siteReadiness.score}%
+                  </p>
+                </div>
+                <Badge className={cn("border px-3 py-1.5", readinessTone)}>
+                  {siteReadiness.done}/{siteReadiness.total} prets
+                </Badge>
+              </div>
+              <div className="mt-4 rounded-2xl border bg-slate-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                  Prochaine action
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-5 text-slate-700">
+                  {siteReadiness.nextAction}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {siteReadiness.items.map((item) => (
+              <div
+                key={item.key}
+                className={cn(
+                  "rounded-3xl border bg-white/85 p-4 shadow-sm",
+                  item.ok ? "border-emerald-100" : "border-amber-200 bg-amber-50/60"
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-950">{item.label}</p>
+                    <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{item.detail}</p>
+                  </div>
+                  {item.ok ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+                  ) : (
+                    <FileWarning className="h-5 w-5 shrink-0 text-amber-600" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="rounded-3xl border bg-white/80 p-4">
+              <MapPin className="h-5 w-5 text-blue-600" />
+              <p className="mt-2 text-sm font-black text-slate-950">Adresse terrain</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                {siteAddress(site) || "Adresse a completer pour interventions, rondes et consignes agent."}
+              </p>
+            </div>
+            <div className="rounded-3xl border bg-white/80 p-4">
+              <Navigation className="h-5 w-5 text-emerald-600" />
+              <p className="mt-2 text-sm font-black text-slate-950">Geolocalisation</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                {hasGeo(site)
+                  ? "GPS pret pour controle de presence et pointage terrain."
+                  : "Ajoutez les coordonnees GPS pour fiabiliser les prises de service."}
+              </p>
+            </div>
+            <div className="rounded-3xl border bg-white/80 p-4">
+              <ShieldAlert className="h-5 w-5 text-amber-600" />
+              <p className="mt-2 text-sm font-black text-slate-950">Risque operationnel</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Niveau {(site as any).riskLevel ?? 3}. Les sites sensibles doivent avoir contacts, consignes et equipe connus.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-1">

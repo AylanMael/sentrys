@@ -379,7 +379,7 @@ export async function POST(req: NextRequest) {
          results.push({ ok: true, id: ref.id });
       }
     } catch (e: any) {
-      results.push({ ok: false, error: e.message });
+      results.push({ ok: false, error: "Internal error" });
     }
   }
 

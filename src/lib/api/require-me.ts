@@ -26,7 +26,7 @@ export async function requireMe(req: NextRequest): Promise<
   }
 
   try {
-    const decoded = await getAuth().verifyIdToken(token);
+    const decoded = await getAuth().verifyIdToken(token, true);
     const uid = decoded.uid;
 
     // tenantUsers/{uid} = source of truth
@@ -64,11 +64,11 @@ export async function requireMe(req: NextRequest): Promise<
     }
 
     return { ok: true, me };
-  } catch (e: unknown) {
+  } catch {
     return {
       ok: false,
       res: NextResponse.json(
-        { ok: false, error: "Invalid token", details: e instanceof Error ? e.message : String(e) },
+        { ok: false, error: "Invalid token" },
         { status: 401 }
       ),
     };

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import {
-  canWrite,
+  isAdminLike,
   requireTenantUser,
 } from "@/app/api/_utils/withTenant";
 import { assignmentDocId } from "@/app/api/vacations/_service";
@@ -12,6 +12,7 @@ import {
   operationSignalStateDocId,
   type OperationSignalStatus,
 } from "@/lib/operations/cockpit-signals";
+import { blockSeedInProduction } from "@/lib/api/seed-guard";
 
 export const runtime = "nodejs";
 
@@ -139,10 +140,13 @@ function vacationSummary(vacation: DemoVacation) {
 }
 
 export async function POST(req: NextRequest) {
+  const productionBlock = blockSeedInProduction();
+  if (productionBlock) return productionBlock;
+
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
 
-  if (!canWrite(auth.role)) {
+  if (!isAdminLike(auth.role)) {
     return json(403, { ok: false, error: "Forbidden" });
   }
 

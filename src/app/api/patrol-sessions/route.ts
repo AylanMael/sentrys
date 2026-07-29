@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     return json(201, { ok: true, id: ref.id });
   } catch (e: any) {
-    return json(500, { ok: false, error: e.message });
+    return json(500, { ok: false, error: "Internal error" });
   }
 }
 
@@ -108,6 +108,6 @@ export async function PATCH(req: NextRequest) {
 
     return json(400, { ok: false, error: "Invalid action" });
   } catch (e: any) {
-    return json(500, { ok: false, error: e.message });
+    return json(500, { ok: false, error: "Internal error" });
   }
 }

@@ -48,34 +48,11 @@ function forbidden(msg = "Forbidden", extra?: any) {
   return json(403, { ok: false, error: msg, ...extra });
 }
 
-function serverError(e: any, tag: string) {
+function serverError(e: unknown, tag: string) {
   console.error(`[${tag}]`, e);
-
-  const details = e?.message ?? String(e);
-  const msg = String(details).toLowerCase();
-
-  const isIndexError =
-    msg.includes("requires an index") ||
-    msg.includes("the query requires an index") ||
-    msg.includes("failed_precondition");
-
-  if (isIndexError) {
-    const indexUrl = extractIndexUrl(e);
-
-    return json(409, {
-      ok: false,
-      error: "Firestore index manquant pour cette requête (vacations).",
-      details,
-      indexUrl,
-      hint:
-        "Crée l’index composite demandé dans Firebase Console (le lien est parfois fourni). Ensuite, recharge le planning.",
-    });
-  }
-
   return json(500, {
     ok: false,
     error: "Internal error",
-    details,
   });
 }
 

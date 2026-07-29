@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
 
     console.error("[set-tenant-user] error", e);
     return NextResponse.json(
-      { ok: false, error: "Internal error", details: e?.message ?? String(e) },
+      { ok: false, error: "Internal error" },
       { status: 500 }
     );
   }

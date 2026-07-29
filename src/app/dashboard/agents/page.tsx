@@ -1,45 +1,36 @@
-// src/app/dashboard/agents/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { apiFetch } from "@/lib/api/client-fetch";
-import { useAuth } from "@/lib/auth-provider";
-import { canManageAgents, normalizeRole } from "@/lib/auth/role";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { computeAgentCompliance } from "@/lib/agents/compliance";
-import { type AgentDocumentItem } from "@/lib/agents/profile";
-import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  Clock3,
-  Grid2X2,
-  List,
+  FileWarning,
   Loader2,
   Mail,
   Phone,
   Plus,
   Search,
-  ShieldCheck,
+  UserRound,
   Users,
   XCircle,
 } from "lucide-react";
+
+import { useAuth } from "@/lib/auth-provider";
+import { canManageAgents, normalizeRole } from "@/lib/auth/role";
+import { apiFetch } from "@/lib/api/client-fetch";
+import { computeAgentCompliance } from "@/lib/agents/compliance";
+import { type AgentDocumentItem } from "@/lib/agents/profile";
+import { SecureAgentPhoto } from "@/components/agents/secure-agent-photo";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+
 
 type Agent = {
   id: string;
@@ -47,7 +38,7 @@ type Agent = {
   lastName?: string | null;
   email?: string | null;
   phone?: string | null;
-  status?: string | null;
+  status?: "active" | "inactive";
   photoUrl?: string | null;
   employeeNumber?: string | null;
   professionalCardNumber?: string | null;
@@ -58,134 +49,110 @@ type Agent = {
   documents?: AgentDocumentItem[];
 };
 
-type AuthUserLike = {
-  role?: string | null;
-} | null;
+type AgentsPageResponse = {
+  ok: boolean;
+  agents?: Agent[];
+  pageInfo?: {
+    pageSize: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
+};
 
-type ViewMode = "grid" | "list";
-
-const PAGE_SIZE_OPTIONS = [12, 25, 50, 100];
+type AuthUserLike = { role?: string | null } | null;
+type StatusFilter = "all" | "active" | "inactive";
 
 function agentName(agent: Agent) {
-  const name = `${agent.firstName ?? ""} ${agent.lastName ?? ""}`.trim();
-  return name || "Agent sans nom";
+  return `${agent.firstName ?? ""} ${agent.lastName ?? ""}`.trim() || "Agent sans nom";
 }
 
-function agentInitials(agent: Agent) {
-  return `${agent.firstName?.charAt(0) || ""}${agent.lastName?.charAt(0) || "?"}`.toUpperCase();
+function initials(agent: Agent) {
+  return `${agent.firstName?.charAt(0) ?? ""}${agent.lastName?.charAt(0) ?? "?"}`.toUpperCase();
 }
 
-function professionalCardLabel(agent: Agent) {
-  if (!agent.professionalCardExpiresAt) return "A vérifier";
-
-  const target = new Date(`${agent.professionalCardExpiresAt}T00:00:00`);
-  if (Number.isNaN(target.getTime())) return "A vérifier";
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const days = Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
-
-  if (days < 0) return "Expiree";
-  if (days <= 60) return `Expire dans ${days} j`;
-  return agent.professionalCardExpiresAt;
+function statusRank(status: ReturnType<typeof computeAgentCompliance>["status"]) {
+  if (status === "blocking") return 0;
+  if (status === "warning") return 1;
+  if (status === "info") return 2;
+  return 3;
 }
 
-function complianceBadgeClass(status: string) {
-  if (status === "blocking") return "border-red-500/30 bg-red-500/10 text-red-700";
-  if (status === "warning") return "border-amber-500/30 bg-amber-500/10 text-amber-700";
-  return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700";
-}
-
-function complianceLabel(status: string) {
+function complianceLabel(status: ReturnType<typeof computeAgentCompliance>["status"]) {
   if (status === "blocking") return "Bloquant";
-  if (status === "warning") return "A compléter";
-  return "Dossier OK";
+  if (status === "warning") return "À compléter";
+  if (status === "info") return "À vérifier";
+  return "Prêt";
 }
 
-function complianceIcon(status: string) {
-  if (status === "blocking") return <AlertTriangle className="h-3 w-3" />;
-  if (status === "warning") return <Clock3 className="h-3 w-3" />;
-  return <CheckCircle2 className="h-3 w-3" />;
+function complianceClass(status: ReturnType<typeof computeAgentCompliance>["status"]) {
+  if (status === "blocking") return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300";
+  if (status === "warning") return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200";
+  if (status === "info") return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
 }
 
-function AgentMetric({
-  label,
-  value,
-  detail,
-  tone = "neutral",
-}: {
-  label: string;
-  value: number;
-  detail: string;
-  tone?: "neutral" | "success" | "warning" | "danger";
-}) {
-  return (
-    <Card
-      className={cn(
-        "rounded-[1.25rem] border shadow-sm",
-        tone === "neutral" && "bg-white dark:bg-slate-950",
-        tone === "success" && "border-emerald-500/20 bg-emerald-500/10",
-        tone === "warning" && "border-amber-500/25 bg-amber-500/10",
-        tone === "danger" && "border-red-500/25 bg-red-500/10"
-      )}
-    >
-      <CardContent className="p-4">
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
-          {label}
-        </p>
-        <p className="mt-1 text-3xl font-black tracking-tight text-foreground">{value}</p>
-        <p className="mt-1 text-xs font-semibold text-muted-foreground">{detail}</p>
-      </CardContent>
-    </Card>
-  );
+function actionLabel(status: ReturnType<typeof computeAgentCompliance>["status"]) {
+  if (status === "blocking") return "Régulariser";
+  if (status === "warning" || status === "info") return "Compléter";
+  return "Ouvrir";
 }
 
 export default function AgentsPage() {
   const { user } = useAuth();
-
   const role = useMemo(
     () => normalizeRole((user as AuthUserLike)?.role) ?? "client",
     [user]
   );
-
   const canWrite = useMemo(() => canManageAgents(role), [role]);
 
-  const [loading, setLoading] = useState(true);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [q, setQ] = useState("");
-  const [qDebounced, setQDebounced] = useState("");
-  const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
   const [pageSize, setPageSize] = useState(25);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [cursorStack, setCursorStack] = useState<Array<string | null>>([null]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+
+  const currentCursor = cursorStack[pageIndex] ?? null;
 
   useEffect(() => {
-    const t = setTimeout(() => setQDebounced(q), 300);
-    return () => clearTimeout(t);
-  }, [q]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [qDebounced, status, viewMode, pageSize]);
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+      setCursorStack([null]);
+      setPageIndex(0);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
+    setError(null);
 
     void (async () => {
-      setLoading(true);
       try {
-        const qs = new URLSearchParams();
-        qs.set("status", status);
-        qs.set("max", "200");
-        if (qDebounced.trim()) qs.set("q", qDebounced.trim());
+        const params = new URLSearchParams({
+          status,
+          pageSize: String(pageSize),
+        });
+        if (debouncedQuery) params.set("q", debouncedQuery);
+        if (currentCursor) params.set("cursor", currentCursor);
 
-        const data = await apiFetch<{ ok: boolean; agents?: Agent[] }>(
-          `/api/agents?${qs.toString()}`
-        );
-
-        if (mounted) {
-          setAgents(data.ok ? (data.agents ?? []) : []);
-        }
+        const response = await apiFetch<AgentsPageResponse>(`/api/agents?${params.toString()}`);
+        if (!mounted) return;
+        setAgents(response.agents ?? []);
+        setNextCursor(response.pageInfo?.nextCursor ?? null);
+        setHasMore(Boolean(response.pageInfo?.hasMore && response.pageInfo.nextCursor));
+      } catch {
+        if (!mounted) return;
+        setAgents([]);
+        setNextCursor(null);
+        setHasMore(false);
+        setError("Impossible de charger les agents. Réessayez dans quelques instants.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -194,467 +161,208 @@ export default function AgentsPage() {
     return () => {
       mounted = false;
     };
-  }, [qDebounced, status]);
+  }, [currentCursor, debouncedQuery, pageSize, status]);
 
-  const countActive = useMemo(
-    () => agents.filter((a) => a.status === "active").length,
+  const operationalAgents = useMemo(
+    () =>
+      [...agents].sort((left, right) => {
+        const priority =
+          statusRank(computeAgentCompliance(left).status) -
+          statusRank(computeAgentCompliance(right).status);
+        return priority || agentName(left).localeCompare(agentName(right), "fr");
+      }),
     [agents]
   );
-  const countInactive = Math.max(0, agents.length - countActive);
 
-  const complianceSummary = useMemo(() => {
-    return agents.reduce(
-      (acc, agent) => {
-        const compliance = computeAgentCompliance(agent);
-        if (compliance.status === "blocking") acc.blocking += 1;
-        else if (compliance.status === "warning") acc.warning += 1;
-        else acc.ok += 1;
-        return acc;
-      },
-      { ok: 0, warning: 0, blocking: 0 }
-    );
-  }, [agents]);
+  const summary = useMemo(
+    () =>
+      agents.reduce(
+        (result, agent) => {
+          const compliance = computeAgentCompliance(agent);
+          if (compliance.status === "blocking") result.blocking += 1;
+          else if (compliance.status === "warning" || compliance.status === "info") result.attention += 1;
+          else result.ready += 1;
+          return result;
+        },
+        { blocking: 0, attention: 0, ready: 0 }
+      ),
+    [agents]
+  );
 
-  const hasFilters = Boolean(q.trim()) || status !== "all";
-  const totalPages = Math.max(1, Math.ceil(agents.length / pageSize));
-  const safePage = Math.min(currentPage, totalPages);
-  const pageStart = agents.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const pageEnd = Math.min(safePage * pageSize, agents.length);
-
-  const paginatedAgents = useMemo(() => {
-    const start = (safePage - 1) * pageSize;
-    return agents.slice(start, start + pageSize);
-  }, [agents, pageSize, safePage]);
-
-  function goToPage(page: number) {
-    setCurrentPage(Math.min(Math.max(page, 1), totalPages));
+  function changeStatus(nextStatus: StatusFilter) {
+    setStatus(nextStatus);
+    setCursorStack([null]);
+    setPageIndex(0);
   }
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-700 pb-10 w-full">
-      <div className="relative overflow-hidden rounded-[1.75rem] border bg-white p-5 shadow-sm ring-1 ring-black/5 dark:bg-slate-950">
-        <div className="pointer-events-none absolute right-[-5rem] top-[-7rem] h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+  function changePageSize(nextPageSize: number) {
+    setPageSize(nextPageSize);
+    setCursorStack([null]);
+    setPageIndex(0);
+  }
 
-        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="rounded-2xl bg-primary/10 p-3 text-primary ring-1 ring-primary/15">
-              <ShieldCheck className="h-6 w-6" />
+  function nextPage() {
+    if (!nextCursor || !hasMore) return;
+    setCursorStack((current) => [...current.slice(0, pageIndex + 1), nextCursor]);
+    setPageIndex((current) => current + 1);
+  }
+
+  function previousPage() {
+    if (pageIndex <= 0) return;
+    setPageIndex((current) => current - 1);
+  }
+
+  const hasFilters = Boolean(query.trim()) || status !== "all";
+
+  return (
+    <div className="w-full space-y-6 pb-10 animate-in fade-in duration-500">
+      <header className="rounded-[1.75rem] border bg-card p-5 shadow-sm md:p-7">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="rounded-2xl bg-primary/10 p-3 text-primary">
+              <Users className="h-6 w-6" />
             </div>
             <div>
-              <Badge
-                variant="outline"
-                className="rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-primary"
-              >
-                Vivier terrain
-              </Badge>
-              <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground">
-                Agents
-              </h1>
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                Visualisez les agents, leur conformité, leurs contacts et les dossiers à traiter.
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-primary">Vivier opérationnel</p>
+              <h1 className="mt-1 text-3xl font-black tracking-tight">Agents</h1>
+              <p className="mt-1 text-sm font-medium text-muted-foreground">
+                Les dossiers nécessitant une action apparaissent en premier sur chaque page.
               </p>
             </div>
           </div>
-
           {canWrite && (
-            <Button asChild className="h-11 rounded-xl px-5 font-black shadow-sm">
+            <Button asChild className="h-11 rounded-xl px-5 font-black">
               <Link href="/dashboard/agents/new">
-                <Plus className="mr-2 h-5 w-5" />
+                <Plus className="mr-2 h-4 w-4" />
                 Ajouter un agent
               </Link>
             </Button>
           )}
         </div>
-      </div>
+      </header>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <AgentMetric label="Agents filtres" value={agents.length} detail="Vivier courant" />
-        <AgentMetric label="Actifs" value={countActive} detail={`${countInactive} inactif(s)`} tone="success" />
-        <AgentMetric label="A compléter" value={complianceSummary.warning} detail="Dossiers a surveiller" tone="warning" />
-        <AgentMetric label="Bloquants" value={complianceSummary.blocking} detail="Non affectables" tone={complianceSummary.blocking > 0 ? "danger" : "success"} />
-      </div>
+      <section className="grid gap-3 sm:grid-cols-3">
+        <Card className="rounded-2xl border-red-500/20 bg-red-500/5"><CardContent className="flex items-center justify-between p-4"><div><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Bloquants</p><p className="mt-1 text-2xl font-black">{summary.blocking}</p></div><AlertTriangle className="h-6 w-6 text-red-600" /></CardContent></Card>
+        <Card className="rounded-2xl border-amber-500/20 bg-amber-500/5"><CardContent className="flex items-center justify-between p-4"><div><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">À traiter</p><p className="mt-1 text-2xl font-black">{summary.attention}</p></div><FileWarning className="h-6 w-6 text-amber-600" /></CardContent></Card>
+        <Card className="rounded-2xl border-emerald-500/20 bg-emerald-500/5"><CardContent className="flex items-center justify-between p-4"><div><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Prêts</p><p className="mt-1 text-2xl font-black">{summary.ready}</p></div><CheckCircle2 className="h-6 w-6 text-emerald-600" /></CardContent></Card>
+      </section>
+      <p className="-mt-3 text-xs font-medium text-muted-foreground">Indicateurs de la page courante.</p>
 
-      <Card className="overflow-hidden rounded-[1.5rem] border bg-background shadow-sm ring-1 ring-black/5">
-        <div className="flex flex-col gap-4 border-b border-border/50 bg-muted/10 p-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="relative w-full xl:max-w-md">
-            <Search className="h-5 w-5 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      <Card className="overflow-hidden rounded-[1.75rem] shadow-sm">
+        <div className="flex flex-col gap-4 border-b bg-muted/15 p-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative w-full xl:max-w-xl">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Rechercher nom, email, tel, matricule..."
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="pl-12 h-12 rounded-2xl bg-card border-border/50 font-medium text-base shadow-sm focus-visible:ring-primary/30"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Rechercher par nom, téléphone, email ou matricule"
+              className="h-12 rounded-xl pl-11"
             />
           </div>
-
-          <div className="flex w-full flex-col gap-3 xl:w-auto xl:flex-row xl:items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex rounded-xl border bg-background p-1">
+              {(["all", "active", "inactive"] as const).map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  variant={status === value ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => changeStatus(value)}
+                  className="flex-1 rounded-lg px-4 font-bold sm:flex-none"
+                >
+                  {value === "all" ? "Tous" : value === "active" ? "Actifs" : "Inactifs"}
+                </Button>
+              ))}
+            </div>
+            <select
+              aria-label="Nombre d’agents par page"
+              value={pageSize}
+              onChange={(event) => changePageSize(Number(event.target.value))}
+              className="h-10 rounded-xl border bg-background px-3 text-sm font-bold"
+            >
+              <option value={25}>25 par page</option>
+              <option value={50}>50 par page</option>
+              <option value={100}>100 par page</option>
+            </select>
             {hasFilters && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setQ("");
-                  setQDebounced("");
-                  setStatus("all");
-                }}
-                className="h-10 rounded-xl font-black"
-              >
-                <XCircle className="mr-2 h-4 w-4" />
-                Reinitialiser
+              <Button type="button" variant="outline" onClick={() => { setQuery(""); changeStatus("all"); }} className="rounded-xl font-bold">
+                <XCircle className="mr-2 h-4 w-4" /> Réinitialiser
               </Button>
             )}
-            <div className="flex p-1 bg-muted/50 rounded-xl border">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setStatus("all")}
-                className={cn(
-                  "h-10 flex-1 px-5 rounded-lg text-xs font-semibold transition-all xl:flex-none",
-                  status === "all"
-                    ? "bg-background shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Tous
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setStatus("active")}
-                className={cn(
-                  "h-10 flex-1 px-5 rounded-lg text-xs font-semibold transition-all xl:flex-none",
-                  status === "active"
-                    ? "bg-background shadow-sm text-green-600"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Actifs
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setStatus("inactive")}
-                className={cn(
-                  "h-10 flex-1 px-5 rounded-lg text-xs font-semibold transition-all xl:flex-none",
-                  status === "inactive"
-                    ? "bg-background shadow-sm text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Inactifs
-              </Button>
-            </div>
-
-            <div className="flex p-1 bg-muted/50 rounded-xl border">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setViewMode("grid")}
-                className={cn(
-                  "h-10 flex-1 px-4 rounded-lg text-xs font-semibold xl:flex-none",
-                  viewMode === "grid" ? "bg-background shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                <Grid2X2 className="mr-2 h-4 w-4" />
-                Grille
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setViewMode("list")}
-                className={cn(
-                  "h-10 flex-1 px-4 rounded-lg text-xs font-semibold xl:flex-none",
-                  viewMode === "list" ? "bg-background shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                <List className="mr-2 h-4 w-4" />
-                Liste
-              </Button>
-            </div>
           </div>
         </div>
 
-        <CardContent className="p-4 md:p-5">
+        <CardContent className="p-0">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-              <p className="text-xs font-semibold uppercase tracking-widest">
-                Recherche des profils...
-              </p>
+            <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="h-7 w-7 animate-spin text-primary" />
+              <p className="text-sm font-semibold">Chargement des agents…</p>
             </div>
-          ) : agents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center px-4 border-2 border-dashed border-border/50 rounded-[2rem]">
-              <div className="bg-muted p-6 rounded-full mb-4">
-                <Users className="h-10 w-10 text-muted-foreground/50" />
-              </div>
-              <h3 className="text-xl font-semibold text-foreground">
-                Aucun agent trouve
-              </h3>
-              <p className="text-sm text-muted-foreground mt-2 max-w-sm mb-6">
-                Essayez de modifier vos filtres ou ajoutez un nouveau profil a votre equipe.
-              </p>
-              {canWrite && (
-                <Button asChild variant="outline" className="rounded-xl font-semibold">
-                  <Link href="/dashboard/agents/new">Créer le premier agent</Link>
-                </Button>
-              )}
+          ) : error ? (
+            <div className="m-5 rounded-2xl border border-red-500/20 bg-red-500/5 p-8 text-center">
+              <AlertTriangle className="mx-auto h-7 w-7 text-red-600" />
+              <p className="mt-3 font-bold">{error}</p>
+            </div>
+          ) : operationalAgents.length === 0 ? (
+            <div className="m-5 rounded-2xl border border-dashed p-12 text-center">
+              <UserRound className="mx-auto h-9 w-9 text-muted-foreground" />
+              <h2 className="mt-3 text-lg font-black">Aucun agent trouvé</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Modifiez la recherche ou les filtres pour élargir les résultats.</p>
             </div>
           ) : (
-            <div className="space-y-5">
-              <div className="flex flex-col gap-3 rounded-2xl border bg-muted/15 p-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm font-black text-foreground">
-                    {pageStart}-{pageEnd} sur {agents.length} agent(s)
-                  </p>
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Vue {viewMode === "grid" ? "grille" : "liste"} avec pagination locale.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">
-                    Lignes
-                  </span>
-                  {PAGE_SIZE_OPTIONS.map((size) => (
-                    <Button
-                      key={size}
-                      type="button"
-                      variant={pageSize === size ? "default" : "outline"}
-                      size="sm"
-                      className="h-9 rounded-xl font-black"
-                      onClick={() => setPageSize(size)}
-                    >
-                      {size}
-                    </Button>
-                  ))}
-                </div>
+            <>
+              <div className="hidden overflow-x-auto md:block">
+                <Table>
+                  <TableHeader><TableRow className="bg-muted/30"><TableHead className="pl-6">Agent</TableHead><TableHead>État opérationnel</TableHead><TableHead>Action prioritaire</TableHead><TableHead>Contact</TableHead><TableHead className="pr-6 text-right">Dossier</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {operationalAgents.map((agent) => {
+                      const compliance = computeAgentCompliance(agent);
+                      const alert = compliance.alerts[0] ?? null;
+                      return (
+                        <TableRow key={agent.id}>
+                          <TableCell className="pl-6">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-muted font-black">
+                                {agent.photoUrl ? <SecureAgentPhoto src={agent.photoUrl} alt={`Photo ${agentName(agent)}`} className="h-full w-full object-cover" fallback={initials(agent)} /> : initials(agent)}
+                              </div>
+                              <div><p className="font-black">{agentName(agent)}</p><p className="text-xs text-muted-foreground">{agent.employeeNumber || "Sans matricule"} · {agent.status === "inactive" ? "Inactif" : "Actif"}</p></div>
+                            </div>
+                          </TableCell>
+                          <TableCell><Badge variant="outline" className={cn("font-black", complianceClass(compliance.status))}>{complianceLabel(compliance.status)}</Badge><p className="mt-1 text-xs text-muted-foreground">Dossier {compliance.completeness}%</p></TableCell>
+                          <TableCell><p className="max-w-xs font-bold">{alert?.title ?? "Aucune anomalie majeure"}</p><p className="mt-1 max-w-sm truncate text-xs text-muted-foreground">{alert?.detail ?? "L’agent peut être utilisé dans le planning."}</p></TableCell>
+                          <TableCell><p className="flex items-center gap-2 text-sm"><Phone className="h-3.5 w-3.5" />{agent.phone || "Non renseigné"}</p><p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><Mail className="h-3.5 w-3.5" />{agent.email || "Non renseigné"}</p></TableCell>
+                          <TableCell className="pr-6 text-right"><Button asChild size="sm" variant={compliance.status === "blocking" ? "default" : "outline"} className="rounded-xl font-black"><Link href={`/dashboard/agents/${agent.id}`}>{actionLabel(compliance.status)}<ChevronRight className="ml-1 h-4 w-4" /></Link></Button></TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
 
-              {viewMode === "grid" ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {paginatedAgents.map((a) => {
-                    const compliance = computeAgentCompliance(a);
-                    const firstAlert = compliance.alerts[0] ?? null;
-
-                    return (
-                      <Link key={a.id} href={`/dashboard/agents/${a.id}`} className="group block">
-                        <div className="flex h-full flex-col rounded-[1.35rem] border border-border/60 bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20 hover:shadow-md">
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center gap-4">
-                              <div
-                                className={cn(
-                                  "h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105 overflow-hidden",
-                                  a.status === "active"
-                                    ? "bg-primary/10 border-primary/20 text-primary"
-                                    : "bg-muted border-border text-muted-foreground"
-                                )}
-                              >
-                                {a.photoUrl ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={a.photoUrl}
-                                    alt={`Photo ${agentName(a)}`}
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="font-bold text-sm tracking-widest">
-                                    {agentInitials(a)}
-                                  </span>
-                                )}
-                              </div>
-                              <div>
-                                <h3 className="font-semibold text-base text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                                  {agentName(a)}
-                                </h3>
-                                <Badge
-                                  variant={a.status === "active" ? "default" : "secondary"}
-                                  className={cn(
-                                    "mt-1 px-2 py-0 h-5 text-[9px] font-semibold uppercase tracking-wider",
-                                    a.status === "active"
-                                      ? "bg-green-500/10 text-green-700 border-transparent"
-                                      : "opacity-60"
-                                  )}
-                                >
-                                  {a.status === "active" ? "Actif" : "Inactif"}
-                                </Badge>
-                              </div>
-                            </div>
-                            <div className="h-8 w-8 rounded-full bg-background border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0">
-                              <ChevronRight className="h-4 w-4 text-primary" />
-                            </div>
-                          </div>
-
-                          <div className="mb-4 rounded-2xl border bg-muted/15 p-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "gap-1.5 text-[10px] font-black uppercase tracking-[0.14em]",
-                                  complianceBadgeClass(compliance.status)
-                                )}
-                              >
-                                {complianceIcon(compliance.status)}
-                                {complianceLabel(compliance.status)}
-                              </Badge>
-                              <span className="text-xs font-black text-muted-foreground">
-                                {compliance.completeness}%
-                              </span>
-                            </div>
-                            {firstAlert && (
-                              <p className="mt-2 line-clamp-1 text-xs font-medium text-muted-foreground">
-                                {firstAlert.title}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="mt-auto space-y-2 pt-4 border-t border-border/50">
-                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                              <Mail className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                              <span className="truncate">{a.email || "Aucun email"}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                              <Phone className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                              <span className="truncate">{a.phone || "Aucun telephone"}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="overflow-hidden rounded-[1.35rem] border bg-card">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/35 hover:bg-muted/35">
-                        <TableHead className="min-w-[260px] pl-6 font-black uppercase tracking-[0.12em]">Agent</TableHead>
-                        <TableHead className="font-black uppercase tracking-[0.12em]">Statut</TableHead>
-                        <TableHead className="font-black uppercase tracking-[0.12em]">Conformité</TableHead>
-                        <TableHead className="font-black uppercase tracking-[0.12em]">Carte pro</TableHead>
-                        <TableHead className="font-black uppercase tracking-[0.12em]">Contact</TableHead>
-                        <TableHead className="pr-6 text-right font-black uppercase tracking-[0.12em]">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedAgents.map((a) => {
-                        const compliance = computeAgentCompliance(a);
-                        const firstAlert = compliance.alerts[0] ?? null;
-
-                        return (
-                          <TableRow key={a.id} className="group">
-                            <TableCell className="pl-6">
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className={cn(
-                                    "flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border font-black tracking-widest",
-                                    a.status === "active"
-                                      ? "border-primary/20 bg-primary/10 text-primary"
-                                      : "border-border bg-muted text-muted-foreground"
-                                  )}
-                                >
-                                  {a.photoUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={a.photoUrl} alt={`Photo ${agentName(a)}`} className="h-full w-full object-cover" />
-                                  ) : (
-                                    agentInitials(a)
-                                  )}
-                                </div>
-                                <div>
-                                  <p className="font-black text-foreground">{agentName(a)}</p>
-                                  <p className="text-xs font-medium text-muted-foreground">
-                                    {a.employeeNumber || "Matricule non renseigné"}
-                                  </p>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={a.status === "active" ? "default" : "secondary"}
-                                className={cn(
-                                  "font-black uppercase tracking-[0.12em]",
-                                  a.status === "active"
-                                    ? "bg-green-500/10 text-green-700 hover:bg-green-500/10"
-                                    : "opacity-70"
-                                )}
-                              >
-                                {a.status === "active" ? "Actif" : "Inactif"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <Badge variant="outline" className={cn("gap-1.5 font-black", complianceBadgeClass(compliance.status))}>
-                                  {complianceIcon(compliance.status)}
-                                  {complianceLabel(compliance.status)}
-                                </Badge>
-                                <p className="text-xs font-medium text-muted-foreground">
-                                  {compliance.completeness}% {firstAlert ? `- ${firstAlert.title}` : "- Pret"}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1 text-sm">
-                                <p className="font-bold text-foreground">
-                                  {a.professionalCardNumber || "Numéro absent"}
-                                </p>
-                                <p className="text-xs font-medium text-muted-foreground">
-                                  {professionalCardLabel(a)}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1 text-xs font-medium text-muted-foreground">
-                                <p className="flex items-center gap-2">
-                                  <Mail className="h-3.5 w-3.5" />
-                                  <span className="max-w-[180px] truncate">{a.email || "Aucun email"}</span>
-                                </p>
-                                <p className="flex items-center gap-2">
-                                  <Phone className="h-3.5 w-3.5" />
-                                  <span>{a.phone || "Aucun telephone"}</span>
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell className="pr-6 text-right">
-                              <Button asChild size="sm" className="rounded-xl font-black">
-                                <Link href={`/dashboard/agents/${a.id}`}>
-                                  Ouvrir
-                                  <ChevronRight className="h-4 w-4" />
-                                </Link>
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-3 rounded-2xl border bg-muted/15 p-4 md:flex-row md:items-center md:justify-between">
-                <p className="text-sm font-semibold text-muted-foreground">
-                  Page {safePage} sur {totalPages} - {pageStart}-{pageEnd} / {agents.length}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" size="icon" className="rounded-xl" disabled={safePage <= 1} onClick={() => goToPage(1)}>
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-                  <Button type="button" variant="outline" size="icon" className="rounded-xl" disabled={safePage <= 1} onClick={() => goToPage(safePage - 1)}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <div className="min-w-24 rounded-xl border bg-background px-4 py-2 text-center text-sm font-black">
-                    {safePage} / {totalPages}
-                  </div>
-                  <Button type="button" variant="outline" size="icon" className="rounded-xl" disabled={safePage >= totalPages} onClick={() => goToPage(safePage + 1)}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button type="button" variant="outline" size="icon" className="rounded-xl" disabled={safePage >= totalPages} onClick={() => goToPage(totalPages)}>
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
-                </div>
+              <div className="divide-y md:hidden">
+                {operationalAgents.map((agent) => {
+                  const compliance = computeAgentCompliance(agent);
+                  const alert = compliance.alerts[0] ?? null;
+                  return (
+                    <div key={agent.id} className="space-y-3 p-5">
+                      <div className="flex items-start justify-between gap-3"><div><p className="font-black">{agentName(agent)}</p><p className="text-xs text-muted-foreground">{agent.employeeNumber || "Sans matricule"}</p></div><Badge variant="outline" className={cn("font-black", complianceClass(compliance.status))}>{complianceLabel(compliance.status)}</Badge></div>
+                      <div className="rounded-xl bg-muted/30 p-3"><p className="text-sm font-bold">{alert?.title ?? "Aucune anomalie majeure"}</p><p className="mt-1 text-xs text-muted-foreground">{alert?.detail ?? "L’agent peut être utilisé dans le planning."}</p></div>
+                      <Button asChild className="w-full rounded-xl font-black" variant={compliance.status === "blocking" ? "default" : "outline"}><Link href={`/dashboard/agents/${agent.id}`}>{actionLabel(compliance.status)}<ChevronRight className="ml-1 h-4 w-4" /></Link></Button>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            </>
           )}
         </CardContent>
+
+        <footer className="flex flex-col gap-3 border-t bg-muted/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-muted-foreground">Page {pageIndex + 1} · {agents.length} agent{agents.length > 1 ? "s" : ""} affiché{agents.length > 1 ? "s" : ""}</p>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={previousPage} disabled={loading || pageIndex === 0} className="flex-1 rounded-xl font-bold sm:flex-none"><ChevronLeft className="mr-1 h-4 w-4" />Précédent</Button>
+            <Button type="button" variant="outline" onClick={nextPage} disabled={loading || !hasMore} className="flex-1 rounded-xl font-bold sm:flex-none">Suivant<ChevronRight className="ml-1 h-4 w-4" /></Button>
+          </div>
+        </footer>
       </Card>
     </div>
   );

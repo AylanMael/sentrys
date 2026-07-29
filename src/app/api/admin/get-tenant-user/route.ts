@@ -45,9 +45,8 @@ export async function GET(req: NextRequest) {
     });
   } catch (e: unknown) {
     console.error("[get-tenant-user] error", e);
-    const details = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
-      { ok: false, error: "Internal error", details },
+      { ok: false, error: "Internal error" },
       { status: 500 }
     );
   }

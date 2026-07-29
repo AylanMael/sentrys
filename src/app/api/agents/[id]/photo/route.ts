@@ -4,6 +4,11 @@ import { FieldValue } from "firebase-admin/firestore";
 import { canWrite, requireTenantUser } from "@/app/api/_utils/withTenant";
 import { adminDb } from "@/lib/firebase/admin";
 import { uploadTenantFile } from "@/lib/uploads/tenant-files";
+import { secureAgentFileUrl } from "@/lib/uploads/agent-file-access";
+import {
+  hasExpectedFileSignature,
+  isAllowedAgentPhotoMimeType,
+} from "@/lib/uploads/file-validation";
 
 export const runtime = "nodejs";
 
@@ -57,7 +62,7 @@ export async function POST(
     return bad("file is required");
   }
 
-  if (!file.type.startsWith("image/")) {
+  if (!isAllowedAgentPhotoMimeType(file.type)) {
     return bad("Only image files are accepted");
   }
 
@@ -71,7 +76,10 @@ export async function POST(
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-  let uploadResult: { url: string; path: string; storageMode: string };
+  if (!hasExpectedFileSignature(buffer, file.type)) {
+    return bad("File content does not match its declared type");
+  }
+  let uploadResult: { path: string; storageMode: string };
 
   try {
     uploadResult = await uploadTenantFile({
@@ -95,7 +103,8 @@ export async function POST(
     });
   }
 
-  const photoUrl = uploadResult.url;
+  const photoUrl = secureAgentFileUrl(agentId, "photo");
+  const photoPath = uploadResult.path;
   const previousProfile =
     agent.profile && typeof agent.profile === "object"
       ? (agent.profile as Record<string, unknown>)
@@ -105,7 +114,8 @@ export async function POST(
     {
       profile: {
         ...previousProfile,
-        photoUrl,
+        photoUrl: null,
+        photoPath,
       },
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: auth.uid,

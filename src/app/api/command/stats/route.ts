@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     }
 
     const token = authHeader.split(" ")[1];
-    const decodedToken = await adminAuth.verifyIdToken(token);
+    const decodedToken = await adminAuth.verifyIdToken(token, true);
     const uid = decodedToken.uid;
 
     // Identifer le tenant
@@ -53,8 +53,8 @@ export async function GET(req: NextRequest) {
       activePatrols,
       incidents
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Command Stats Error:", error);
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });
   }
 }

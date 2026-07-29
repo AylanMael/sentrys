@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
     return json(200, { ok: true, patrols });
   } catch (e: any) {
-    return json(500, { ok: false, error: e.message });
+    return json(500, { ok: false, error: "Internal error" });
   }
 }
 
@@ -63,6 +63,6 @@ export async function POST(req: NextRequest) {
 
     return json(201, { ok: true, id: ref.id });
   } catch (e: any) {
-    return json(500, { ok: false, error: e.message });
+    return json(500, { ok: false, error: "Internal error" });
   }
 }

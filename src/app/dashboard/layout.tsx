@@ -18,6 +18,7 @@ import {
   MapPin,
   CreditCard,
   CalendarDays,
+  ClipboardList,
   User,
   LifeBuoy,
   Activity,
@@ -354,6 +355,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       "/dashboard/settings",
       "/dashboard/clients",
       "/dashboard/sites",
+      "/dashboard/commandes",
       "/dashboard/users",
       "/dashboard/pending",
       "/dashboard/rejected",
@@ -454,6 +456,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             ? [{ href: "/dashboard/agent-planning", icon: Bell, label: "Mes diffusions" }]
             : []),
           { href: "/dashboard/planning", icon: CalendarDays, label: "Planning" },
+          { href: "/dashboard/commandes", icon: ClipboardList, label: "Commandes clients" },
           { href: "/dashboard/prepaie", icon: Calculator, label: "Pré-paie" },
           { href: "/dashboard/vacations", icon: CalendarClock, label: "Vacations" },
           { href: "/dashboard/patrols", icon: Activity, label: "Rondes" },

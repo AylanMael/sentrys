@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("[ai/magic-fill] Error:", error);
     return NextResponse.json(
-      { ok: false, error: error.message || "Internal Genkit Error" },
+      { ok: false, error: "Internal error" },
       { status: 500 }
     );
   }

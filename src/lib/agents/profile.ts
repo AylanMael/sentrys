@@ -50,6 +50,7 @@ export type AgentEquipmentItem = {
 };
 export type AgentProfileFields = {
   photoUrl?: string | null;
+  photoPath?: string | null;
   employeeNumber?: string | null;
   birthDate?: string | null;
   addressLine1?: string | null;
@@ -68,6 +69,7 @@ export type AgentDocumentItem = {
   id: string;
   label: string;
   url: string;
+  path?: string | null;
   kind: string | null;
   expiresAt: string | null;
   fileName?: string | null;
@@ -106,6 +108,7 @@ export function normalizeAgentDocuments(value: unknown): AgentDocumentItem[] {
         `${Date.now().toString(36)}-${index}`,
       label: normalizeAgentProfileField(item.label) ?? "Document",
       url: normalizeAgentProfileField(item.url) ?? "",
+      path: normalizeAgentProfileField(item.path),
       kind: normalizeAgentProfileField(item.kind),
       expiresAt: normalizeAgentProfileField(item.expiresAt),
       fileName: normalizeAgentProfileField(item.fileName),
@@ -116,7 +119,7 @@ export function normalizeAgentDocuments(value: unknown): AgentDocumentItem[] {
           : null,
       uploadedAt: normalizeAgentProfileField(item.uploadedAt),
     }))
-    .filter((item) => item.url.length > 0)
+    .filter((item) => item.url.length > 0 || Boolean(item.path))
     .slice(0, 30);
 }
 export function normalizeAgentEquipmentItems(value: unknown): AgentEquipmentItem[] {

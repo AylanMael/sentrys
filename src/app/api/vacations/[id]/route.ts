@@ -58,7 +58,6 @@ function serverError(e: any, tag: string, extra?: any) {
   return json(500, {
     ok: false,
     error: "Internal error",
-    details: e?.message ?? String(e),
     ...(extra ? { extra } : {}),
   });
 }

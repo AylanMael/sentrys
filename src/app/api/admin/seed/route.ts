@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/api/admin-auth";
 import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { blockSeedInProduction } from "@/lib/api/seed-guard";
 
 export const runtime = "nodejs";
 
@@ -10,6 +11,9 @@ function bad(msg: string, extra?: Record<string, unknown>) {
 }
 
 export async function POST(req: NextRequest) {
+  const productionBlock = blockSeedInProduction();
+  if (productionBlock) return productionBlock;
+
   let body: { tenantId?: string } = {};
   try {
     body = (await req.json()) as { tenantId?: string };
@@ -122,7 +126,7 @@ export async function POST(req: NextRequest) {
   } catch (e: unknown) {
     console.error("[seed] error", e);
     return NextResponse.json(
-      { ok: false, error: "Internal error", details: e instanceof Error ? e.message : String(e) },
+      { ok: false, error: "Internal error" },
       { status: 500 }
     );
   }

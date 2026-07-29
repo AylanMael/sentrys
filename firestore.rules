@@ -56,6 +56,15 @@ service cloud.firestore {
     function isClient() {
       return hasTU() && myRole() == "client";
     }
+    function myAgentId() {
+      return hasTU() && ("agentId" in tu().data)
+        ? tu().data.agentId
+        : uid();
+    }
+
+    function isOwnAgent(agentId) {
+      return isAgent() && myAgentId() == agentId;
+    }
 
     function canReadBackoffice() {
       return hasTU() && myRole() in ["super_admin", "owner", "admin", "manager", "viewer"];
@@ -228,8 +237,8 @@ service cloud.firestore {
 
       allow read: if sameTenantResource()
         && (
-          canReadBackoffice()
-          || isAgent()
+          canManagePlanning()
+          || isOwnAgent(id)
         );
 
       allow update: if canManagePlanning()

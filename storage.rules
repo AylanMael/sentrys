@@ -6,14 +6,79 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function userTenantId() {
-      return firestore.get(
-        /databases/(default)/documents/tenantUsers/$(request.auth.uid)
-      ).data.tenantId;
+    function tenantUserPath() {
+      return /databases/(default)/documents/tenantUsers/$(request.auth.uid);
     }
 
-    match /tenants/{tenantId}/agents/{agentId}/{allPaths=**} {
-      allow read, write: if signedIn() && userTenantId() == tenantId;
+    function hasActiveTenantUser() {
+      return signedIn()
+        && firestore.exists(tenantUserPath())
+        && firestore.get(tenantUserPath()).data.status == "active";
+    }
+
+    function tenantUser() {
+      return firestore.get(tenantUserPath()).data;
+    }
+
+    function belongsToTenant(tenantId) {
+      return hasActiveTenantUser()
+        && tenantUser().tenantId == tenantId;
+    }
+
+    function isTenantDocumentManager(tenantId) {
+      return belongsToTenant(tenantId)
+        && tenantUser().role in ["super_admin", "owner", "admin", "manager"];
+    }
+
+    function isOwnAgentRecord(tenantId, agentId) {
+      return belongsToTenant(tenantId)
+        && tenantUser().role == "agent"
+        && (
+          request.auth.uid == agentId
+          || (
+            "agentId" in tenantUser()
+            && tenantUser().agentId == agentId
+          )
+        );
+    }
+
+    function canAccessAgentFiles(tenantId, agentId) {
+      return isTenantDocumentManager(tenantId)
+        || isOwnAgentRecord(tenantId, agentId);
+    }
+
+    function isAllowedPhoto() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches("image/(jpeg|png|webp)");
+    }
+
+    function isAllowedDocument() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 12 * 1024 * 1024
+        && request.resource.contentType.matches(
+          "(application/pdf|image/(jpeg|png|webp)|application/msword|application/vnd\\.openxmlformats-officedocument\\.wordprocessingml\\.document)"
+        );
+    }
+
+    match /tenants/{tenantId}/agents/{agentId}/photo/{fileName} {
+      allow read: if canAccessAgentFiles(tenantId, agentId);
+      allow create, update: if canAccessAgentFiles(tenantId, agentId)
+        && isAllowedPhoto();
+      allow delete: if canAccessAgentFiles(tenantId, agentId);
+    }
+
+    match /tenants/{tenantId}/agents/{agentId}/documents/{fileName} {
+      allow read: if canAccessAgentFiles(tenantId, agentId);
+      allow create, update: if canAccessAgentFiles(tenantId, agentId)
+        && isAllowedDocument();
+      allow delete: if canAccessAgentFiles(tenantId, agentId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

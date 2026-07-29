@@ -34,7 +34,6 @@ function serverError(e: unknown, tag: string) {
   return json(500, {
     ok: false,
     error: "Internal error",
-    details: e instanceof Error ? e.message : String(e),
   });
 }
 

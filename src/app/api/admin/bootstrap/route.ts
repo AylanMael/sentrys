@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
     try {
       await getAuth().getUser(adminUid);
     } catch (e: unknown) {
-      return bad("adminUid not found in Firebase Auth", { details: e instanceof Error ? e.message : String(e) });
+      console.warn("[bootstrap] adminUid lookup failed", e);
+      return bad("adminUid not found in Firebase Auth");
     }
 
     const tenantRef = adminDb.collection("tenants").doc(tenantId);
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
   } catch (e: unknown) {
     console.error("[bootstrap] fatal", e);
     return NextResponse.json(
-      { ok: false, error: "Internal error", details: e instanceof Error ? e.message : String(e) },
+      { ok: false, error: "Internal error" },
       { status: 500 }
     );
   }

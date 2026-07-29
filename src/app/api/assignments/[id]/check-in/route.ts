@@ -144,7 +144,6 @@ export async function POST(
     return json(500, {
       ok: false,
       error: "Internal server error",
-      details: e instanceof Error ? e.message : String(e)
     });
   }
 }

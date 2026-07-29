@@ -12,7 +12,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit --incremental false"
+    "typecheck": "tsc --noEmit --incremental false",
+    "security:check": "node scripts/security-regression-check.mjs",
+    "agent-files:audit": "node scripts/migrate-agent-file-tokens.cjs",
+    "agent-files:repair": "node scripts/migrate-agent-file-tokens.cjs --repair",
+    "agent-links:audit": "node scripts/audit-agent-user-links.cjs",
+    "agent-links:repair": "node scripts/audit-agent-user-links.cjs --repair"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.20",

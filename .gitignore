@@ -73,6 +73,7 @@ next-env.d.ts
 .agents/
 tmp/
 public/uploads/
+.private-uploads/
 *.log
 *_report.json
 eslint_*.txt

@@ -12,6 +12,10 @@ import {
   normalizeAgentQualifications,
   type AgentProfileFields,
 } from "@/lib/agents/profile";
+import {
+  parseFirebaseStoragePath,
+  secureAgentFileUrl,
+} from "@/lib/uploads/agent-file-access";
 
 export const runtime = "nodejs";
 
@@ -42,7 +46,6 @@ function serverError(e: unknown, tag: string) {
   return json(500, {
     ok: false,
     error: "Internal error",
-    details: e instanceof Error ? e.message : String(e),
   });
 }
 
@@ -94,6 +97,7 @@ function pickProfile(d: Record<string, unknown>): AgentProfileFields {
 
   return {
     photoUrl: normalizeAgentProfileField(rawProfile.photoUrl),
+    photoPath: normalizeAgentProfileField(rawProfile.photoPath),
     employeeNumber: normalizeAgentProfileField(rawProfile.employeeNumber),
     birthDate: normalizeAgentProfileField(rawProfile.birthDate),
     addressLine1: normalizeAgentProfileField(rawProfile.addressLine1),
@@ -117,8 +121,18 @@ function pickProfile(d: Record<string, unknown>): AgentProfileFields {
   };
 }
 
-function pickAgent(d: Record<string, unknown>, id: string) {
+function pickAgent(d: Record<string, unknown>, id: string, includeSensitiveProfile = true) {
   const profile = pickProfile(d);
+  const storedPhotoPath = profile.photoPath || parseFirebaseStoragePath(profile.photoUrl);
+  const presentedPhotoUrl = storedPhotoPath
+    ? secureAgentFileUrl(id, "photo")
+    : profile.photoUrl;
+  const presentedDocuments = (profile.documents ?? []).map((document) => {
+    const storedPath = document.path || parseFirebaseStoragePath(document.url);
+    return storedPath
+      ? { ...document, path: storedPath, url: secureAgentFileUrl(id, document.id) }
+      : document;
+  });
 
   return {
     id,
@@ -129,19 +143,19 @@ function pickAgent(d: Record<string, unknown>, id: string) {
     phone: d.phone as string | null ?? null,
     monthlyContractHours:
       typeof d.monthlyContractHours === "number" ? d.monthlyContractHours : null,
-    photoUrl: profile.photoUrl,
-    employeeNumber: profile.employeeNumber,
-    birthDate: profile.birthDate,
-    addressLine1: profile.addressLine1,
-    addressLine2: profile.addressLine2,
-    professionalCardNumber: profile.professionalCardNumber,
-    professionalCardExpiresAt: profile.professionalCardExpiresAt,
+    photoUrl: includeSensitiveProfile ? presentedPhotoUrl : null,
+    employeeNumber: includeSensitiveProfile ? profile.employeeNumber : null,
+    birthDate: includeSensitiveProfile ? profile.birthDate : null,
+    addressLine1: includeSensitiveProfile ? profile.addressLine1 : null,
+    addressLine2: includeSensitiveProfile ? profile.addressLine2 : null,
+    professionalCardNumber: includeSensitiveProfile ? profile.professionalCardNumber : null,
+    professionalCardExpiresAt: includeSensitiveProfile ? profile.professionalCardExpiresAt : null,
     qualifications: profile.qualifications,
-    emergencyContactName: profile.emergencyContactName,
-    emergencyContactPhone: profile.emergencyContactPhone,
-    documents: profile.documents,
-    equipmentItems: profile.equipmentItems,
-    notes: profile.notes,
+    emergencyContactName: includeSensitiveProfile ? profile.emergencyContactName : null,
+    emergencyContactPhone: includeSensitiveProfile ? profile.emergencyContactPhone : null,
+    documents: includeSensitiveProfile ? presentedDocuments : [],
+    equipmentItems: includeSensitiveProfile ? profile.equipmentItems : [],
+    notes: includeSensitiveProfile ? profile.notes : null,
     status: (d.status ?? "active") as AgentStatus,
     search: d.search as string | null ?? null,
 
@@ -218,6 +232,10 @@ export async function GET(
     return forbidden("Insufficient rights");
   }
 
+  if (isAgentRole(role) && (auth.agentId ?? auth.uid) !== agentId) {
+    return forbidden("Insufficient rights");
+  }
+
   try {
     const loaded = await loadAgentOr404(agentId, auth.tenantId);
     if (!loaded.ok) return loaded.res;
@@ -225,7 +243,7 @@ export async function GET(
     return json(200, {
       ok: true,
       tenantId: auth.tenantId,
-      agent: pickAgent(loaded.data, loaded.snap.id),
+      agent: pickAgent(loaded.data, loaded.snap.id, role !== "viewer"),
     });
   } catch (e: unknown) {
     return serverError(e, "agents.[id].GET");

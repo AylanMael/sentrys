@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   } catch (e: unknown) {
     console.error("[list-tenant-users] error", e);
     return NextResponse.json(
-      { ok: false, error: "Internal error", details: e instanceof Error ? e.message : String(e) },
+      { ok: false, error: "Internal error" },
       { status: 500 }
     );
   }

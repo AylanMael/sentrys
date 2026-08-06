@@ -7,6 +7,7 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
 import frLocale from "@fullcalendar/core/locales/fr";
+import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
 import {
   getVacationPublicationStatus,
@@ -100,6 +101,7 @@ export const PlanningCalendar: React.FC = () => {
 
   const calendarRef = useRef<FullCalendar>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { resolvedTheme } = useTheme();
   const pendingScrollRestoreRef = useRef(false);
   const scrollSnapshotRef = useRef<Array<{ left: number; top: number }>>([]);
   const [contextMenu, setContextMenu] = React.useState<{ x: number, y: number, eventId: string } | null>(null);
@@ -115,6 +117,17 @@ export const PlanningCalendar: React.FC = () => {
       setZoomLevel(savedZoom);
     }
   }, []);
+
+  useEffect(() => {
+    // FullCalendar's resource-timeline grid doesn't repaint on its own when an
+    // ancestor's dark/light class changes - it only recalculates on events it
+    // explicitly listens to (resize, view change, data change). Force one so
+    // the grid follows the theme toggle instead of staying on its last colors.
+    const timeoutId = window.setTimeout(() => {
+      calendarRef.current?.getApi().updateSize();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [resolvedTheme]);
 
   useEffect(() => {
     function refreshAutoDensityPreference() {

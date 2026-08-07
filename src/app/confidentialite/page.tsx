@@ -1,0 +1,12 @@
+import type { Metadata } from "next";
+import { LegalPage } from "@/components/legal-page";
+export const metadata: Metadata = { title: "Politique de confidentialité", description: "Traitement et protection des données personnelles sur Sentrys.", alternates: { canonical: "/confidentialite" } };
+export default function PrivacyPage() { return <LegalPage eyebrow="Protection des données" title="Politique de confidentialité" updated="29 juillet 2026" sections={[
+  { title: "1. Responsable et rôles", paragraphs: ["VSW Digital traite les données nécessaires à la gestion des comptes, à la sécurité et à l’exploitation de la plateforme. Pour les données métier importées par une agence, cette agence agit généralement comme responsable de traitement et Sentrys comme sous-traitant."] },
+  { title: "2. Données traitées", paragraphs: ["Les données peuvent inclure les coordonnées professionnelles, informations de compte, journaux de sécurité, données de planning et documents métier confiés par l’organisation cliente."] },
+  { title: "3. Finalités", paragraphs: ["Les traitements servent à fournir le service, sécuriser les accès, assurer la traçabilité, assister les utilisateurs et améliorer la fiabilité du produit."] },
+  { title: "4. Hébergement et destinataires", paragraphs: ["Les données sont hébergées au sein des services Firebase et Google Cloud configurés pour Sentrys. Les accès sont limités aux personnes et prestataires ayant besoin d’intervenir pour fournir ou sécuriser le service."] },
+  { title: "5. Conservation", paragraphs: ["Les données sont conservées pendant la durée nécessaire au service et aux obligations légales ou contractuelles. Les durées détaillées sont précisées dans les accords conclus avec les organisations clientes."] },
+  { title: "6. Vos droits", paragraphs: ["Vous pouvez demander l’accès, la rectification, l’effacement, la limitation ou la portabilité lorsque ces droits sont applicables. Pour les données gérées par votre employeur ou votre agence, contactez d’abord cette organisation."] },
+  { title: "7. Contact", paragraphs: ["Les demandes relatives à la confidentialité peuvent être adressées à contact@vsw-digital.fr. Une réclamation peut également être déposée auprès de la CNIL."] }
+]} />; }

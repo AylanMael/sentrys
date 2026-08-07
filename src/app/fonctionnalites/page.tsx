@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Fonctionnalités Sentrys — Planning, incidents, sites, agents, reporting",
   description: "Découvrez comment Sentrys simplifie la gestion de vos opérations de sécurité : planning centralisé, gestion des incidents, dossiers agents, sites & consignes, reporting.",
+  alternates: { canonical: "/fonctionnalites" },
 };
 
 type Feature = {

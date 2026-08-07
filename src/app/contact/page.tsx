@@ -25,10 +25,12 @@ import {
   Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ContactForm } from "@/components/contact-form";
 
 export const metadata: Metadata = {
   title: "Contactez Sentrys — Démo et Expertise Opérationnelle",
   description: "Demandez une démo personnalisée ou posez vos questions sur Sentrys. Notre équipe d'experts en sécurité privée vous répond sous 24-48h.",
+  alternates: { canonical: "/contact" },
 };
 
 const reasons = [
@@ -38,7 +40,8 @@ const reasons = [
   { value: "partenariat", label: "Opportunités de partenariat" },
 ];
 
-export default function ContactPage() {
+export default async function ContactPage({ searchParams }: { searchParams: Promise<{ reason?: string }> }) {
+  const { reason = "demo" } = await searchParams;
   return (
     <PublicLayout>
       {/* ===================== HERO SECTION ===================== */}
@@ -81,72 +84,7 @@ export default function ContactPage() {
                     </div>
                   </div>
 
-                  <form className="space-y-8">
-                    <div className="grid gap-6 sm:grid-cols-2">
-                      <div className="space-y-3">
-                        <Label htmlFor="name" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Nom complet</Label>
-                        <Input id="name" placeholder="Marc Lefebvre" className="h-12 rounded-xl bg-muted/40 border-border/50 focus-visible:ring-primary/20 text-base" required />
-                      </div>
-                      <div className="space-y-3">
-                        <Label htmlFor="email" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Email professionnel</Label>
-                        <Input id="email" type="email" placeholder="m.lefebvre@securite.fr" className="h-12 rounded-xl bg-muted/40 border-border/50 focus-visible:ring-primary/20 text-base" required />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-6 sm:grid-cols-2">
-                      <div className="space-y-3">
-                        <Label htmlFor="company" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Société</Label>
-                        <Input id="company" placeholder="Sentrys Protection Service" className="h-12 rounded-xl bg-muted/40 border-border/50 focus-visible:ring-primary/20 text-base" />
-                      </div>
-                      <div className="space-y-3">
-                        <Label htmlFor="reason" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Objet de la demande</Label>
-                        <div className="relative group">
-                          <select
-                            id="reason"
-                            className="h-12 w-full appearance-none rounded-xl border border-border/50 bg-muted/40 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-                            defaultValue="demo"
-                          >
-                            {reasons.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                          </select>
-                          <ChevronRight className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90 text-muted-foreground transition-transform group-hover:translate-y-[-40%]" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center px-1">
-                        <Label htmlFor="message" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Détail de votre besoin</Label>
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase opacity-50 italic">Optionnel : nb sites / agents</span>
-                      </div>
-                      <Textarea
-                        id="message"
-                        placeholder="Ex: Bonjour, je souhaite digitaliser la main courante de mes 15 sites clients..."
-                        className="min-h-[180px] rounded-[1.5rem] bg-muted/40 border-border/50 focus-visible:ring-primary/20 p-6 text-base resize-none"
-                        required
-                      />
-                    </div>
-
-                    <div className="pt-6 flex flex-col md:flex-row items-center justify-between gap-6 border-t border-border/50">
-  <p className="text-[10px] font-medium text-muted-foreground leading-relaxed max-w-[280px]">
-    En soumettant ce formulaire, vous acceptez notre{" "}
-    <Link href="/legal" className="text-primary hover:underline font-bold">
-      politique de confidentialité
-    </Link>.
-  </p>
-
-  <Button
-    type="submit"
-    size="lg"
-    className={cn(
-      "w-full md:w-auto h-14 rounded-2xl font-black shadow-xl shadow-primary/20",
-      "px-20", // ✅ Augmentation massive du padding horizontal (80px de chaque côté)
-      "active:scale-95 transition-all hover:translate-y-[-2px]"
-    )}
-  >
-    Envoyer le message <ArrowRight className="ml-2 h-4 w-4" />
-  </Button>
-</div>
-                  </form>
+                  <ContactForm reasons={reasons} defaultReason={reason} />
                 </div>
               </div>
             </div>
@@ -165,7 +103,7 @@ export default function ContactPage() {
                     </div>
                     <div>
                       <p className="text-sm font-black text-foreground uppercase tracking-tight">Email</p>
-                      <p className="text-muted-foreground font-medium">contact@sentrys.io</p>
+                      <p className="text-muted-foreground font-medium">contact@vsw-digital.fr</p>
                     </div>
                   </div>
 
@@ -193,7 +131,7 @@ export default function ContactPage() {
                 <Separator className="opacity-50" />
 
                 <ul className="space-y-3">
-                   {["Réponse sous 24h ouvrées", "Onboarding personnalisé inclus", "Hébergement certifié HDS/RGPD"].map(t => (
+                   {["Réponse sous 24h ouvrées", "Onboarding personnalisé inclus", "Hébergement Google Cloud en Europe"].map(t => (
                      <li key={t} className="flex items-center gap-3 text-xs font-bold text-foreground/70 italic">
                         <CheckCircle2 className="h-4 w-4 text-primary shrink-0" /> {t}
                      </li>

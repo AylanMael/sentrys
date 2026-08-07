@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Tarifs Sentrys — Plans pour la sécurité privée",
   description: "Choisissez le plan adapté à votre agence : Free, Starter, Pro ou Growth. Comparez nos fonctionnalités et nos quotas en toute transparence.",
+  alternates: { canonical: "/tarifs" },
 };
 
 type PlanId = "free" | "starter" | "pro" | "growth";

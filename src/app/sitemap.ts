@@ -9,6 +9,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const posts = await getAllPosts();
 
   const staticRoutes = ["", "/tarifs", "/fonctionnalites", "/contact", "/blog"];
+  const legalRoutes = ["/conditions", "/confidentialite"];
 
   const now = new Date();
 
@@ -19,6 +20,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: p === "" ? 1 : 0.7,
   }));
 
+  const legalEntries: MetadataRoute.Sitemap = legalRoutes.map((p) => ({
+    url: `${SITE_URL}${p}`,
+    lastModified: now,
+    changeFrequency: "yearly",
+    priority: 0.3,
+  }));
+
   const postEntries: MetadataRoute.Sitemap = posts.map((post) => ({
     url: `${SITE_URL}/blog/${post.slug}`,
     lastModified: new Date(post.date),
@@ -26,5 +34,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  return [...staticEntries, ...postEntries];
+  return [...staticEntries, ...legalEntries, ...postEntries];
 }

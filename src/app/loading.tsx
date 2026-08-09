@@ -1,0 +1,1 @@
+export default function LoadingPage() { return <main className="grid min-h-[50vh] place-items-center" aria-live="polite"><div className="flex items-center gap-3 text-sm font-semibold text-muted-foreground"><span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />Chargement de Sentrys…</div></main>; }

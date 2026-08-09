@@ -1,0 +1,3 @@
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+export default function NotFoundPage() { return <main className="grid min-h-screen place-items-center bg-muted/20 p-6"><div className="max-w-lg text-center"><p className="text-sm font-black uppercase tracking-[0.2em] text-primary">Erreur 404</p><h1 className="mt-3 text-4xl font-black">Page introuvable</h1><p className="mt-4 text-muted-foreground">Le lien utilisé n’existe plus ou l’adresse est incorrecte.</p><div className="mt-7 flex justify-center gap-3"><Button asChild><Link href="/">Accueil</Link></Button><Button asChild variant="outline"><Link href="/login">Connexion</Link></Button></div></div></main>; }

@@ -1,0 +1,4 @@
+import Link from "next/link";
+import { ShieldX } from "lucide-react";
+import { Button } from "@/components/ui/button";
+export default function ForbiddenPage() { return <main className="grid min-h-screen place-items-center bg-muted/20 p-6"><div className="max-w-lg rounded-[2rem] border bg-background p-8 text-center shadow-sm"><ShieldX className="mx-auto h-12 w-12 text-amber-600" /><h1 className="mt-5 text-2xl font-black">Accès non autorisé</h1><p className="mt-3 text-muted-foreground">Votre compte ne possède pas les droits nécessaires ou doit être réactivé par un administrateur.</p><div className="mt-6 flex justify-center gap-3"><Button asChild><Link href="/login">Se reconnecter</Link></Button><Button asChild variant="outline"><Link href="/contact?reason=support">Contacter l’assistance</Link></Button></div></div></main>; }

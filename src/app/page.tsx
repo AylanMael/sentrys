@@ -39,7 +39,7 @@ import { cn } from "@/lib/utils";
 const heroImage = PlaceHolderImages.find((p) => p.id === "hero-landing");
 
 export const metadata: Metadata = {
-  title: "Sentrys — Logiciel de gestion pour la sécurité privée",
+  title: "Logiciel de gestion pour la sécurité privée",
   description: "Centralisez agents, sites, planning et incidents sur une plateforme SaaS moderne. Gagnez en traçabilité et en efficacité opérationnelle.",
 };
 

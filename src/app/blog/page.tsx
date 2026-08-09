@@ -13,8 +13,10 @@ import { Separator } from "@/components/ui/separator";
 import { getAllPosts } from "@/lib/blog";
 import { cn } from "@/lib/utils";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
-  title: "Le Mag Sentrys — Expertise en Sécurité Privée",
+  title: "Le Mag — Expertise en Sécurité Privée",
   description: "Analyses, nouveautés technologiques et conseils opérationnels pour les professionnels de la sécurité privée.",
   alternates: { canonical: "/blog" },
 };

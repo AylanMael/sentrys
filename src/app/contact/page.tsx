@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { ContactForm } from "@/components/contact-form";
 
 export const metadata: Metadata = {
-  title: "Contactez Sentrys — Démo et Expertise Opérationnelle",
+  title: "Contact — Démo et Expertise Opérationnelle",
   description: "Demandez une démo personnalisée ou posez vos questions sur Sentrys. Notre équipe d'experts en sécurité privée vous répond sous 24-48h.",
   alternates: { canonical: "/contact" },
 };

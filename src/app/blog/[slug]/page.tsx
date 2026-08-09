@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
 
-import { getAllPosts, getPostBySlug } from "@/lib/blog";
+import { getPostBySlug } from "@/lib/blog";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -29,6 +29,8 @@ type Props = {
 };
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sentrys.app";
+
+export const dynamic = "force-dynamic";
 
 /** -------- utils -------- */
 function readingTimeMinutes(text: string) {
@@ -175,11 +177,6 @@ function createMdxComponents() {
 }
 
 /** -------- Next.js metadata -------- */
-export async function generateStaticParams() {
-  const posts = await getAllPosts();
-  return posts.map((p) => ({ slug: p.slug }));
-}
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const { post } = await getPostBySlug(slug);
@@ -189,7 +186,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const url = `/blog/${post.slug}`;
 
   return {
-    title: `${post.title} — Expertise Sentrys`,
+    title: `${post.title} — Expertise`,
     description: post.description,
     alternates: { canonical: url },
     openGraph: {
@@ -220,9 +217,22 @@ export default async function BlogPostPage({ params }: Props) {
   const minutes = readingTimeMinutes(content);
   const toc = extractTocFromMdx(content);
   const mdxComponents = createMdxComponents();
+  const articleJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: post.title,
+    description: post.description,
+    image: post.image ? [post.image] : undefined,
+    datePublished: post.date,
+    dateModified: post.updatedAt ?? post.date,
+    author: { "@type": "Organization", name: post.author ?? "Sentrys" },
+    publisher: { "@type": "Organization", name: "Sentrys" },
+    mainEntityOfPage: `${SITE_URL}/blog/${post.slug}`,
+  };
 
   return (
     <PublicLayout>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd).replace(/</g, "\\u003c") }} />
       {/* ===================== ARTICLE HEADER ===================== */}
       <section className="relative overflow-hidden border-b border-border/50 pb-12 pt-16">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_right,rgba(var(--primary-rgb),0.05),transparent)]" />
@@ -308,7 +318,7 @@ export default async function BlogPostPage({ params }: Props) {
                 <div className="relative mb-12 aspect-[16/9] overflow-hidden rounded-[2.5rem] border border-border/50 shadow-2xl shadow-black/5">
                   <Image
                     src={post.image}
-                    alt={post.title}
+                    alt={post.imageAlt ?? post.title}
                     fill
                     priority
                     className="object-cover"

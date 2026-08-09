@@ -75,7 +75,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 shadow-sm shadow-black/[0.02]">
         <div className="container flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-2" aria-label="Sentrys">
             <Logo />
@@ -98,7 +98,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
               <Button variant="ghost" asChild>
                 <Link href="/login">Connexion</Link>
               </Button>
-              <Button asChild className="gap-2">
+              <Button asChild className="gap-2 rounded-xl font-bold shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-transform">
                 <Link href="/signup">
                   Démarrer <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -114,46 +114,46 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       </main>
 
       {/* Footer */}
-      <footer className="border-t">
-        <div className="container py-12">
-          <div className="grid gap-8 md:grid-cols-3">
-            <div className="flex flex-col gap-2">
+      <footer className="border-t border-border/50 bg-muted/10">
+        <div className="container py-16">
+          <div className="grid gap-10 md:grid-cols-3">
+            <div className="flex flex-col gap-3">
               <Logo />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
                 La plateforme opérationnelle pour les entreprises de sécurité privée.
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-8 text-sm md:col-span-2 md:grid-cols-3">
-              <div className="grid gap-2">
-                <h3 className="font-semibold">Produit</h3>
-                <Link href="/fonctionnalites" className="text-muted-foreground hover:text-foreground">
+              <div className="grid gap-3">
+                <h3 className="text-xs font-black uppercase tracking-widest text-foreground/80">Produit</h3>
+                <Link href="/fonctionnalites" className="text-muted-foreground hover:text-primary transition-colors">
                   Fonctionnalités
                 </Link>
-                <Link href="/tarifs" className="text-muted-foreground hover:text-foreground">
+                <Link href="/tarifs" className="text-muted-foreground hover:text-primary transition-colors">
                   Tarifs
                 </Link>
-                <Link href="/contact" className="text-muted-foreground hover:text-foreground">
+                <Link href="/contact" className="text-muted-foreground hover:text-primary transition-colors">
                   Démo
                 </Link>
               </div>
 
-              <div className="grid gap-2">
-                <h3 className="font-semibold">Entreprise</h3>
-                <Link href="/blog" className="text-muted-foreground hover:text-foreground">
+              <div className="grid gap-3">
+                <h3 className="text-xs font-black uppercase tracking-widest text-foreground/80">Entreprise</h3>
+                <Link href="/blog" className="text-muted-foreground hover:text-primary transition-colors">
                   Blog
                 </Link>
-                <Link href="/contact" className="text-muted-foreground hover:text-foreground">
+                <Link href="/contact" className="text-muted-foreground hover:text-primary transition-colors">
                   Contact
                 </Link>
               </div>
 
-              <div className="grid gap-2">
-                <h3 className="font-semibold">Légal</h3>
-                <Link href="/conditions" className="text-muted-foreground hover:text-foreground">
+              <div className="grid gap-3">
+                <h3 className="text-xs font-black uppercase tracking-widest text-foreground/80">Légal</h3>
+                <Link href="/conditions" className="text-muted-foreground hover:text-primary transition-colors">
                   Conditions
                 </Link>
-                <Link href="/confidentialite" className="text-muted-foreground hover:text-foreground">
+                <Link href="/confidentialite" className="text-muted-foreground hover:text-primary transition-colors">
                   Confidentialité
                 </Link>
               </div>

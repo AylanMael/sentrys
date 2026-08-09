@@ -30,13 +30,17 @@ import {
   Layers,
   Lock,
   Zap,
-  Globe
 } from "lucide-react";
 
-import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { cn } from "@/lib/utils";
 
-const heroImage = PlaceHolderImages.find((p) => p.id === "hero-landing");
+const heroPreviewRows = [
+  { site: "Tour Eiffel", cells: ["ok", "ok", "warn", "ok", "ok", "open"] },
+  { site: "Data Center", cells: ["ok", "open", "ok", "ok", "warn", "ok"] },
+  { site: "Centre Cial.", cells: ["warn", "ok", "ok", "open", "ok", "ok"] },
+] as const;
+
+const heroPreviewDays = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
 export const metadata: Metadata = {
   title: "Logiciel de gestion pour la sécurité privée",
@@ -81,8 +85,11 @@ export default async function Home() {
             </span>
           </div>
 
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter mb-8 bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/70 leading-[1.1]">
-            La sécurité privée a enfin <br className="hidden lg:block" /> son système d'exploitation.
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter mb-8 leading-[1.1]">
+            <span className="bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/70">
+              La sécurité privée a enfin <br className="hidden lg:block" /> son{" "}
+            </span>
+            <span className="premium-gradient-text">système d'exploitation.</span>
           </h1>
 
           <p className="max-w-2xl mx-auto text-lg md:text-xl text-muted-foreground font-medium mb-10">
@@ -112,30 +119,60 @@ export default async function Home() {
                   <Lock className="h-3 w-3" /> app.sentrys.io
                 </div>
               </div>
-              <div className="relative aspect-[16/10] sm:aspect-[16/9] w-full">
-                {heroImage ? (
-                  <Image
-                    src={heroImage.imageUrl}
-                    alt="Sentrys Dashboard"
-                    fill
-                    priority
-                    className="object-cover"
-                    sizes="100vw"
-                  />
-                ) : (
-                  <div className="h-full w-full bg-muted animate-pulse flex items-center justify-center">
-                    <Globe className="h-12 w-12 text-muted-foreground/20" />
+              <div className="relative aspect-[16/10] sm:aspect-[16/9] w-full bg-gradient-to-br from-muted/40 via-background to-muted/20 p-4 sm:p-8">
+                <div className="flex h-full flex-col gap-2 sm:gap-3">
+                  <div className="grid grid-cols-[64px_repeat(6,1fr)] gap-1.5 sm:grid-cols-[110px_repeat(6,1fr)] sm:gap-2">
+                    <span />
+                    {heroPreviewDays.map((day) => (
+                      <span
+                        key={day}
+                        className="text-center text-[7px] font-black uppercase tracking-wider text-muted-foreground/50 sm:text-[10px]"
+                      >
+                        {day}
+                      </span>
+                    ))}
                   </div>
-                )}
+                  {heroPreviewRows.map((row) => (
+                    <div
+                      key={row.site}
+                      className="grid grid-cols-[64px_repeat(6,1fr)] items-center gap-1.5 sm:grid-cols-[110px_repeat(6,1fr)] sm:gap-2"
+                    >
+                      <span className="truncate text-[8px] font-bold text-foreground/70 sm:text-xs">{row.site}</span>
+                      {row.cells.map((status, i) => (
+                        <div
+                          key={i}
+                          className={cn(
+                            "h-6 rounded-lg border sm:h-9 sm:rounded-xl",
+                            status === "ok" && "border-emerald-500/40 bg-emerald-500/25",
+                            status === "warn" && "border-amber-500/40 bg-amber-500/25",
+                            status === "open" && "border-dashed border-rose-500/40 bg-rose-500/15"
+                          )}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                  <div className="mt-auto flex flex-wrap items-center gap-3 pt-2 sm:gap-4 sm:pt-4">
+                    {[
+                      { label: "Complet", cls: "border-emerald-500/40 bg-emerald-500/25" },
+                      { label: "À surveiller", cls: "border-amber-500/40 bg-amber-500/25" },
+                      { label: "À pourvoir", cls: "border-dashed border-rose-500/40 bg-rose-500/15" },
+                    ].map((item) => (
+                      <span key={item.label} className="flex items-center gap-1.5 text-[7px] font-bold uppercase tracking-wider text-muted-foreground/70 sm:text-[10px]">
+                        <span className={cn("h-2.5 w-2.5 rounded-sm border sm:h-3 sm:w-3", item.cls)} />
+                        {item.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Floating Stats Bullets */}
-            <div className="hidden lg:grid grid-cols-4 gap-4 mt-8">
+            <div className="grid grid-cols-2 gap-3 mt-8 sm:gap-4 lg:grid-cols-4">
                {["Planning 0 faute", "Rapports instantanés", "Agents connectés", "Multi-sites"].map((txt) => (
                  <div key={txt} className="flex items-center gap-3 p-4 rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm shadow-sm group hover:border-primary/30 transition-colors">
-                    <CheckCircle2 className="h-5 w-5 text-primary" />
-                    <span className="text-sm font-black uppercase tracking-tight text-foreground/80">{txt}</span>
+                    <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                    <span className="text-xs sm:text-sm font-black uppercase tracking-tight text-foreground/80">{txt}</span>
                  </div>
                ))}
             </div>
@@ -154,16 +191,19 @@ export default async function Home() {
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
             {featureCards.map((f) => (
-              <div key={f.title} className="group p-8 rounded-[2rem] border border-border/50 bg-card hover:bg-muted/30 transition-all duration-300 hover:shadow-xl hover:shadow-black/5 hover:-translate-y-1">
-                <div className={cn("inline-flex p-3 rounded-2xl mb-6 transition-transform group-hover:scale-110 duration-500", f.bg)}>
-                  <f.icon className={cn("h-6 w-6", f.color)} />
-                </div>
-                <h3 className="text-xl font-black tracking-tight mb-3 text-foreground">{f.title}</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed mb-6">{f.desc}</p>
-                <div className="pt-4 border-t border-border/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                   <Link href="/fonctionnalites" className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                    Détails module <ArrowRight className="h-3 w-3" />
-                   </Link>
+              <div key={f.title} className="group relative overflow-hidden p-8 rounded-[2rem] border border-border/50 bg-card hover:bg-muted/30 transition-all duration-300 hover:shadow-xl hover:shadow-black/5 hover:-translate-y-1">
+                <div className={cn("absolute -top-12 -right-12 w-48 h-48 rounded-full blur-[80px] opacity-0 transition-opacity duration-500 group-hover:opacity-40", f.bg)} />
+                <div className="relative">
+                  <div className={cn("inline-flex p-3 rounded-2xl mb-6 transition-transform group-hover:scale-110 duration-500", f.bg)}>
+                    <f.icon className={cn("h-6 w-6", f.color)} />
+                  </div>
+                  <h3 className="text-xl font-black tracking-tight mb-3 text-foreground">{f.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed mb-6">{f.desc}</p>
+                  <div className="pt-4 border-t border-border/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                     <Link href="/fonctionnalites" className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                      Détails module <ArrowRight className="h-3 w-3" />
+                     </Link>
+                  </div>
                 </div>
               </div>
             ))}
@@ -199,7 +239,7 @@ export default async function Home() {
 
             <div className="flex-1 relative">
                <div className="absolute inset-0 bg-primary/20 rounded-[3rem] blur-[80px] -z-10" />
-               <div className="p-8 rounded-[3rem] border border-border/50 bg-card shadow-2xl">
+               <div className="group p-8 rounded-[3rem] border border-border/50 bg-card shadow-2xl">
                   <div className="flex items-center gap-4 mb-8">
                     <div className="p-3 rounded-2xl bg-primary shadow-lg shadow-primary/20 text-white"><CalendarClock className="h-6 w-6"/></div>
                     <div>
@@ -237,7 +277,7 @@ export default async function Home() {
             </Button>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-3 max-w-6xl mx-auto">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
             {latestPosts.length > 0 ? (
               latestPosts.map((post) => (
                 <article key={post.slug} className="group flex flex-col rounded-[2rem] border border-border/50 bg-card overflow-hidden hover:shadow-2xl hover:shadow-black/5 transition-all">

@@ -38,6 +38,8 @@ const heroPreviewRows = [
   { site: "Tour Eiffel", cells: ["ok", "ok", "warn", "ok", "ok", "open"] },
   { site: "Data Center", cells: ["ok", "open", "ok", "ok", "warn", "ok"] },
   { site: "Centre Cial.", cells: ["warn", "ok", "ok", "open", "ok", "ok"] },
+  { site: "Site Concorde", cells: ["ok", "ok", "ok", "warn", "ok", "open"] },
+  { site: "La Défense", cells: ["open", "ok", "warn", "ok", "ok", "ok"] },
 ] as const;
 
 const heroPreviewDays = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -119,8 +121,8 @@ export default async function Home() {
                   <Lock className="h-3 w-3" /> app.sentrys.io
                 </div>
               </div>
-              <div className="relative aspect-[16/10] sm:aspect-[16/9] w-full bg-gradient-to-br from-muted/40 via-background to-muted/20 p-4 sm:p-8">
-                <div className="flex h-full flex-col gap-2 sm:gap-3">
+              <div className="relative w-full bg-gradient-to-br from-muted/40 via-background to-muted/20 p-4 sm:p-8">
+                <div className="flex flex-col gap-2.5 sm:gap-3.5">
                   <div className="grid grid-cols-[64px_repeat(6,1fr)] gap-1.5 sm:grid-cols-[110px_repeat(6,1fr)] sm:gap-2">
                     <span />
                     {heroPreviewDays.map((day) => (
@@ -142,7 +144,7 @@ export default async function Home() {
                         <div
                           key={i}
                           className={cn(
-                            "h-6 rounded-lg border sm:h-9 sm:rounded-xl",
+                            "h-7 rounded-lg border sm:h-10 sm:rounded-xl",
                             status === "ok" && "border-emerald-500/40 bg-emerald-500/25",
                             status === "warn" && "border-amber-500/40 bg-amber-500/25",
                             status === "open" && "border-dashed border-rose-500/40 bg-rose-500/15"
@@ -151,7 +153,7 @@ export default async function Home() {
                       ))}
                     </div>
                   ))}
-                  <div className="mt-auto flex flex-wrap items-center gap-3 pt-2 sm:gap-4 sm:pt-4">
+                  <div className="flex flex-wrap items-center gap-3 pt-4 mt-1 border-t border-border/40 sm:gap-4 sm:pt-6">
                     {[
                       { label: "Complet", cls: "border-emerald-500/40 bg-emerald-500/25" },
                       { label: "À surveiller", cls: "border-amber-500/40 bg-amber-500/25" },

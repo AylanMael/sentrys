@@ -17,14 +17,16 @@ function parseLimit(value: string | null) {
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_PAGE_SIZE;
   return Math.min(Math.floor(parsed), MAX_PAGE_SIZE);
 }
-function encodeCursor(id: string) {
-  return Buffer.from(JSON.stringify({ id }), "utf8").toString("base64url");
+function encodeCursor(incidentId: string, id: string) {
+  return Buffer.from(JSON.stringify({ v: 1, incidentId, id }), "utf8").toString("base64url");
 }
-function decodeCursor(value: string | null) {
+function decodeCursor(value: string | null, incidentId: string) {
   if (!value) return null;
   try {
     const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
-    return typeof parsed?.id === "string" && parsed.id ? parsed.id : null;
+    return parsed?.v === 1 && parsed?.incidentId === incidentId && typeof parsed?.id === "string" && parsed.id
+      ? parsed.id
+      : null;
   } catch { return null; }
 }
 function toIso(value: unknown) {
@@ -57,8 +59,12 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   const { id: incidentId } = await context.params;
   const limit = parseLimit(req.nextUrl.searchParams.get("limit"));
   const rawCursor = req.nextUrl.searchParams.get("cursor");
-  const cursorId = decodeCursor(rawCursor);
+  const anchorId = req.nextUrl.searchParams.get("anchor");
+  const cursorId = decodeCursor(rawCursor, incidentId);
   if (rawCursor && !cursorId) return json(400, { ok: false, error: "Curseur invalide." });
+  if (anchorId !== null && (!anchorId || anchorId.length > 1_500 || rawCursor)) {
+    return json(400, { ok: false, error: "Curseur invalide." });
+  }
 
   try {
     const incidentRef = adminDb.collection("incidents").doc(incidentId);
@@ -68,8 +74,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
     const comments = incidentRef.collection("comments");
     let pageQuery: FirebaseFirestore.Query = comments.orderBy("createdAt", "desc");
-    if (cursorId) {
-      const cursor = await comments.doc(cursorId).get();
+    if (cursorId || anchorId) {
+      const cursor = await comments.doc(cursorId ?? anchorId!).get();
       if (!cursor.exists || cursor.ref.parent.parent?.id !== incidentId) {
         return json(400, { ok: false, error: "Curseur invalide." });
       }
@@ -93,7 +99,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
           },
         };
       }),
-      nextCursor: hasMore && page.length ? encodeCursor(page[page.length - 1].id) : null,
+      nextCursor: hasMore && page.length ? encodeCursor(incidentId, page[page.length - 1].id) : null,
     });
   } catch (error) {
     console.error("[incident-comments.list]", error);

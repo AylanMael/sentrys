@@ -64,6 +64,10 @@ type PlanningPreviewLine = {
 };
 
 type PlanningPreview = {
+  sourceOrderId: string;
+  window: { from: string; to: string } | null;
+  limits: { candidates: number; window: number };
+  predictive: true;
   summary: {
     lineCount: number;
     ready: number;
@@ -76,6 +80,8 @@ type PlanningPreview = {
   lines: PlanningPreviewLine[];
   globalWarnings: string[];
 };
+
+class PreviewWindowTooDenseError extends Error {}
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -204,16 +210,6 @@ function lineToRange(line: ClientOrderLine) {
   return { start, end };
 }
 
-function isMissingIndexError(error: unknown) {
-  const details = error instanceof Error ? error.message : String(error);
-  const msg = details.toLowerCase();
-  return (
-    msg.includes("requires an index") ||
-    msg.includes("the query requires an index") ||
-    msg.includes("failed_precondition")
-  );
-}
-
 function toMillis(value: unknown) {
   const maybeTs = value as { toDate?: () => Date } | null | undefined;
   if (maybeTs && typeof maybeTs.toDate === "function") {
@@ -253,45 +249,70 @@ async function listExistingVacationsForPreview(input: {
   const base = adminDb.collection("vacations").where("tenantId", "==", input.tenantId);
   const fromMs = input.from.getTime();
   const toMs = input.to.getTime();
+  const scanFrom = input.from;
 
-  const filterOverlap = (items: ExistingVacationSnapshot[]) =>
-    items.filter((item) => {
-      if (item.startMs === null || item.endMs === null) return false;
-      return item.startMs < toMs && item.endMs > fromMs;
-    });
+  const windowQuery = (windowFrom: Date, windowTo: Date) => base
+    .where("startAt", ">=", windowFrom)
+    .where("startAt", "<", windowTo);
 
-  try {
-    const snap = await base
-      .where("startAt", "<", input.to)
-      .where("endAt", ">", input.from)
-      .orderBy("startAt", "desc")
-      .limit(1500)
-      .get();
-    return { items: snap.docs.map(vacationFromDoc), warnings: [] as string[] };
-  } catch (error) {
-    if (!isMissingIndexError(error)) throw error;
+  const candidateCount = (await windowQuery(scanFrom, input.to).count().get()).data().count;
+  if (candidateCount > VACATION_CANDIDATE_LIMIT) {
+    throw new PreviewWindowTooDenseError(
+      "Periode trop large pour verifier les doublons de facon exhaustive. Reduisez la periode de la commande."
+    );
   }
 
-  try {
-    const snap = await base
-      .where("startAt", "<", input.to)
-      .orderBy("startAt", "desc")
-      .limit(1500)
-      .get();
-    return {
-      items: filterOverlap(snap.docs.map(vacationFromDoc)),
-      warnings: ["Index Firestore manquant: controle doublons effectue avec un fallback memoire."],
-    };
-  } catch (error) {
-    if (!isMissingIndexError(error)) throw error;
-  }
+  const loadWindow = async (
+    windowFrom: Date,
+    windowTo: Date,
+    depth = 0,
+    knownCount?: number
+  ): Promise<ExistingVacationSnapshot[]> => {
+    const query = windowQuery(windowFrom, windowTo);
+    const count = knownCount ?? (await query.count().get()).data().count;
+    if (count <= VACATION_WINDOW_LIMIT) {
+      const boundedQuery = query.orderBy("startAt", "asc").limit(VACATION_WINDOW_LIMIT);
+      const snap = await boundedQuery.limit(VACATION_WINDOW_LIMIT + 1).get();
+      if (snap.size > VACATION_WINDOW_LIMIT) {
+        throw new PreviewWindowTooDenseError(
+          "Periode trop dense pour verifier les doublons de facon exhaustive."
+        );
+      }
+      return snap.docs.map(vacationFromDoc);
+    }
 
-  const snap = await base.limit(2500).get();
+    const fromTime = windowFrom.getTime();
+    const toTime = windowTo.getTime();
+    if (depth >= VACATION_WINDOW_MAX_DEPTH || toTime - fromTime <= 60_000) {
+      throw new PreviewWindowTooDenseError(
+        "Periode trop dense pour verifier les doublons de facon exhaustive."
+      );
+    }
+
+    const middle = new Date(fromTime + Math.floor((toTime - fromTime) / 2));
+    const left = await loadWindow(windowFrom, middle, depth + 1);
+    const right = await loadWindow(middle, windowTo, depth + 1);
+    return [...left, ...right];
+  };
+
+  const loaded = await loadWindow(scanFrom, input.to, 0, candidateCount);
+  const unique = Array.from(new Map(loaded.map((vacation) => [vacation.id, vacation])).values());
+  const items = unique.filter((item) => {
+    if (item.startMs === null || item.endMs === null) return false;
+    return item.startMs < toMs && item.endMs > fromMs;
+  });
+
   return {
-    items: filterOverlap(snap.docs.map(vacationFromDoc)),
-    warnings: ["Controle doublons en mode secours: ajoutez les index Firestore avant production."],
+    items,
+    warnings: [] as string[],
   };
 }
+
+const PREVIEW_MAX_RANGE_DAYS = 366;
+const PREVIEW_LINE_LIMIT = 500;
+const VACATION_WINDOW_LIMIT = 500;
+const VACATION_WINDOW_MAX_DEPTH = 12;
+const VACATION_CANDIDATE_LIMIT = 2000;
 
 async function buildPlanningPreview(input: {
   tenantId: string;
@@ -299,6 +320,12 @@ async function buildPlanningPreview(input: {
   orderVersion: number;
   lines: ClientOrderLine[];
 }) {
+  if (input.lines.length > PREVIEW_LINE_LIMIT) {
+    throw new PreviewWindowTooDenseError(
+      "Periode trop large pour verifier les doublons de facon exhaustive."
+    );
+  }
+
   const ranges = input.lines
     .map((line) => lineToRange(line))
     .filter((range): range is { start: Date; end: Date } => Boolean(range));
@@ -309,6 +336,11 @@ async function buildPlanningPreview(input: {
   if (ranges.length > 0) {
     const from = new Date(Math.min(...ranges.map((range) => range.start.getTime())));
     const to = new Date(Math.max(...ranges.map((range) => range.end.getTime())));
+    if (to.getTime() - from.getTime() > PREVIEW_MAX_RANGE_DAYS * 24 * 60 * 60 * 1000) {
+      throw new PreviewWindowTooDenseError(
+        "Periode trop large pour verifier les doublons de facon exhaustive."
+      );
+    }
     const loaded = await listExistingVacationsForPreview({
       tenantId: input.tenantId,
       from,
@@ -447,6 +479,15 @@ async function buildPlanningPreview(input: {
   });
 
   const preview: PlanningPreview = {
+    sourceOrderId: input.orderId,
+    window: ranges.length > 0
+      ? {
+          from: new Date(Math.min(...ranges.map((range) => range.start.getTime()))).toISOString(),
+          to: new Date(Math.max(...ranges.map((range) => range.end.getTime()))).toISOString(),
+        }
+      : null,
+    limits: { candidates: VACATION_CANDIDATE_LIMIT, window: VACATION_WINDOW_LIMIT },
+    predictive: true,
     summary: {
       lineCount: lines.length,
       ready: lines.filter((line) => line.status === "ready" || line.status === "warning").length,
@@ -701,6 +742,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const currentLines = Array.isArray(order.data.lines) ? (order.data.lines as ClientOrderLine[]) : [];
 
     if (action === "preview_planning") {
+      if (JSON.stringify(body).length > 1_000 || Object.keys(body).some((key) => key !== "action")) {
+        return bad("Parametres de previsualisation invalides");
+      }
       if (status === "cancelled") return bad("Impossible de previsualiser un bon annule");
       if (currentLines.length === 0) return bad("Aucune ligne exploitable");
 
@@ -957,6 +1001,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       item: pickOrder(updated.data() as Record<string, unknown>, id),
     });
   } catch (error) {
+    if (error instanceof PreviewWindowTooDenseError) {
+      return json(422, {
+        ok: false,
+        error: "Periode trop large pour verifier les doublons. Reduisez la periode de la commande.",
+      });
+    }
     return serverError(error, "client-orders.PATCH");
   }
 }

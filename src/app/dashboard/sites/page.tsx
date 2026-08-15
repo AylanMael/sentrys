@@ -1,16 +1,13 @@
 // src/app/dashboard/sites/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
-
-import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api/client-fetch";
-import { canManageSites, hasRole, normalizeRole } from "@/lib/auth/role";
+import { canManageSites, normalizeRole } from "@/lib/auth/role";
 
 import type { Site } from "@/lib/sites/types";
 import { SiteForm, type SiteFormValues } from "@/components/sites/site-form";
@@ -48,6 +45,7 @@ import {
   LayoutGrid,
   List,
   XCircle,
+  Loader2,
 } from "lucide-react";
 
 const GRID_BATCH_SIZE = 9;
@@ -143,14 +141,17 @@ export default function SitesPage() {
   const [clientFilter, setClientFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<SiteTypeFilter>("all");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
+  const [sitesLoading, setSitesLoading] = useState(true);
+  const [sitesLoadingMore, setSitesLoadingMore] = useState(false);
+  const [sitesError, setSitesError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [knownClientOptions, setKnownClientOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const requestSequenceRef = useRef(0);
+  const loadingCursorRef = useRef<string | null>(null);
   const role = useMemo(
     () => normalizeRole((user as any)?.role) ?? "client",
     [user]
   );
-
-  const isAdmin = useMemo(() => {
-    return hasRole(role, ["super_admin", "owner", "admin"]);
-  }, [role]);
 
   const canWrite = useMemo(() => canManageSites(role), [role]);
 
@@ -158,6 +159,7 @@ export default function SitesPage() {
     const map = new Map<string, string>();
     let hasSitesWithoutClient = false;
 
+    knownClientOptions.forEach(({ value, label }) => map.set(value, label));
     sites.forEach((site: any) => {
       const key = siteClientFilterKey(site);
       if (key === "__no_client__") {
@@ -176,62 +178,86 @@ export default function SitesPage() {
     }
 
     return rows;
-  }, [sites]);
-  useEffect(() => {
-    if (!(user as any)?.tenantId) return;
-
-    const ref = collection(db, "sites");
-
-    const qy = isAdmin
-      ? query(ref, where("tenantId", "==", (user as any).tenantId), orderBy("createdAt", "desc"))
-      : query(
-          ref,
-          where("tenantId", "==", (user as any).tenantId),
-          where("accessUids", "array-contains", (user as any).uid),
-          orderBy("createdAt", "desc")
-        );
-
-    const unsub = onSnapshot(
-      qy,
-      (snap) => {
-        const data: Site[] = snap.docs.map((d) => {
-          const raw = d.data() as any;
-          return {
-            id: d.id,
-            ...(raw as any),
-            managerIds: safeArr(raw?.managerIds),
-            agentIds: safeArr(raw?.agentIds),
-            accessUids: safeArr(raw?.accessUids),
-            clientId: typeof raw?.clientId === "string" ? raw.clientId : null,
-            clientName:
-              typeof raw?.clientName === "string"
-                ? raw.clientName
-                : (raw?.clientName ?? null),
-          } as any;
-        });
-
-        setSites(data);
-      },
-      (err) => {
-        console.error(err);
-
-        const msg =
-          err?.message?.includes("requires an index")
-            ? "Index Firestore requis pour la liste des sites (tenantId + accessUids + createdAt)."
-            : err?.message?.includes("Missing or insufficient permissions")
-              ? "Permissions Firestore insuffisantés (règles sites)."
-              : "Impossible de charger les sites.";
-
-        toast({
-          title: "Erreur",
-          description: msg,
-          variant: "destructive",
-        });
+  }, [knownClientOptions, sites]);
+  const loadSites = useCallback(
+    async (cursor: string | null = null, append = false) => {
+      if (!(user as any)?.tenantId) {
+        setSitesLoading(false);
+        return;
       }
-    );
+      if (append && (!cursor || loadingCursorRef.current === cursor)) return;
 
-    return () => unsub();
-  }, [toast, (user as any)?.tenantId, (user as any)?.uid, isAdmin]);
+      const requestId = ++requestSequenceRef.current;
+      if (append) {
+        loadingCursorRef.current = cursor;
+        setSitesLoadingMore(true);
+      } else {
+        setSitesLoading(true);
+      }
+      setSitesError(null);
+
+      try {
+        const params = new URLSearchParams({ limit: "50" });
+        params.set("pageSize", "50");
+        const search = qText.trim();
+        if (search) {
+          params.set("search", search);
+          params.set("q", search);
+        }
+        if (cursor) params.set("cursor", cursor);
+        if (statusFilter !== "all") params.set("isActive", String(statusFilter === "active"));
+        if (clientFilter !== "all") params.set("clientId", clientFilter);
+        if (clientIdParam) params.set("clientId", clientIdParam);
+        if (typeFilter !== "all") params.set("siteType", typeFilter);
+        if (riskFilter !== "all") params.set("riskLevel", riskFilter);
+
+        const response = await apiFetch<{
+          sites?: Site[];
+          items?: Site[];
+          nextCursor?: string | null;
+          hasMore?: boolean;
+        }>(`/api/sites?${params.toString()}`);
+        if (requestId !== requestSequenceRef.current) return;
+
+        const incoming = response.sites ?? response.items ?? [];
+        setKnownClientOptions((current) => {
+          const map = new Map(current.map((option) => [option.value, option.label]));
+          incoming.forEach((site: any) => {
+            const key = siteClientFilterKey(site);
+            map.set(key, key === "__no_client__" ? "Sans client" : site.clientName || "Client sans nom");
+          });
+          return Array.from(map.entries())
+            .map(([value, label]) => ({ value, label }))
+            .sort((a, b) => a.label.localeCompare(b.label, "fr"));
+        });
+        setSites((current) => {
+          if (!append) return incoming;
+          const deduped = new Map(current.map((site) => [site.id, site]));
+          incoming.forEach((site) => deduped.set(site.id, site));
+          return Array.from(deduped.values());
+        });
+        setNextCursor(response.hasMore === false ? null : response.nextCursor ?? null);
+      } catch (error) {
+        if (requestId !== requestSequenceRef.current) return;
+        console.error(error);
+        if (!append) setSites([]);
+        setSitesError("Impossible de charger les sites.");
+      } finally {
+        if (requestId === requestSequenceRef.current) {
+          setSitesLoading(false);
+          setSitesLoadingMore(false);
+          loadingCursorRef.current = null;
+        }
+      }
+    },
+    [clientFilter, clientIdParam, qText, riskFilter, statusFilter, typeFilter, user]
+  );
+
+  useEffect(() => {
+    requestSequenceRef.current += 1;
+    const timer = window.setTimeout(() => void loadSites(null, false), 300);
+    return () => window.clearTimeout(timer);
+  }, [loadSites]);
 
   useEffect(() => {
     if (shouldOpenCreate && canWrite) {
@@ -395,6 +421,7 @@ export default function SitesPage() {
       });
 
       setOpen(false);
+      await loadSites(null, false);
     } catch (e: any) {
       const message = e?.message ?? "Création impossible.";
       const isQuota = String(message).toLowerCase().includes("quota atteint");
@@ -479,8 +506,14 @@ export default function SitesPage() {
       </div>
 
 
+      {sitesError && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm font-semibold text-destructive">
+          {sitesError}
+        </div>
+      )}
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <SiteMetric label="Sites filtres" value={filtered.length} detail="Portefeuille courant" />
+        <SiteMetric label="Sites chargés" value={filtered.length} detail="Page(s) serveur courante(s)" />
         <SiteMetric label="Actifs" value={activeSitesCount} detail={`${inactiveSitesCount} inactif(s)`} tone="success" />
         <SiteMetric label="Risque eleve" value={highRiskSitesCount} detail="Niveaux 4 et 5" tone="warning" />
         <SiteMetric label="GPS manquant" value={missingGpsSitesCount} detail="A compléter pour le pointage" tone={missingGpsSitesCount > 0 ? "danger" : "success"} />
@@ -920,7 +953,29 @@ export default function SitesPage() {
         </Card>
       )}
 
-      {filtered.length === 0 && (
+      {sitesLoading && (
+        <div className="flex items-center justify-center gap-2 py-10 text-sm font-semibold text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Chargement des sites…
+        </div>
+      )}
+
+      {!sitesLoading && nextCursor && (
+        <div className="flex justify-center py-4">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={sitesLoadingMore}
+            onClick={() => void loadSites(nextCursor, true)}
+            className="rounded-xl font-bold"
+          >
+            {sitesLoadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Charger les 50 suivants
+          </Button>
+        </div>
+      )}
+
+      {!sitesLoading && filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-24 text-center px-4 rounded-[2rem] border-2 border-dashed border-muted">
           <div className="bg-muted p-6 rounded-full mb-4">
             <Building2 className="h-10 w-10 text-muted-foreground/50" />

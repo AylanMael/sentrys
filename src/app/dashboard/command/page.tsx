@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ComponentType } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   Activity,
@@ -49,10 +49,10 @@ const TacticalMap = dynamic(() => import("@/components/tactical-map"), {
   ),
 });
 
-type CommandStats = {
+type CommandCounts = {
   totalSites: number;
   activePatrols: number;
-  recentIncidentsCount: number;
+  recentIncidents: number;
 };
 
 type CommandSite = {
@@ -84,10 +84,23 @@ type CommandPatrol = {
 
 type CommandResponse = {
   ok: boolean;
-  stats: CommandStats;
-  sites: CommandSite[];
-  activePatrols: CommandPatrol[];
-  incidents: CommandIncident[];
+  counts: CommandCounts;
+  mapPreview: {
+    items: {
+      sites: CommandSite[];
+      activePatrols: CommandPatrol[];
+      incidents: CommandIncident[];
+    };
+    limits: { sites: number; activePatrols: number; incidents: number };
+    hasMore: { sites: boolean; activePatrols: boolean; incidents: boolean };
+    truncated: boolean;
+  };
+  incidentPreview: {
+    items: CommandIncident[];
+    limit: number;
+    hasMore: boolean;
+  };
+  window: { from: string; to: string };
 };
 
 type CommandView = "overview" | "map" | "alerts";
@@ -241,9 +254,9 @@ function getSituation(data: CommandResponse | null): {
   action: string;
 } {
   const highIncidents =
-    data?.incidents?.filter((incident) => incident.priority === "high").length ?? 0;
-  const incidents = data?.incidents?.length ?? 0;
-  const activePatrols = data?.stats?.activePatrols ?? 0;
+    data?.incidentPreview.items.filter((incident) => incident.priority === "high").length ?? 0;
+  const incidents = data?.incidentPreview.items.length ?? 0;
+  const activePatrols = data?.counts?.activePatrols ?? 0;
 
   if (highIncidents > 0) {
     return {
@@ -305,16 +318,17 @@ export default function CommandPage() {
   const [statusFilter, setStatusFilter] = useState<IncidentStatusFilter>("all");
   const [incidentPage, setIncidentPage] = useState(1);
   const [incidentPageSize, setIncidentPageSize] = useState(6);
+  const requestInFlightRef = useRef(false);
 
   const situation = useMemo(() => getSituation(data), [data]);
-  const incidents = useMemo(() => data?.incidents ?? [], [data]);
+  const incidents = useMemo(() => data?.incidentPreview.items ?? [], [data]);
   const highIncidentCount = useMemo(
-    () => data?.incidents?.filter((incident) => incident.priority === "high").length ?? 0,
+    () => data?.incidentPreview.items.filter((incident) => incident.priority === "high").length ?? 0,
     [data]
   );
   const watchIncidentCount = useMemo(
     () =>
-      data?.incidents?.filter((incident) => incident.priority !== "high").length ?? 0,
+      data?.incidentPreview.items.filter((incident) => incident.priority !== "high").length ?? 0,
     [data]
   );
   const situationHref =
@@ -353,6 +367,8 @@ export default function CommandPage() {
 
   const fetchStats = useCallback(
     async (options: { quiet?: boolean; refresh?: boolean } = {}) => {
+      if (requestInFlightRef.current) return;
+      requestInFlightRef.current = true;
       if (options.refresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
@@ -365,7 +381,7 @@ export default function CommandPage() {
         if (!options.quiet) {
           feedback.info(
             "Supervision synchronisee",
-            `${response.stats.totalSites} site(s), ${response.stats.activePatrols} ronde(s), ${response.incidents.length} incident(s) recent(s).`
+            `${response.counts.totalSites} site(s), ${response.counts.activePatrols} ronde(s), ${response.counts.recentIncidents} incident(s) sur 24 h.`
           );
         }
       } catch (err) {
@@ -379,6 +395,7 @@ export default function CommandPage() {
           fallback: message,
         });
       } finally {
+        requestInFlightRef.current = false;
         setLoading(false);
         setRefreshing(false);
       }
@@ -482,9 +499,9 @@ export default function CommandPage() {
           <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
             Rondes actives
           </p>
-          <p className="mt-1 text-2xl font-black">{data?.stats.activePatrols ?? 0}</p>
+          <p className="mt-1 text-2xl font-black">{data?.counts.activePatrols ?? 0}</p>
           <p className="mt-1 text-xs font-semibold opacity-75">
-            {data?.stats.totalSites ?? 0} site(s) suivis
+            {data?.counts.totalSites ?? 0} site(s) suivis
           </p>
         </div>
         <Link
@@ -573,21 +590,21 @@ export default function CommandPage() {
       <div className={cn("grid gap-3 md:grid-cols-3", commandView !== "overview" && "hidden")}>
         <CommandKpi
           label="Sites suivis"
-          value={data?.stats.totalSites ?? 0}
+          value={data?.counts.totalSites ?? 0}
           detail="Périmètre opérationnel charge"
           icon={ShieldCheck}
           tone="success"
         />
         <CommandKpi
           label="Rondes actives"
-          value={data?.stats.activePatrols ?? 0}
+          value={data?.counts.activePatrols ?? 0}
           detail="Sessions terrain en cours"
           icon={Activity}
           tone="info"
         />
         <CommandKpi
           label="Incidents recents"
-          value={data?.stats.recentIncidentsCount ?? 0}
+          value={data?.counts.recentIncidents ?? 0}
           detail={
             highIncidentCount > 0
               ? `${highIncidentCount} critique(s) à traiter`
@@ -622,11 +639,16 @@ export default function CommandPage() {
           <CardContent className="p-4">
             <div className="h-[min(62vh,560px)] min-h-[420px] overflow-hidden rounded-2xl border bg-slate-950">
               <TacticalMap
-                sites={data?.sites ?? []}
-                incidents={data?.incidents ?? []}
-                activePatrols={data?.activePatrols ?? []}
+                sites={data?.mapPreview.items.sites ?? []}
+                incidents={data?.mapPreview.items.incidents ?? []}
+                activePatrols={data?.mapPreview.items.activePatrols ?? []}
               />
             </div>
+            {data?.mapPreview.truncated ? (
+              <p className="mt-3 text-xs font-semibold text-muted-foreground">
+                Aperçu cartographique limité : d’autres éléments existent dans le périmètre.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
         )}

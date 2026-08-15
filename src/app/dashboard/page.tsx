@@ -428,9 +428,9 @@ export default function DashboardPage() {
               </Link>
             </Button>
             <Button asChild className="h-10 rounded-xl bg-primary px-3 font-black shadow-sm shadow-primary/15">
-              <Link href="/dashboard/incidents">
+              <Link href="/dashboard/incidents?new=1">
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Incident
+                Déclarer un incident
               </Link>
             </Button>
             <Button asChild variant="outline" className="h-10 rounded-xl px-3 font-black">

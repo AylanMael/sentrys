@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import { logActivity } from "@/lib/activity/logger";
+import { appLogger } from "@/lib/observability/logger";
 import {
   computeStatus,
   parseDateTimeIso,
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
 
   // -- BATCHING ENGINE --
   let currentBatch = adminDb.batch();
-  let batches = [currentBatch];
+  const batches = [currentBatch];
   let opCount = 0;
 
   const getBatch = (reserve: number) => {
@@ -386,8 +387,9 @@ export async function POST(req: NextRequest) {
   // Atomically commit all accumulated batches
   try {
     await Promise.all(batches.map(b => b.commit()));
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: "Batch commit failed: " + err.message }, { status: 500 });
+  } catch (error) {
+    appLogger.error("vacations.bulk.commit_failed", error, { tenantId: auth.tenantId, batchCount: batches.length });
+    return NextResponse.json({ ok: false, error: "L'opération par lot n'a pas pu être enregistrée." }, { status: 500 });
   }
 
   logActivity({

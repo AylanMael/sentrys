@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { Users, Building2, MapPin, CalendarOff } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Users, Building2, MapPin, CalendarOff, Search, Loader2, ChevronDown } from "lucide-react";
 import {
   usePlanning,
   type AgentApiItem,
@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const publicationFilters: Array<{ value: PublicationFilter; label: string }> = [
@@ -37,12 +38,44 @@ export const PlanningFilters: React.FC = () => {
     sitesLoading,
     agents,
     agentsLoading,
+    siteOptions,
+    agentOptions,
+    sitesHasMore,
+    agentsHasMore,
+    sitesStatus,
+    agentsStatus,
+    sitesError,
+    agentsError,
+    loadSiteOptions,
+    loadAgentOptions,
     clearSelection,
     showAbsences,
     setShowAbsences,
     publicationFilter,
     setPublicationFilter,
   } = usePlanning();
+  const [siteSearch, setSiteSearch] = useState("");
+  const [agentSearch, setAgentSearch] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadSiteOptions(siteSearch), 300);
+    return () => window.clearTimeout(timer);
+  }, [siteSearch, loadSiteOptions]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadAgentOptions(agentSearch), 300);
+    return () => window.clearTimeout(timer);
+  }, [agentSearch, loadAgentOptions]);
+
+  const displayedSites = useMemo(() => {
+    const selected = sites.find((site) => site.id === siteId);
+    return Array.from(new Map([...(selected ? [selected] : []), ...siteOptions].map((site) => [site.id, site])).values());
+  }, [siteId, siteOptions, sites]);
+
+  const displayedAgents = useMemo(() => {
+    const selected = agents.find((agent) => agent.id === agentId);
+    return Array.from(new Map([...(selected ? [selected] : []), ...agentOptions].map((agent) => [agent.id, agent])).values());
+  }, [agentId, agentOptions, agents]);
 
   const agentLabel = (a: AgentApiItem) => {
     const fn = String(a.firstName ?? "").trim();
@@ -111,13 +144,21 @@ export const PlanningFilters: React.FC = () => {
             </div>
           </SelectTrigger>
           <SelectContent className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border-white/20 dark:border-slate-800/50 rounded-xl shadow-2xl overflow-hidden">
+            <div className="relative p-2" onKeyDown={(event) => event.stopPropagation()}>
+              <Search className="pointer-events-none absolute left-5 top-5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input value={siteSearch} onChange={(event) => setSiteSearch(event.target.value)} placeholder="Rechercher un site" className="h-9 pl-9 text-xs" />
+            </div>
             <SelectItem value="all" className="text-xs font-bold py-2.5 focus:bg-primary/10">Tous les périmètres</SelectItem>
             <Separator className="my-1 opacity-50" />
-            {sites.map((s) => (
+            {displayedSites.map((s) => (
               <SelectItem key={s.id} value={s.id} className="text-xs py-2.5 transition-colors focus:bg-primary/5">
                 {s.name}
               </SelectItem>
             ))}
+            {sitesStatus === "loading" && <div className="flex items-center justify-center p-3 text-xs text-muted-foreground"><Loader2 className="mr-2 h-3 w-3 animate-spin" />Chargement…</div>}
+            {sitesStatus !== "loading" && displayedSites.length === 0 && <div className="p-3 text-center text-xs text-muted-foreground">Aucun site trouvé.</div>}
+            {sitesError && <div className="p-3 text-center text-xs text-destructive">{sitesError}</div>}
+            {sitesHasMore && <Button type="button" variant="ghost" size="sm" className="w-full text-xs" disabled={sitesLoading} onClick={(event) => { event.preventDefault(); void loadSiteOptions(siteSearch, true); }}>{sitesStatus === "loadingMore" ? <Loader2 className="mr-2 h-3 w-3 animate-spin"/> : <ChevronDown className="mr-2 h-3 w-3"/>}50 suivants</Button>}
           </SelectContent>
         </Select>
       </div>
@@ -146,13 +187,21 @@ export const PlanningFilters: React.FC = () => {
               </div>
             </SelectTrigger>
             <SelectContent className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border-white/20 dark:border-slate-800/50 rounded-xl shadow-2xl overflow-hidden">
+              <div className="relative p-2" onKeyDown={(event) => event.stopPropagation()}>
+                <Search className="pointer-events-none absolute left-5 top-5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input value={agentSearch} onChange={(event) => setAgentSearch(event.target.value)} placeholder="Rechercher un agent" className="h-9 pl-9 text-xs" />
+              </div>
               <SelectItem value="all" className="text-xs font-bold py-2.5 focus:bg-primary/10">Tous les effectifs</SelectItem>
               <Separator className="my-1 opacity-50" />
-              {agents.map((a) => (
+              {displayedAgents.map((a) => (
                 <SelectItem key={a.id} value={a.id} className="text-xs py-2.5 transition-colors focus:bg-primary/5">
                   {agentLabel(a)}
                 </SelectItem>
               ))}
+              {agentsStatus === "loading" && <div className="flex items-center justify-center p-3 text-xs text-muted-foreground"><Loader2 className="mr-2 h-3 w-3 animate-spin" />Chargement…</div>}
+              {agentsStatus !== "loading" && displayedAgents.length === 0 && <div className="p-3 text-center text-xs text-muted-foreground">Aucun agent trouvé.</div>}
+              {agentsError && <div className="p-3 text-center text-xs text-destructive">{agentsError}</div>}
+              {agentsHasMore && <Button type="button" variant="ghost" size="sm" className="w-full text-xs" disabled={agentsLoading} onClick={(event) => { event.preventDefault(); void loadAgentOptions(agentSearch, true); }}>{agentsStatus === "loadingMore" ? <Loader2 className="mr-2 h-3 w-3 animate-spin"/> : <ChevronDown className="mr-2 h-3 w-3"/>}50 suivants</Button>}
             </SelectContent>
           </Select>
         </div>

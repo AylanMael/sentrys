@@ -30,7 +30,7 @@ export class FirestorePermissionError extends Error {
     // The 'digest' property is a Next.js-specific convention. By setting it,
     // we can make our custom error appear in the Next.js error overlay,
     // which is extremely helpful for debugging during development.
-    // @ts-ignore
+    // @ts-expect-error -- Next.js error overlays inspect this non-standard property.
     this.digest = `FIRESTORE_PERMISSION_ERROR: ${context.operation.toUpperCase()} on ${context.path}`;
   }
 }

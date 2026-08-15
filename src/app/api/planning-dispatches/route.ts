@@ -29,8 +29,14 @@ import {
   safeArr,
   toIso,
 } from "@/app/api/vacations/_shared";
+import {
+  loadDispatchVacationWindow,
+  VacationWindowError,
+} from "@/app/api/planning-dispatches/_vacation-window";
 
 export const runtime = "nodejs";
+const MAX_BODY_CHARS = 50_000;
+const MAX_REQUESTED_AGENTS = 500;
 
 type DispatchVacation = {
   id: string;
@@ -302,10 +308,24 @@ export async function POST(req: NextRequest) {
 
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    const rawBody = await req.text();
+    if (!rawBody || rawBody.length > MAX_BODY_CHARS) return bad("Invalid JSON");
+    const parsed = JSON.parse(rawBody);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return bad("Invalid JSON");
+    body = parsed as Record<string, unknown>;
   } catch {
     return bad("Invalid JSON");
   }
+  const allowedKeys = new Set([
+    "from",
+    "to",
+    "agentIds",
+    "vacationIds",
+    "channel",
+    "forceComplianceOverride",
+    "forceComplianceReason",
+  ]);
+  if (Object.keys(body).some((key) => !allowedKeys.has(key))) return bad("Invalid JSON");
 
   const from = parseDateTimeIso(body.from);
   const to = parseDateTimeIso(body.to);
@@ -318,17 +338,33 @@ export async function POST(req: NextRequest) {
   const forceComplianceOverride = body.forceComplianceOverride === true;
   const forceComplianceReason = normalizeText(body.forceComplianceReason);
   if (requestedAgentIds.size === 0) return bad("agentIds are required");
+  if (requestedAgentIds.size > MAX_REQUESTED_AGENTS) return bad("Too many agentIds");
   if (forceComplianceOverride && forceComplianceReason.length < 8) {
     return bad("forceComplianceReason is required to force compliance");
   }
 
-  const vacationsSnap = await adminDb
-    .collection("vacations")
-    .where("tenantId", "==", auth.tenantId)
-    .limit(1500)
-    .get();
+  let vacationDocs: FirebaseFirestore.QueryDocumentSnapshot[];
+  try {
+    vacationDocs = await loadDispatchVacationWindow({
+      tenantId: auth.tenantId,
+      from,
+      to,
+      vacationIds: [...requestedVacationIds],
+    });
+  } catch (error) {
+    if (error instanceof VacationWindowError) {
+      return json(422, {
+        ok: false,
+        error: "Periode trop large ou trop dense. Reduisez la periode.",
+      });
+    }
+    throw error;
+  }
+  if (requestedVacationIds.size > 0 && vacationDocs.length !== requestedVacationIds.size) {
+    return json(422, { ok: false, error: "Les vacations demandees ne peuvent pas etre verifiees." });
+  }
 
-  const vacations: DispatchVacation[] = vacationsSnap.docs.flatMap((doc) => {
+  const vacations: DispatchVacation[] = vacationDocs.flatMap((doc) => {
     const data = doc.data() as Record<string, unknown>;
     if (requestedVacationIds.size > 0 && !requestedVacationIds.has(doc.id)) return [];
     if (!isPublishedAndFresh(data)) return [];
@@ -378,9 +414,10 @@ export async function POST(req: NextRequest) {
     const refs = part.map((agentId) => adminDb.collection("agents").doc(agentId));
     const snaps = await adminDb.getAll(...refs);
     snaps.forEach((snap, index) => {
-      if (snap.exists) {
-        agentMap.set(part[index], snap.data() as Record<string, unknown>);
-      }
+      if (!snap.exists) return;
+      const data = snap.data() as Record<string, unknown>;
+      if (data.tenantId !== auth.tenantId || snap.id !== part[index]) return;
+      agentMap.set(part[index], data);
     });
   }
 

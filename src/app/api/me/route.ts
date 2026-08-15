@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuth } from "firebase-admin/auth";
 import { adminDb } from "@/lib/firebase/admin";
 import { normalizeRole } from "@/lib/auth/role";
+import { appLogger } from "@/lib/observability/logger";
 
 export const runtime = "nodejs";
 
@@ -101,11 +102,8 @@ export async function GET(req: NextRequest) {
       name: (vérifiéd as { name?: string }).name,
     };
   } catch (error) {
-    console.error("[me] verifyIdToken failed for token:", token.slice(0, 10) + "...", error);
-    return unauthorized(
-      "Invalid token",
-      error instanceof Error ? error.message : String(error)
-    );
+    appLogger.warning("auth.token.invalid", { route: "/api/me" });
+    return unauthorized("Invalid or expired token");
   }
 
   try {

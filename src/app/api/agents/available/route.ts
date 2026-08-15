@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Timestamp } from "firebase-admin/firestore";
 
 import { requireTenantUser } from "@/app/api/_utils/withTenant";
+import {
+  loadDispatchVacationWindow,
+  VacationWindowError,
+} from "@/app/api/planning-dispatches/_vacation-window";
 import { adminDb } from "@/lib/firebase/admin";
 import { computeAgentCompliance } from "@/lib/agents/compliance";
 import { calculateDistance } from "@/lib/geo/distance";
@@ -15,7 +18,8 @@ const RULES = {
 };
 
 const EXTRA_DAYS_AROUND = 2;
-const MAX_VACATIONS_FETCH = 4000;
+const MAX_AGENT_CANDIDATES = 500;
+const MAX_AVAILABILITY_RANGE_DAYS = 31;
 
 type AvailabilityReason =
   | "inactive"
@@ -66,9 +70,6 @@ type AvailableAgentItem = {
   id: string;
   firstName?: string | null;
   lastName?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  professionalCardExpiresAt?: string | null;
   qualifications: string[];
   weeklyMinutes: number;
   currentWeekHours: number;
@@ -204,28 +205,13 @@ function minutesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: numb
   return ms / (60 * 1000);
 }
 
-function isMissingIndexError(e: unknown) {
-  const err = e as { message?: string; details?: string; code?: number } | null | undefined;
-  const msg = String(err?.message ?? "").toLowerCase();
-  const details = String(err?.details ?? "").toLowerCase();
-  const code = err?.code;
-  return (
-    code === 9 ||
-    msg.includes("failed_precondition") ||
-    details.includes("failed_precondition") ||
-    msg.includes("requires an index") ||
-    details.includes("requires an index") ||
-    msg.includes("the query requires an index")
-  );
-}
-
 function normalizedQualification(value: unknown) {
   return normalizeText(value).toLowerCase();
 }
 
-function agentLabel(a: Pick<AgentRow, "id" | "firstName" | "lastName" | "email" | "phone">) {
+function agentLabel(a: Pick<AgentRow, "id" | "firstName" | "lastName">) {
   const full = `${a.firstName ?? ""} ${a.lastName ?? ""}`.trim();
-  return full || a.email || a.phone || a.id || "Agent";
+  return full || a.id || "Agent";
 }
 
 function workloadLevel(projectedWeekHours: number): AvailableAgentItem["workloadLevel"] {
@@ -276,14 +262,19 @@ export async function GET(req: NextRequest) {
 
   if (!start || !end) return bad("from/to are required (ISO date)");
   if (end.getTime() <= start.getTime()) return bad("end must be > start");
+  if (
+    end.getTime() - start.getTime() >
+    MAX_AVAILABILITY_RANGE_DAYS * 24 * 60 * 60 * 1000
+  ) {
+    return bad(`range must not exceed ${MAX_AVAILABILITY_RANGE_DAYS} days`);
+  }
 
-  const agentsSnap = await adminDb
-    .collection("agents")
-    .where("tenantId", "==", auth.tenantId)
-    .get();
-
-  let agents: AgentRow[] = agentsSnap.docs.map((doc) => {
+  const toAgentRow = (
+    doc: FirebaseFirestore.DocumentSnapshot
+  ): AgentRow | null => {
+    if (!doc.exists) return null;
     const data = doc.data() as Record<string, unknown>;
+    if (data.tenantId !== auth.tenantId) return null;
     return {
       id: doc.id,
       firstName: normalizeNullableText(profileValue(data, "firstName")),
@@ -309,11 +300,12 @@ export async function GET(req: NextRequest) {
         profileValue(data, "longitude") ?? profileValue(data, "homeLongitude")
       ),
     };
-  });
+  };
 
   let allowedOnSite: Set<string> | null = null;
   let siteLatitude: number | null = null;
   let siteLongitude: number | null = null;
+  let agents: AgentRow[] = [];
 
   if (siteId) {
     const siteSnap = await adminDb.collection("sites").doc(siteId).get();
@@ -326,49 +318,56 @@ export async function GET(req: NextRequest) {
       return json(200, { ok: true, tenantId: auth.tenantId, count: 0, agents: [], available: [] });
     }
 
-    allowedOnSite = new Set<string>(safeArr(site.agentIds));
-    agents = agents.filter((agent) => allowedOnSite!.has(agent.id));
+    const siteAgentIds = uniq(safeArr(site.agentIds));
+    if (siteAgentIds.length > MAX_AGENT_CANDIDATES) {
+      return json(422, { ok: false, error: "Too many agent candidates" });
+    }
+
+    allowedOnSite = new Set<string>(siteAgentIds);
+    if (siteAgentIds.length > 0) {
+      const snapshots = await adminDb.getAll(
+        ...siteAgentIds.map((agentId) => adminDb.collection("agents").doc(agentId))
+      );
+      agents = snapshots
+        .map((snapshot) => toAgentRow(snapshot))
+        .filter((agent): agent is AgentRow => agent !== null);
+    }
     siteLatitude = numberOrNull(site.latitude);
     siteLongitude = numberOrNull(site.longitude);
+  } else {
+    const agentsSnap = await adminDb
+      .collection("agents")
+      .where("tenantId", "==", auth.tenantId)
+      .limit(MAX_AGENT_CANDIDATES + 1)
+      .get();
+    if (agentsSnap.size > MAX_AGENT_CANDIDATES) {
+      return json(422, { ok: false, error: "Too many agent candidates" });
+    }
+    agents = agentsSnap.docs
+      .map((doc) => toAgentRow(doc))
+      .filter((agent): agent is AgentRow => agent !== null);
   }
 
   const { weekStart, weekEnd } = isoWeekRangeUtc(start);
   const fetchFrom = addDays(weekStart, -EXTRA_DAYS_AROUND);
   const fetchTo = addDays(weekEnd, EXTRA_DAYS_AROUND);
-  const warnings: any[] = [];
   let vacations: VacationRow[] = [];
 
   try {
-    const q: FirebaseFirestore.Query = adminDb
-      .collection("vacations")
-      .where("tenantId", "==", auth.tenantId)
-      .where("startAt", ">=", Timestamp.fromDate(fetchFrom))
-      .where("startAt", "<", Timestamp.fromDate(fetchTo))
-      .orderBy("startAt", "asc")
-      .limit(MAX_VACATIONS_FETCH);
-
-    const snap = await q.get();
-    vacations = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) })) as unknown as VacationRow[];
-  } catch (e: unknown) {
-    if (!isMissingIndexError(e)) return serverError(e, "agents.available.GET");
-
-    warnings.push({
-      code: "missing_index_fallback",
-      message: "Index manquant sur vacations, fallback active.",
+    const snapshots = await loadDispatchVacationWindow({
+      tenantId: auth.tenantId,
+      from: fetchFrom < start ? fetchFrom : start,
+      to: fetchTo > end ? fetchTo : end,
     });
-
-    try {
-      const snap = await adminDb
-        .collection("vacations")
-        .where("tenantId", "==", auth.tenantId)
-        .orderBy("startAt", "desc")
-        .limit(2000)
-        .get();
-
-      vacations = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) })) as unknown as VacationRow[];
-    } catch (e2: unknown) {
-      return serverError(e2, "agents.available.GET.fallback");
+    vacations = snapshots.map((snapshot) => ({
+      id: snapshot.id,
+      ...(snapshot.data() as Record<string, unknown>),
+    })) as unknown as VacationRow[];
+  } catch (e: unknown) {
+    if (e instanceof VacationWindowError) {
+      return json(422, { ok: false, error: "Vacation window is too dense" });
     }
+    return serverError(e, "agents.available.GET");
   }
 
   const normalized: NormalizedVacation[] = vacations
@@ -540,9 +539,6 @@ export async function GET(req: NextRequest) {
         id: agent.id,
         firstName: agent.firstName ?? null,
         lastName: agent.lastName ?? null,
-        email: agent.email ?? null,
-        phone: agent.phone ?? null,
-        professionalCardExpiresAt: agent.professionalCardExpiresAt ?? null,
         qualifications: agent.qualifications,
         weeklyMinutes: Math.round(currentWeekMinutes),
         currentWeekHours,
@@ -593,6 +589,5 @@ export async function GET(req: NextRequest) {
     availableCount: available.length,
     agents: items,
     available,
-    warnings: warnings.length ? warnings : undefined,
   });
 }

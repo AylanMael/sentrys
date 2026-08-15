@@ -7,6 +7,7 @@ import {
 import { safeArr } from "@/app/api/vacations/_shared";
 import { adminDb } from "@/lib/firebase/admin";
 import {
+  operationSignalStateDocId,
   pickOperationSignalState,
   type OperationSignalStatus,
 } from "@/lib/operations/cockpit-signals";
@@ -16,6 +17,9 @@ import {
 } from "@/lib/payroll/workflow";
 
 export const runtime = "nodejs";
+
+const TODAY_VACATION_LIMIT = 500;
+const CARRYOVER_VACATION_LIMIT = 100;
 
 type PriorityTone = "critical" | "warning" | "info" | "success";
 type TimelineKind =
@@ -164,29 +168,14 @@ export async function GET(req: NextRequest) {
   const nextTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
   const monthRange = currentMonthRange();
 
-  const [
-    vacationsSnap,
-    agentsSnap,
-    sitesSnap,
-    incidentsSnap,
-    dispatchesSnap,
-    prepayPeriodSnap,
-  ] = await Promise.all([
-    adminDb
-      .collection("vacations")
-      .where("tenantId", "==", auth.tenantId)
-      .limit(5000)
-      .get(),
-    adminDb
-      .collection("agents")
-      .where("tenantId", "==", auth.tenantId)
-      .limit(1000)
-      .get(),
-    adminDb
-      .collection("sites")
-      .where("tenantId", "==", auth.tenantId)
-      .limit(1000)
-      .get(),
+  const [todayStartsSnap, carryoversSnap, incidentsSnap, dispatchesSnap,
+    prepayPeriodSnap, agentsCount, inactiveAgentsCount, sitesCount, inactiveSitesCount] = await Promise.all([
+    adminDb.collection("vacations").where("tenantId", "==", auth.tenantId)
+      .where("startAt", ">=", todayStart).where("startAt", "<", tomorrowStart)
+      .orderBy("startAt", "desc").limit(TODAY_VACATION_LIMIT + 1).get(),
+    adminDb.collection("vacations").where("tenantId", "==", auth.tenantId)
+      .where("startAt", "<", todayStart).orderBy("startAt", "desc")
+      .limit(CARRYOVER_VACATION_LIMIT + 1).get(),
     adminDb
       .collection("incidents")
       .where("tenantId", "==", auth.tenantId)
@@ -207,25 +196,54 @@ export async function GET(req: NextRequest) {
         )
       )
       .get(),
+    adminDb.collection("agents").where("tenantId", "==", auth.tenantId).count().get(),
+    adminDb.collection("agents").where("tenantId", "==", auth.tenantId)
+      .where("status", "==", "inactive").count().get(),
+    adminDb.collection("sites").where("tenantId", "==", auth.tenantId).count().get(),
+    adminDb.collection("sites").where("tenantId", "==", auth.tenantId)
+      .where("isActive", "==", false).count().get(),
   ]);
 
-  const agents = agentsSnap.docs.map((doc) => ({
-    id: doc.id,
-    data: doc.data() as Record<string, unknown>,
-  }));
-  const sites = sitesSnap.docs.map((doc) => ({
-    id: doc.id,
-    data: doc.data() as Record<string, unknown>,
-  }));
-  const sitesById = new Map(sites.map((site) => [site.id, site.data]));
-  const agentsById = new Map(agents.map((agent) => [agent.id, agent.data]));
-
-  const activeAgents = agents.filter((agent) => {
-    return text(agent.data.status).toLowerCase() !== "inactive";
+  const todayVacationsTruncated = todayStartsSnap.size > TODAY_VACATION_LIMIT;
+  const carryoverVacationsTruncated = carryoversSnap.size > CARRYOVER_VACATION_LIMIT;
+  if (todayVacationsTruncated || carryoverVacationsTruncated) {
+    return json(409, {
+      ok: false,
+      error: "Fenetre operationnelle trop volumineuse pour un calcul fiable.",
+      truncated: true,
+      limits: {
+        todayVacations: TODAY_VACATION_LIMIT,
+        carryoverVacations: CARRYOVER_VACATION_LIMIT,
+      },
+      exceeded: {
+        todayVacations: todayVacationsTruncated,
+        carryoverVacations: carryoverVacationsTruncated,
+      },
+    });
+  }
+  const vacationDocs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+  const todayVacationDocs = todayStartsSnap.docs.slice(0, TODAY_VACATION_LIMIT);
+  const carryoverVacationDocs = carryoversSnap.docs.slice(0, CARRYOVER_VACATION_LIMIT);
+  [...todayVacationDocs, ...carryoverVacationDocs].forEach((doc) => vacationDocs.set(doc.id, doc));
+  const referencedSiteIds = new Set<string>();
+  const referencedAgentIds = new Set<string>();
+  vacationDocs.forEach((doc) => {
+    const data = doc.data();
+    if (text(data.siteId)) referencedSiteIds.add(text(data.siteId));
+    safeArr(data.assignedAgentIds).forEach((id) => referencedAgentIds.add(id));
   });
-  const activeSites = sites.filter((site) => site.data.isActive !== false);
+  const [siteDocs, agentDocs] = await Promise.all([
+    referencedSiteIds.size ? adminDb.getAll(...[...referencedSiteIds].map((id) => adminDb.collection("sites").doc(id))) : [],
+    referencedAgentIds.size ? adminDb.getAll(...[...referencedAgentIds].map((id) => adminDb.collection("agents").doc(id))) : [],
+  ]);
+  const sitesById = new Map(siteDocs.filter((doc) => doc.exists && doc.data()?.tenantId === auth.tenantId)
+    .map((doc) => [doc.id, doc.data() as Record<string, unknown>]));
+  const agentsById = new Map(agentDocs.filter((doc) => doc.exists && doc.data()?.tenantId === auth.tenantId)
+    .map((doc) => [doc.id, doc.data() as Record<string, unknown>]));
+  const activeAgentsCount = agentsCount.data().count - inactiveAgentsCount.data().count;
+  const activeSitesCount = sitesCount.data().count - inactiveSitesCount.data().count;
 
-  const todayVacations = vacationsSnap.docs
+  const todayVacations = [...vacationDocs.values()]
     .map((doc) => ({
       id: doc.id,
       data: doc.data() as Record<string, unknown>,
@@ -536,13 +554,12 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const signalStatesSnap = await adminDb
-    .collection("operationSignalStates")
-    .where("tenantId", "==", auth.tenantId)
-    .limit(1000)
-    .get();
+  const signalStateDocs = operationFeed.length
+    ? await adminDb.getAll(...operationFeed.map((item) =>
+        adminDb.collection("operationSignalStates").doc(operationSignalStateDocId(auth.tenantId, item.id))))
+    : [];
   const signalStatesById = new Map(
-    signalStatesSnap.docs.map((doc) => {
+    signalStateDocs.filter((doc) => doc.exists && doc.data()?.tenantId === auth.tenantId).map((doc) => {
       const state = pickOperationSignalState(
         doc.data() as Record<string, unknown>,
         doc.id
@@ -605,8 +622,8 @@ export async function GET(req: NextRequest) {
       assignedPosts,
       uncoveredPosts,
       startsNextTwoHours,
-      activeAgents: activeAgents.length,
-      activeSites: activeSites.length,
+      activeAgents: activeAgentsCount,
+      activeSites: activeSitesCount,
       criticalIncidents: criticalIncidents.length,
       openIncidents: unresolvedIncidents.length,
       complianceToRegularize: complianceOpenDispatches.length,

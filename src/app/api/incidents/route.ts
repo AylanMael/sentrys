@@ -1,7 +1,8 @@
 // src/app/api/incidents/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { adminDb } from "@/lib/firebase/admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import { logActivity } from "@/lib/activity/logger";
@@ -45,6 +46,61 @@ function parseMax(v: string | null, def = 50) {
   const n = Number(v ?? "");
   if (!Number.isFinite(n) || n <= 0) return def;
   return Math.min(Math.floor(n), 200);
+}
+
+const INCIDENT_CURSOR_VERSION = 1;
+const INCIDENT_PAGE_SIZE = 10;
+const INCIDENT_MAX_PAGE_SIZE = 50;
+
+type IncidentCursor = {
+  v: typeof INCIDENT_CURSOR_VERSION;
+  id: string;
+  seconds: number;
+  nanoseconds: number;
+  tenant: string;
+  site: string;
+  filters: string;
+};
+
+function fingerprint(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function parseIncidentLimit(value: string | null) {
+  const parsed = Number(value ?? "");
+  if (!Number.isInteger(parsed) || parsed <= 0) return INCIDENT_PAGE_SIZE;
+  return Math.min(parsed, INCIDENT_MAX_PAGE_SIZE);
+}
+
+function incidentFiltersFingerprint(siteId: string) {
+  return fingerprint(JSON.stringify({ siteId, order: "createdAt:desc" }));
+}
+
+function encodeIncidentCursor(input: IncidentCursor) {
+  return Buffer.from(JSON.stringify(input), "utf8").toString("base64url");
+}
+
+function decodeIncidentCursor(value: string): IncidentCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<IncidentCursor>;
+    const keys = Object.keys(parsed).sort().join(",");
+    if (
+      keys !== "filters,id,nanoseconds,seconds,site,tenant,v" ||
+      parsed.v !== INCIDENT_CURSOR_VERSION ||
+      typeof parsed.id !== "string" ||
+      !parsed.id ||
+      !Number.isInteger(parsed.seconds) ||
+      !Number.isInteger(parsed.nanoseconds) ||
+      typeof parsed.tenant !== "string" ||
+      typeof parsed.site !== "string" ||
+      typeof parsed.filters !== "string"
+    ) {
+      return null;
+    }
+    return parsed as IncidentCursor;
+  } catch {
+    return null;
+  }
 }
 
 function parseBool(v: string | null): boolean | null {
@@ -148,8 +204,82 @@ export async function GET(req: NextRequest) {
   const agentId = normalizeText(url.searchParams.get("agentId")) || "";
   const vacationId = normalizeText(url.searchParams.get("vacationId")) || "";
   const includeDeleted = parseBool(url.searchParams.get("includeDeleted")) ?? false;
+  const incidentLimit = url.searchParams.get("limit");
+  const encodedCursor = normalizeText(url.searchParams.get("cursor"));
 
   try {
+    if ((incidentLimit != null || encodedCursor) && !siteId) {
+      return bad("Le site est requis");
+    }
+
+    if (siteId && (incidentLimit != null || encodedCursor)) {
+      const limit = parseIncidentLimit(incidentLimit);
+      const filters = incidentFiltersFingerprint(siteId);
+      let cursorSnap: FirebaseFirestore.DocumentSnapshot | null = null;
+
+      if (encodedCursor) {
+        const cursor = decodeIncidentCursor(encodedCursor);
+        if (
+          !cursor ||
+          cursor.tenant !== fingerprint(auth.tenantId) ||
+          cursor.site !== fingerprint(siteId) ||
+          cursor.filters !== filters
+        ) {
+          return bad("Curseur invalide");
+        }
+
+        cursorSnap = await adminDb.collection("incidents").doc(cursor.id).get();
+        const cursorCreatedAt = cursorSnap.data()?.createdAt;
+        if (
+          !cursorSnap.exists ||
+          cursorSnap.data()?.tenantId !== auth.tenantId ||
+          cursorSnap.data()?.siteId !== siteId ||
+          !(cursorCreatedAt instanceof Timestamp) ||
+          cursorCreatedAt.seconds !== cursor.seconds ||
+          cursorCreatedAt.nanoseconds !== cursor.nanoseconds
+        ) {
+          return bad("Curseur invalide");
+        }
+      }
+
+      let siteHistoryQuery: FirebaseFirestore.Query = adminDb
+        .collection("incidents")
+        .where("siteId", "==", siteId)
+        .where("tenantId", "==", auth.tenantId)
+        .orderBy("createdAt", "desc");
+
+      if (cursorSnap) siteHistoryQuery = siteHistoryQuery.startAfter(cursorSnap);
+
+      const snapshot = await siteHistoryQuery.limit(limit + 1).get();
+      const hasMore = snapshot.docs.length > limit;
+      const pageDocs = snapshot.docs.slice(0, limit);
+      const lastDoc = pageDocs.at(-1);
+      const lastCreatedAt = lastDoc?.data()?.createdAt;
+      const nextCursor = hasMore && lastDoc && lastCreatedAt instanceof Timestamp
+        ? encodeIncidentCursor({
+            v: INCIDENT_CURSOR_VERSION,
+            id: lastDoc.id,
+            seconds: lastCreatedAt.seconds,
+            nanoseconds: lastCreatedAt.nanoseconds,
+            tenant: fingerprint(auth.tenantId),
+            site: fingerprint(siteId),
+            filters,
+          })
+        : null;
+
+      const items = pageDocs.map((doc) => {
+        const incident = pickIncident(doc.data() as Record<string, unknown>, doc.id);
+        return {
+          id: incident.id,
+          severity: incident.severity,
+          status: incident.status,
+          createdAtIso: incident.createdAtIso,
+        };
+      });
+
+      return json(200, { ok: true, items, nextCursor: nextCursor, hasMore, pageSize: limit });
+    }
+
     let ref: FirebaseFirestore.Query = adminDb
       .collection("incidents")
       .where("tenantId", "==", auth.tenantId);

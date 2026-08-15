@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Loader2,
@@ -16,18 +16,9 @@ import {
   Users,
   FileText,
   CheckCircle2,
-  CalendarDays
+  Search,
+  ChevronDown,
 } from "lucide-react";
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-  type Timestamp,
-} from "firebase/firestore";
-
-import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api/client-fetch";
@@ -37,27 +28,18 @@ import { Badge } from "@/components/ui/badge"; // ✅ IMPORT AJOUTÉ ICI
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 /* ================= types ================= */
 
-type SiteRow = { id: string; tenantId: string; name?: string; isActive?: boolean; city?: string | null; createdAt?: Timestamp; };
-type AgentRow = { id: string; tenantId: string; firstName?: string | null; lastName?: string | null; status?: "active" | "inactive"; createdAt?: Timestamp; };
-type VacationCreateBody = { siteId: string; title?: string | null; startAt: string; endAt: string; requiredAgents?: number; assignedAgentIds?: string[]; notes?: string | null; };
+type SiteRow = { id: string; tenantId: string; name?: string; isActive?: boolean; city?: string | null; };
+type AgentRow = { id: string; tenantId: string; firstName?: string | null; lastName?: string | null; status?: "active" | "inactive"; };
+type SitesResponse = { ok: boolean; sites?: SiteRow[]; items?: SiteRow[]; nextCursor?: string | null };
+type AgentsResponse = { ok: boolean; agents?: AgentRow[]; items?: AgentRow[]; pageInfo?: { hasMore?: boolean; nextCursor?: string | null } };
 type OverlapApiItem = { agentId: string; withVacationId: string; withSiteId?: string | null; withSiteName?: string | null; withStatus?: string; withStartAtIso?: string | null; withEndAtIso?: string | null; };
 type OverlapGroup = { agentId: string; agentName?: string | null; conflict: Array<{ vacationId: string; siteId?: string | null; siteName?: string | null; startAtIso: string; endAtIso: string; status?: string; }>; };
 type OverlapsResponse = { ok: boolean; error?: string; overlaps?: OverlapApiItem[]; hasOverlaps?: boolean; count?: number; };
@@ -109,13 +91,27 @@ export default function NewVacationPage() {
 
   const [sites, setSites] = useState<SiteRow[]>([]);
   const [sitesLoading, setSitesLoading] = useState(true);
+  const [sitesLoadingMore, setSitesLoadingMore] = useState(false);
   const [sitesError, setSitesError] = useState<string | null>(null);
+  const [siteSearch, setSiteSearch] = useState("");
+  const [siteQuery, setSiteQuery] = useState("");
+  const [sitesCursor, setSitesCursor] = useState<string | null>(null);
+  const sitesRequestRef = useRef(0);
+  const sitesLoadingKeyRef = useRef<string | null>(null);
 
   const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [visibleAgentIds, setVisibleAgentIds] = useState<string[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
+  const [agentsLoadingMore, setAgentsLoadingMore] = useState(false);
   const [agentsError, setAgentsError] = useState<string | null>(null);
+  const [agentSearch, setAgentSearch] = useState("");
+  const [agentQuery, setAgentQuery] = useState("");
+  const [agentsCursor, setAgentsCursor] = useState<string | null>(null);
+  const agentsRequestRef = useRef(0);
+  const agentsLoadingKeyRef = useRef<string | null>(null);
 
   const [siteId, setSiteId] = useState<string>("");
+  const [selectedSite, setSelectedSite] = useState<SiteRow | null>(null);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [requiredAgents, setRequiredAgents] = useState<number>(1);
@@ -139,43 +135,130 @@ export default function NewVacationPage() {
   }, [startLocal, endLocal]);
 
   useEffect(() => {
-    if (!tenantId) { setSites([]); setSitesLoading(false); return; }
-    if (!db) { setSitesLoading(false); setSitesError("Firestore indisponible."); return; }
-    setSitesLoading(true); setSitesError(null);
-    const qy = query(collection(db, "sites"), where("tenantId", "==", tenantId), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(qy, (snap) => {
-      const rows: SiteRow[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      rows.sort((a, b) => String(a.name ?? "").toLowerCase().localeCompare(String(b.name ?? "").toLowerCase()));
-      setSites(rows); setSitesLoading(false);
-      if (!siteId && rows.length === 1) setSiteId(rows[0].id);
-    }, (err) => { setSitesError("Impossible de charger les sites."); setSitesLoading(false); });
-    return () => unsub();
-  }, [tenantId]);
+    const nextQuery = siteSearch.trim();
+    if (nextQuery === siteQuery) return;
+    sitesRequestRef.current += 1;
+    sitesLoadingKeyRef.current = null;
+    setSites([]);
+    setSitesCursor(null);
+    setSitesError(null);
+    setSitesLoading(true);
+    const timer = window.setTimeout(() => setSiteQuery(nextQuery), 300);
+    return () => window.clearTimeout(timer);
+  }, [siteQuery, siteSearch]);
 
   useEffect(() => {
-    if (!tenantId) { setAgents([]); setAgentsLoading(false); return; }
-    if (!db) { setAgentsLoading(false); setAgentsError("Firestore indisponible."); return; }
-    setAgentsLoading(true); setAgentsError(null);
-    const qy = query(collection(db, "agents"), where("tenantId", "==", tenantId), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(qy, (snap) => {
-      const rows: AgentRow[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      rows.sort((a, b) => {
-        const aa = String(a.status ?? "active") === "active" ? 0 : 1;
-        const bb = String(b.status ?? "active") === "active" ? 0 : 1;
-        if (aa !== bb) return aa - bb;
-        return agentLabel(a).toLowerCase().localeCompare(agentLabel(b).toLowerCase());
-      });
-      setAgents(rows); setAgentsLoading(false);
-      setSelectedAgentIds((prev) => {
-        const allowed = new Set(rows.filter((a) => String(a.status ?? "active") === "active").map((a) => a.id));
-        const next = prev.filter((id) => allowed.has(id));
-        return next.length === prev.length ? prev : next;
-      });
-    }, (err) => { setAgentsError("Impossible de charger les agents."); setAgentsLoading(false); });
-    return () => unsub();
-  }, [tenantId]);
+    const nextQuery = agentSearch.trim();
+    if (nextQuery === agentQuery) return;
+    agentsRequestRef.current += 1;
+    agentsLoadingKeyRef.current = null;
+    setVisibleAgentIds([]);
+    setAgentsCursor(null);
+    setAgentsError(null);
+    setAgentsLoading(true);
+    const timer = window.setTimeout(() => setAgentQuery(nextQuery), 300);
+    return () => window.clearTimeout(timer);
+  }, [agentQuery, agentSearch]);
+
+  const loadSites = useCallback(async (append = false, cursor: string | null = null) => {
+    const loadingKey = append ? cursor : `search:${siteQuery}`;
+    if (!loadingKey || sitesLoadingKeyRef.current === loadingKey) return;
+    sitesLoadingKeyRef.current = loadingKey;
+    const requestId = ++sitesRequestRef.current;
+    if (!tenantId) {
+      setSites([]);
+      setSitesLoading(false);
+      sitesLoadingKeyRef.current = null;
+      return;
+    }
+    if (append) setSitesLoadingMore(true); else setSitesLoading(true);
+    setSitesError(null);
+    try {
+      const params = new URLSearchParams({ limit: "25", pageSize: "25", isActive: "true" });
+      if (siteQuery) {
+        params.set("search", siteQuery);
+        params.set("q", siteQuery);
+      }
+      if (append && cursor) params.set("cursor", cursor);
+      const response = await apiFetch<SitesResponse>(`/api/sites?${params.toString()}`);
+      if (requestId !== sitesRequestRef.current) return;
+      const rows = response.sites ?? response.items ?? [];
+      setSites((current) => append
+        ? Array.from(new Map([...current, ...rows].map((site) => [site.id, site])).values())
+        : rows
+      );
+      setSitesCursor(response.nextCursor ?? null);
+      if (!append && !siteQuery && rows.length === 1 && !response.nextCursor) {
+        setSiteId(rows[0].id);
+        setSelectedSite(rows[0]);
+      }
+    } catch (error) {
+      if (requestId !== sitesRequestRef.current) return;
+      if (!append) setSites([]);
+      setSitesError(error instanceof Error ? error.message : "Impossible de charger les sites.");
+    } finally {
+      if (requestId === sitesRequestRef.current) {
+        setSitesLoading(false);
+        setSitesLoadingMore(false);
+        sitesLoadingKeyRef.current = null;
+      }
+    }
+  }, [siteQuery, tenantId]);
+
+  const loadAgents = useCallback(async (append = false, cursor: string | null = null) => {
+    const loadingKey = append ? cursor : `search:${agentQuery}`;
+    if (!loadingKey || agentsLoadingKeyRef.current === loadingKey) return;
+    agentsLoadingKeyRef.current = loadingKey;
+    const requestId = ++agentsRequestRef.current;
+    if (!tenantId) {
+      setAgents([]);
+      setVisibleAgentIds([]);
+      setAgentsLoading(false);
+      agentsLoadingKeyRef.current = null;
+      return;
+    }
+    if (append) setAgentsLoadingMore(true); else setAgentsLoading(true);
+    setAgentsError(null);
+    try {
+      const params = new URLSearchParams({ pageSize: "25", limit: "25", status: "active" });
+      if (agentQuery) params.set("q", agentQuery);
+      if (append && cursor) params.set("cursor", cursor);
+      const response = await apiFetch<AgentsResponse>(`/api/agents?${params.toString()}`);
+      if (requestId !== agentsRequestRef.current) return;
+      const rows = response.agents ?? response.items ?? [];
+      setAgents((current) => Array.from(new Map([...current, ...rows].map((agent) => [agent.id, agent])).values()));
+      setVisibleAgentIds((current) => append ? uniq([...current, ...rows.map((agent) => agent.id)]) : rows.map((agent) => agent.id));
+      setAgentsCursor(response.pageInfo?.nextCursor ?? null);
+    } catch (error) {
+      if (requestId !== agentsRequestRef.current) return;
+      if (!append) setVisibleAgentIds([]);
+      setAgentsError(error instanceof Error ? error.message : "Impossible de charger les agents.");
+    } finally {
+      if (requestId === agentsRequestRef.current) {
+        setAgentsLoading(false);
+        setAgentsLoadingMore(false);
+        agentsLoadingKeyRef.current = null;
+      }
+    }
+  }, [agentQuery, tenantId]);
+
+  useEffect(() => {
+    setSitesCursor(null);
+    void loadSites(false);
+    return () => { sitesRequestRef.current += 1; };
+  }, [loadSites]);
+
+  useEffect(() => {
+    setAgentsCursor(null);
+    void loadAgents(false);
+    return () => { agentsRequestRef.current += 1; };
+  }, [loadAgents]);
 
   const activeSites = useMemo(() => sites, [sites]);
+  const visibleAgents = useMemo(() => {
+    const byId = new Map(agents.map((agent) => [agent.id, agent]));
+    return visibleAgentIds.map((id) => byId.get(id)).filter(Boolean) as AgentRow[];
+  }, [agents, visibleAgentIds]);
   const startAtIso = useMemo(() => localInputToIso(startLocal) ?? "", [startLocal]);
   const endAtIso = useMemo(() => localInputToIso(endLocal) ?? "", [endLocal]);
   const isDateRangeValid = useMemo(() => {
@@ -184,11 +267,10 @@ export default function NewVacationPage() {
   }, [startAtIso, endAtIso]);
 
   useEffect(() => {
-    let t: any;
     if (!user || !canWrite || !tenantId || !siteId || !startAtIso || !endAtIso || !isDateRangeValid || !selectedAgentIds.length) {
       setOverlaps([]); setOverlapError(null); return;
     }
-    t = setTimeout(async () => {
+    const t = setTimeout(async () => {
       setOverlapLoading(true); setOverlapError(null);
       try {
         const token = typeof getIdToken === "function" ? await getIdToken() : await (user as any)?.getIdToken?.();
@@ -297,26 +379,25 @@ export default function NewVacationPage() {
 
               <div className="space-y-3">
                 <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Site d'intervention <span className="text-destructive">*</span></Label>
-                {sitesLoading ? (
-                  <div className="h-12 flex items-center px-4 rounded-xl bg-muted/30 text-sm font-medium text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin mr-2"/> Chargement...</div>
-                ) : sitesError ? (
-                  <div className="p-3 bg-destructive/10 text-destructive rounded-xl text-sm font-bold flex items-center gap-2"><AlertCircle className="h-4 w-4"/> {sitesError}</div>
-                ) : activeSites.length === 0 ? (
-                  <div className="p-3 bg-muted rounded-xl text-sm text-muted-foreground">Aucun site disponible.</div>
-                ) : (
-                  <Select value={siteId} onValueChange={setSiteId}>
-                    <SelectTrigger className="h-12 rounded-xl bg-muted/30 border-muted-foreground/20 font-bold focus-visible:ring-primary/30">
-                      <SelectValue placeholder="Choisir un site..." />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      {activeSites.map((s) => (
-                        <SelectItem key={s.id} value={s.id} className="font-medium">
-                          {s.name ?? "Site sans nom"} {s.isActive === false ? " (Inactif)" : ""} {s.city ? ` - ${s.city}` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {selectedSite && (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                    <div className="min-w-0"><p className="truncate text-sm font-bold">{selectedSite.name ?? "Site sans nom"}</p><p className="text-xs text-muted-foreground">{selectedSite.city || "Site sélectionné"}</p></div>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setSiteId(""); setSelectedSite(null); }}>Changer</Button>
+                  </div>
                 )}
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                  <Input value={siteSearch} onChange={(event) => setSiteSearch(event.target.value)} placeholder="Rechercher un site ou une ville..." className="h-12 rounded-xl bg-muted/30 pl-10" />
+                </div>
+                {sitesError && <div className="p-3 bg-destructive/10 text-destructive rounded-xl text-sm font-bold flex items-center gap-2"><AlertCircle className="h-4 w-4"/> {sitesError}</div>}
+                <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border p-1" aria-busy={sitesLoading}>
+                  {sitesLoading ? <div className="flex items-center justify-center p-6 text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Chargement...</div> : activeSites.length === 0 ? <div className="p-6 text-center text-sm text-muted-foreground">Aucun site trouvé.</div> : activeSites.map((site) => (
+                    <button key={site.id} type="button" onClick={() => { setSiteId(site.id); setSelectedSite(site); }} className={cn("w-full rounded-lg p-3 text-left hover:bg-muted", siteId === site.id && "bg-primary/10")}>
+                      <span className="block truncate text-sm font-bold">{site.name ?? "Site sans nom"}</span><span className="block truncate text-xs text-muted-foreground">{site.city || "Ville non renseignée"}</span>
+                    </button>
+                  ))}
+                  {sitesCursor && !sitesLoading && <Button type="button" variant="ghost" className="w-full" disabled={sitesLoadingMore} onClick={() => void loadSites(true, sitesCursor)}>{sitesLoadingMore ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ChevronDown className="mr-2 h-4 w-4"/>}Afficher les 25 suivants</Button>}
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -397,28 +478,43 @@ export default function NewVacationPage() {
                 </div>
               )}
 
-              <div className="space-y-1 max-h-[500px] overflow-y-auto pr-1">
+              <div className="relative mb-3">
+                <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                <Input value={agentSearch} onChange={(event) => setAgentSearch(event.target.value)} placeholder="Rechercher un agent..." className="h-11 rounded-xl bg-muted/30 pl-10" />
+              </div>
+
+              {selectedAgentIds.length > 0 && (
+                <div className="mb-3 rounded-xl border border-primary/20 bg-primary/5 p-2">
+                  <p className="px-1 pb-1 text-[10px] font-black uppercase tracking-wider text-muted-foreground">Agents retenus</p>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedAgentIds.map((id) => {
+                      const agent = agents.find((item) => item.id === id);
+                      return <Button key={id} type="button" variant="secondary" size="sm" className="h-7 rounded-full text-xs" onClick={() => toggleAgent(id)}>{agent ? agentLabel(agent) : `Agent ${id.slice(0, 6)}`} ×</Button>;
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {agentsError && <div className="mb-3 p-3 bg-destructive/10 text-destructive rounded-xl text-xs font-bold flex items-center gap-2"><AlertCircle className="h-4 w-4"/> {agentsError}</div>}
+              <div className="space-y-1 max-h-[430px] overflow-y-auto pr-1" aria-busy={agentsLoading}>
                 {agentsLoading ? (
                   <div className="py-10 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-                ) : agents.length === 0 ? (
-                  <div className="py-10 text-center text-sm text-muted-foreground italic">Aucun agent dans votre base.</div>
+                ) : visibleAgents.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-muted-foreground italic">Aucun agent actif trouvé.</div>
                 ) : (
-                  agents.map((a) => {
-                    const inactive = String(a.status ?? "active") !== "active";
-                    const checked = selectedAgentIds.includes(a.id);
+                  visibleAgents.map((agent) => {
+                    const checked = selectedAgentIds.includes(agent.id);
                     return (
-                      <label key={a.id} className={cn("flex items-center justify-between p-3 rounded-xl border border-transparent transition-all cursor-pointer", inactive ? "opacity-50 cursor-not-allowed" : "hover:bg-muted/50", checked && "bg-primary/5 border-primary/20 hover:bg-primary/10")}>
-                        <div className="flex items-center gap-3">
-                          <input type="checkbox" className="h-4 w-4 rounded text-primary border-muted-foreground/30 focus:ring-primary" checked={checked} disabled={inactive} onChange={() => toggleAgent(a.id)} />
-                          <div className="min-w-0">
-                            <p className="font-bold text-sm truncate">{agentLabel(a)}</p>
-                            {inactive && <p className="text-[10px] uppercase font-bold text-destructive">Inactif</p>}
-                          </div>
+                      <label key={agent.id} className={cn("flex cursor-pointer items-center justify-between rounded-xl border border-transparent p-3 transition-all hover:bg-muted/50", checked && "border-primary/20 bg-primary/5 hover:bg-primary/10")}>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <input type="checkbox" className="h-4 w-4 rounded border-muted-foreground/30 text-primary focus:ring-primary" checked={checked} onChange={() => toggleAgent(agent.id)} />
+                          <p className="truncate text-sm font-bold">{agentLabel(agent)}</p>
                         </div>
                       </label>
                     );
                   })
                 )}
+                {agentsCursor && !agentsLoading && <Button type="button" variant="ghost" className="w-full" disabled={agentsLoadingMore} onClick={() => void loadAgents(true, agentsCursor)}>{agentsLoadingMore ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ChevronDown className="mr-2 h-4 w-4"/>}Afficher les 25 suivants</Button>}
               </div>
             </div>
           </Card>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldPath, FieldValue } from "firebase-admin/firestore";
 
 import { requireTenantUser } from "@/app/api/_utils/withTenant";
 import { assertWithinLimitsTx } from "@/lib/billing/limits";
@@ -88,10 +88,10 @@ function uniq(arr: string[]) {
   return Array.from(new Set(arr.map((x) => String(x)).filter(Boolean)));
 }
 
-function parseMax(v: string | null, def = 50) {
+function parsePageSize(v: string | null, def = 50) {
   const n = Number(v ?? "");
   if (!Number.isFinite(n) || n <= 0) return def;
-  return Math.min(Math.floor(n), 200);
+  return Math.min(Math.floor(n), 50);
 }
 
 function parseBool(v: string | null): boolean | null {
@@ -177,8 +177,28 @@ async function assertClientBelongsToTenant(clientId: string, tenantId: string) {
 }
 
 /* ================= GET ================= */
+function encodeSiteCursor(id: string) {
+  return Buffer.from(JSON.stringify({ id }), "utf8").toString("base64url");
+}
+
+function decodeSiteCursor(value: string | null) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as { id?: unknown };
+    const id = typeof parsed.id === "string" ? parsed.id.trim() : "";
+    return id && id.length <= 200 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * GET /api/sites?max=50&isActive=true&q=paris&clientId=xxx
+ * GET /api/sites?pageSize=50&cursor=...&search=paris
+ *
+ * Sites are traversed by document id. This keeps ordering deterministic for
+ * legacy documents that do not have createdAt or a normalized search field.
+ * Search and optional filters apply to the current bounded server page; the
+ * cursor lets callers continue scanning without downloading the whole tenant.
  */
 export async function GET(req: NextRequest) {
   const auth = await requireTenantUser(req);
@@ -193,49 +213,61 @@ export async function GET(req: NextRequest) {
   }
 
   const url = new URL(req.url);
-  const max = parseMax(url.searchParams.get("max"), 50);
-  const fetchLimit = canReadAll ? max : Math.min(Math.max(max * 10, 200), 1000);
+  const pageSize = parsePageSize(
+    url.searchParams.get("pageSize") ??
+      url.searchParams.get("limit") ??
+      url.searchParams.get("max"),
+    50
+  );
+  const rawCursor = url.searchParams.get("cursor");
+  const cursorId = decodeSiteCursor(rawCursor);
+  if (rawCursor && !cursorId) return bad("Invalid cursor");
+
+  const fetchLimit = pageSize + 1;
   const isActive = parseBool(url.searchParams.get("isActive"));
-  const q = normalizeText(url.searchParams.get("q")).toLowerCase();
+  const q = normalizeText(url.searchParams.get("search") ?? url.searchParams.get("q")).toLowerCase();
   const clientId = normalizeText(url.searchParams.get("clientId"));
+  const siteType = normalizeText(url.searchParams.get("siteType"));
+  const risk = normalizeText(url.searchParams.get("riskLevel") ?? url.searchParams.get("risk"));
+  const riskLevel = /^[1-5]$/.test(risk) ? Number(risk) : null;
 
   try {
     let ref: FirebaseFirestore.Query = adminDb
       .collection("sites")
-      .where("tenantId", "==", auth.tenantId);
+      .where("tenantId", "==", auth.tenantId)
+      .orderBy(FieldPath.documentId(), "asc");
 
-    if (isActive !== null) ref = ref.where("isActive", "==", isActive);
-    if (clientId) ref = ref.where("clientId", "==", clientId);
+    if (cursorId) {
+      const cursorSnap = await adminDb.collection("sites").doc(cursorId).get();
+      if (!cursorSnap.exists || cursorSnap.data()?.tenantId !== auth.tenantId) {
+        return bad("Invalid cursor");
+      }
+      ref = ref.startAfter(cursorSnap);
+    }
 
     const snap = await ref.limit(fetchLimit).get();
-    let sites = snap.docs.map((doc) => pickSite(doc.data(), doc.id));
-
-    if (!canReadAll) {
-      sites = sites.filter((s: any) =>
-        canUserAccessSiteDoc({ uid: auth.uid, role: auth.role, site: s })
-      );
-    }
-
-    sites.sort((a: any, b: any) => {
-      const au = a.updatedAtIso ? Date.parse(a.updatedAtIso) : 0;
-      const bu = b.updatedAtIso ? Date.parse(b.updatedAtIso) : 0;
-      if (bu !== au) return bu - au;
-
-      const ac = a.createdAtIso ? Date.parse(a.createdAtIso) : 0;
-      const bc = b.createdAtIso ? Date.parse(b.createdAtIso) : 0;
-      return bc - ac;
-    });
-
-    if (q) {
-      sites = sites.filter((s: any) => {
-        const hay =
-          String(s.search ?? "").toLowerCase() ||
-          `${s.name ?? ""} ${s.clientName ?? ""} ${s.city ?? ""} ${s.address ?? ""}`.toLowerCase();
+    const hasMore = snap.size > pageSize;
+    const scannedDocs = snap.docs.slice(0, pageSize);
+    const sites = scannedDocs
+      .map((doc) => pickSite(doc.data(), doc.id))
+      .filter((site) => canReadAll || canUserAccessSiteDoc({ uid: auth.uid, role: auth.role, site }))
+      .filter((site) => {
+        if (isActive !== null && site.isActive !== isActive) return false;
+        if (clientId === "__no_client__" && site.clientId) return false;
+        if (clientId && clientId !== "__no_client__" && site.clientId !== clientId) return false;
+        if (siteType && site.siteType !== siteType) return false;
+        const level = Number(site.riskLevel ?? 3);
+        if (riskLevel !== null && level !== riskLevel) return false;
+        if (risk === "high" && level < 4) return false;
+        if (!q) return true;
+        const hay = String(
+          site.search ||
+            `${site.name ?? ""} ${site.clientName ?? ""} ${site.city ?? ""} ${site.address ?? ""}`
+        ).toLowerCase();
         return hay.includes(q);
       });
-    }
-
-    sites = sites.slice(0, max);
+    const cursorDoc = hasMore ? scannedDocs.at(-1) ?? null : null;
+    const nextCursor = cursorDoc ? encodeSiteCursor(cursorDoc.id) : null;
 
     return json(200, {
       ok: true,
@@ -243,6 +275,8 @@ export async function GET(req: NextRequest) {
       count: sites.length,
       sites,
       items: sites,
+      nextCursor,
+      hasMore,
     });
   } catch (e: any) {
     return serverError(e, "sites.GET");

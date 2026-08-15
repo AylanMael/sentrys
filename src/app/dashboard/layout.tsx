@@ -64,7 +64,6 @@ import {
   SidebarInset,
   SidebarMenu,
   SidebarMenuBadge,
-  SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
@@ -218,6 +217,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [displayDensity, setDisplayDensity] =
     useState<DisplayDensity>("comfortable");
   const [densityHydrated, setDensityHydrated] = useState(false);
+  const [navigationSearch, setNavigationSearch] = useState("");
+  const navigationSearchRef = useRef<HTMLInputElement>(null);
 
   const isPlanning = pathname?.startsWith("/dashboard/planning") ?? false;
   const isCompactDisplay = displayDensity === "compact";
@@ -449,49 +450,68 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const menuGroups = useMemo(() => {
     return [
       {
-        label: "Opérations",
+        label: "Quotidien",
         items: [
-          { href: "/dashboard", icon: LayoutDashboard, label: "Vue d'ensemble" },
+          { href: "/dashboard", icon: LayoutDashboard, label: "Vue d'ensemble", keywords: "accueil synthèse" },
           ...(role === "agent"
-            ? [{ href: "/dashboard/agent-planning", icon: Bell, label: "Mes diffusions" }]
+            ? [{ href: "/dashboard/agent-planning", icon: Bell, label: "Mes diffusions", keywords: "missions affectations" }]
             : []),
-          { href: "/dashboard/planning", icon: CalendarDays, label: "Planning" },
-          { href: "/dashboard/commandes", icon: ClipboardList, label: "Commandes clients" },
-          { href: "/dashboard/prepaie", icon: Calculator, label: "Pré-paie" },
-          { href: "/dashboard/vacations", icon: CalendarClock, label: "Vacations" },
-          { href: "/dashboard/patrols", icon: Activity, label: "Rondes" },
-          { href: "/dashboard/incidents", icon: Siren, label: "Incidents" },
-          { href: "/dashboard/command", icon: Radar, label: "Command Center" },
-          { href: "/dashboard/conduite", icon: CheckCircle2, label: "Conduite" },
+          { href: "/dashboard/planning", icon: CalendarDays, label: "Planning", keywords: "calendrier affectations" },
+          { href: "/dashboard/vacations", icon: CalendarClock, label: "Vacations", keywords: "missions horaires" },
+          { href: "/dashboard/incidents", icon: Siren, label: "Incidents", keywords: "alertes déclarations" },
+          { href: "/dashboard/commandes", icon: ClipboardList, label: "Commandes clients", keywords: "demandes prestations" },
         ],
       },
       {
-        label: "Ressources",
+        label: "Répertoire",
         items: [
-          { href: "/dashboard/sites", icon: MapPin, label: "Sites" },
-          { href: "/dashboard/agents", icon: ShieldCheck, label: "Agents" },
-          { href: "/dashboard/clients", icon: Building2, label: "Clients" },
+          { href: "/dashboard/sites", icon: MapPin, label: "Sites", keywords: "lieux établissements" },
+          { href: "/dashboard/agents", icon: ShieldCheck, label: "Agents", keywords: "personnel sécurité" },
+          { href: "/dashboard/clients", icon: Building2, label: "Clients", keywords: "entreprises contacts" },
+          ...(canSeeUsersTeam
+            ? [{ href: "/dashboard/users", icon: Users, label: "Équipe", keywords: "utilisateurs collaborateurs" }]
+            : []),
         ],
       },
       {
-        label: "Administration",
+        label: "Outils avancés",
         items: [
+          { href: "/dashboard/prepaie", icon: Calculator, label: "Pré-paie", keywords: "salaires heures primes" },
+          { href: "/dashboard/command", icon: Radar, label: "Command Center", keywords: "pilotage opérations" },
+          { href: "/dashboard/conduite", icon: CheckCircle2, label: "Conduite", keywords: "suivi contrôle" },
+          { href: "/dashboard/patrols", icon: Activity, label: "Suivi des rondes", keywords: "patrouilles parcours" },
           ...(isPlatformSuperAdmin
-            ? [{ href: "/platform", icon: ShieldCheck, label: "Backoffice SaaS" }]
+            ? [{ href: "/platform", icon: ShieldCheck, label: "Backoffice SaaS", keywords: "plateforme tenants" }]
             : []),
           ...(needsAgencyOnboarding
-            ? [{ href: "/dashboard/onboarding", icon: CheckCircle2, label: tenantOnboardingStatus === "activation_requested" ? "Activation demandee" : "Demarrage agence" }]
+            ? [{ href: "/dashboard/onboarding", icon: CheckCircle2, label: tenantOnboardingStatus === "activation_requested" ? "Activation demandée" : "Démarrage agence", keywords: "configuration ouverture" }]
             : []),
-          { href: "/dashboard/activity", icon: Activity, label: "Audit Log" },
-          { href: "/dashboard/recette", icon: CheckCircle2, label: "Recette MVP" },
-          { href: "/dashboard/conformite", icon: FileWarning, label: "Conformité" },
-          ...(canSeeUsersTeam
-            ? [{ href: "/dashboard/users", icon: Users, label: "Équipe" }]
+          { href: "/dashboard/activity", icon: Activity, label: "Journal d'activité", keywords: "audit historique" },
+          { href: "/dashboard/conformite", icon: FileWarning, label: "Conformité", keywords: "documents obligations" },
+          ...(process.env.NODE_ENV !== "production"
+            ? [{ href: "/dashboard/recette", icon: CheckCircle2, label: "Recette MVP", keywords: "tests validation" }]
             : []),
         ],
       },
     ];
   }, [canSeeUsersTeam, isPlatformSuperAdmin, needsAgencyOnboarding, role, tenantOnboardingStatus]);
+
+  const navigationResults = useMemo(() => {
+    const query = navigationSearch.trim().toLocaleLowerCase("fr");
+    if (!query) return [];
+
+    return [
+      ...menuGroups.flatMap((group) =>
+        group.items.map((item) => ({ ...item, group: group.label }))
+      ),
+      { href: "/dashboard/billing", icon: CreditCard, label: "Abonnement", keywords: "facturation offre quotas", group: "Gestion" },
+      { href: "/dashboard/settings", icon: Settings, label: "Configuration", keywords: "paramètres agence", group: "Gestion" },
+    ]
+      .filter((item) =>
+        `${item.label} ${item.keywords}`.toLocaleLowerCase("fr").includes(query)
+      )
+      .slice(0, 8);
+  }, [menuGroups, navigationSearch]);
 
   const handleLogout = async () => {
     await auth.signOut();
@@ -505,11 +525,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (!meta) return;
       if (e.key.toLowerCase() === "k") {
         e.preventDefault();
+        navigationSearchRef.current?.focus();
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  const renderMenuGroup = (group: (typeof menuGroups)[number]) => (
+    <SidebarGroup key={group.label} className={cn(isCompactDisplay ? "mb-3" : "mb-6")}>
+      <SidebarGroupLabel className="text-[10px] uppercase font-black tracking-[0.2em] text-muted-foreground/40 px-4 mb-3 group-data-[collapsible=icon]:hidden">
+        {group.label}
+      </SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-1">
+          {group.items.map((item) => (
+            <SidebarMenuItem key={item.label}>
+              <NavLink href={item.href} icon={item.icon} label={item.label} />
+              {item.href === "/dashboard/conformite" && complianceOpenCount > 0 && (
+                <SidebarMenuBadge
+                  variant="destructive"
+                  className="animate-pulse shadow-lg shadow-destructive/20"
+                >
+                  {complianceOpenCount > 99 ? "99+" : complianceOpenCount}
+                </SidebarMenuBadge>
+              )}
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
 
   if (loading || loadingUserDoc) {
     return (
@@ -532,7 +578,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <SidebarProvider>
         <SidebarAutoCollapse isPlanning={isPlanning} />
 
-        <Sidebar collapsible="icon" className="border-r border-border/10 glass-card">
+        <Sidebar
+          collapsible="icon"
+          role="navigation"
+          aria-label="Navigation principale"
+          className="border-r border-border/10 glass-card"
+        >
           <SidebarHeader
             className={cn(
               "flex items-center justify-center border-b border-border/10",
@@ -551,52 +602,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </SidebarHeader>
 
           <SidebarContent className={cn("px-2", isCompactDisplay ? "py-3" : "py-6")}>
-            {menuGroups.map((group) => (
-              <SidebarGroup key={group.label} className={cn(isCompactDisplay ? "mb-3" : "mb-6")}>
-                <SidebarGroupLabel className="text-[10px] uppercase font-black tracking-[0.2em] text-muted-foreground/40 px-4 mb-3 group-data-[collapsible=icon]:hidden">
-                  {group.label}
-                </SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu className="gap-1">
-                    {group.items.map((item) => (
-                      <SidebarMenuItem key={item.label}>
-                        <NavLink href={item.href} icon={item.icon} label={item.label} />
-                        {item.href === "/dashboard/conformite" &&
-                          complianceOpenCount > 0 && (
-                            <SidebarMenuBadge
-                              variant="destructive"
-                              className="animate-pulse shadow-lg shadow-destructive/20"
-                            >
-                              {complianceOpenCount > 99
-                                ? "99+"
-                                : complianceOpenCount}
-                            </SidebarMenuBadge>
-                          )}
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            ))}
+            {menuGroups.slice(0, 2).map(renderMenuGroup)}
+
+            <SidebarSeparator className="mx-4 my-3 opacity-10" />
+
+            {menuGroups.slice(2).map(renderMenuGroup)}
 
             <SidebarSeparator className="mx-4 my-4 opacity-10" />
 
             <SidebarGroup>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip="Facturation"
-                    className={cn(
-                      "transition-all",
-                      pathname === "/dashboard/billing" && "glass-card border-l-4 border-l-primary/50 text-foreground"
-                    )}
-                  >
-                    <Link href="/dashboard/billing" className="font-bold flex items-center gap-3">
-                      <CreditCard className="size-4 text-muted-foreground" />
-                      <span className="text-muted-foreground/80">Abonnement</span>
-                    </Link>
-                  </SidebarMenuButton>
+                  <NavLink
+                    href="/dashboard/billing"
+                    icon={CreditCard}
+                    label="Abonnement"
+                  />
 
                   {!billing.loading && (
                     <div className="group-data-[collapsible=icon]:hidden">
@@ -622,12 +643,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <SidebarFooter className={cn("border-t border-border/10", isCompactDisplay ? "p-3" : "p-6")}>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Paramètres de l'agence">
-                  <Link href="/dashboard/settings" className="hover:bg-muted/30 transition-all rounded-xl border border-transparent hover:border-border/20">
-                    <Settings className="size-4 text-muted-foreground" />
-                    <span className="text-muted-foreground/80 font-medium">Configuration</span>
-                  </Link>
-                </SidebarMenuButton>
+                <NavLink
+                  href="/dashboard/settings"
+                  icon={Settings}
+                  label="Configuration"
+                />
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarFooter>
@@ -643,12 +663,44 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex items-center gap-6">
               <SidebarTrigger className="-ml-2 hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all duration-300 rounded-lg p-2" />
 
-              <div className="hidden lg:flex items-center gap-3 px-4 py-2 rounded-xl bg-background/40 border border-border/10 text-muted-foreground transition-all duration-300 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 cursor-pointer group w-80">
-                <Search className="size-4 group-hover:text-primary transition-colors" />
-                <span className="text-xs font-semibold tracking-tight uppercase opacity-60">Recherche d'élite...</span>
-                <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded bg-muted/50 px-2 font-mono text-[10px] font-bold text-muted-foreground border border-border/10">
-                  <span className="text-xs">⌘</span>K
+              <div className="relative flex w-40 max-w-[45vw] min-w-0 items-center gap-2 rounded-xl border border-border/10 bg-background/40 px-3 py-2 text-muted-foreground transition focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 sm:w-72 sm:max-w-none lg:w-80">
+                <Search className="size-4 shrink-0" aria-hidden="true" />
+                <input
+                  ref={navigationSearchRef}
+                  type="search"
+                  value={navigationSearch}
+                  onChange={(event) => setNavigationSearch(event.target.value)}
+                  aria-label="Rechercher dans la navigation"
+                  placeholder="Rechercher une fonction"
+                  className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-foreground outline-none placeholder:text-muted-foreground"
+                />
+                <kbd className="pointer-events-none ml-auto hidden h-5 select-none items-center gap-1 rounded border border-border/10 bg-muted/50 px-2 font-mono text-[10px] font-bold text-muted-foreground sm:inline-flex">
+                  ⌘/Ctrl+K
                 </kbd>
+                {navigationSearch.trim() && (
+                  <div className="absolute left-0 top-[calc(100%+0.5rem)] z-50 max-h-80 w-full min-w-64 overflow-y-auto rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-xl">
+                    {navigationResults.length > 0 ? (
+                      navigationResults.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setNavigationSearch("")}
+                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          <item.icon className="size-4 shrink-0" aria-hidden="true" />
+                          <span className="min-w-0 flex-1 truncate font-semibold">{item.label}</span>
+                          <span className="hidden truncate text-[10px] text-muted-foreground sm:inline">
+                            {item.group}
+                          </span>
+                        </Link>
+                      ))
+                    ) : (
+                      <p className="px-3 py-4 text-center text-xs text-muted-foreground" role="status">
+                        Aucune fonction trouvée.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -854,7 +906,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <DropdownMenuLabel className="p-4 mb-2">
                     <div className="flex flex-col space-y-2">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60">
-                        Profil Opérationnel
+                        Profil utilisateur
                       </p>
                       <p className="text-sm font-black truncate leading-tight tracking-tighter text-foreground">{user?.email}</p>
                       <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 w-fit">
@@ -869,12 +921,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                   <DropdownMenuItem className="rounded-2xl gap-4 p-3.5 cursor-pointer hover:bg-primary/5 transition-all group">
                     <User className="size-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                    <span className="text-sm font-semibold text-muted-foreground group-hover:text-foreground">Profil de commandement</span>
+                    <span className="text-sm font-semibold text-muted-foreground group-hover:text-foreground">Mon profil</span>
                   </DropdownMenuItem>
 
                   <DropdownMenuItem className="rounded-2xl gap-4 p-3.5 cursor-pointer hover:bg-primary/5 transition-all group">
                     <LifeBuoy className="size-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                    <span className="text-sm font-semibold text-muted-foreground group-hover:text-foreground">Soutien logistique</span>
+                    <span className="text-sm font-semibold text-muted-foreground group-hover:text-foreground">Aide</span>
                   </DropdownMenuItem>
 
                   <DropdownMenuSeparator className="opacity-10 my-2" />

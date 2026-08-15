@@ -162,6 +162,16 @@ export interface PlanningContextType {
   loading: boolean;
   sitesLoading: boolean;
   agentsLoading: boolean;
+  siteOptions: SiteApiItem[];
+  agentOptions: AgentApiItem[];
+  sitesHasMore: boolean;
+  agentsHasMore: boolean;
+  sitesStatus: CatalogStatus;
+  agentsStatus: CatalogStatus;
+  sitesError: string | null;
+  agentsError: string | null;
+  loadSiteOptions: (query?: string, append?: boolean) => Promise<void>;
+  loadAgentOptions: (query?: string, append?: boolean) => Promise<void>;
   mode: PlanningMode;
   setMode: (m: PlanningMode) => void;
   viewDensity: "compact" | "comfortable";
@@ -244,6 +254,7 @@ export interface PlanningContextType {
 }
 
 type DisplayDensity = "comfortable" | "compact";
+export type CatalogStatus = "idle" | "loading" | "loadingMore" | "error";
 
 const DISPLAY_DENSITY_STORAGE_KEY = "sentrys:display-density";
 const DISPLAY_DENSITY_SOURCE_STORAGE_KEY = "sentrys:display-density-source";
@@ -269,9 +280,28 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // --- State ---
   const [sites, setSites] = useState<SiteApiItem[]>([]);
-  const [sitesLoading, setSitesLoading] = useState(true);
   const [agents, setAgents] = useState<AgentApiItem[]>([]);
-  const [agentsLoading, setAgentsLoading] = useState(true);
+  const [siteOptions, setSiteOptions] = useState<SiteApiItem[]>([]);
+  const [agentOptions, setAgentOptions] = useState<AgentApiItem[]>([]);
+  const [sitesStatus, setSitesStatus] = useState<CatalogStatus>("idle");
+  const [agentsStatus, setAgentsStatus] = useState<CatalogStatus>("idle");
+  const [sitesError, setSitesError] = useState<string | null>(null);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
+  const [sitesHasMore, setSitesHasMore] = useState(false);
+  const [agentsHasMore, setAgentsHasMore] = useState(false);
+  const sitesCursorRef = useRef<string | null>(null);
+  const agentsCursorRef = useRef<string | null>(null);
+  const siteQueryRef = useRef("");
+  const agentQueryRef = useRef("");
+  const siteRequestRef = useRef(0);
+  const agentRequestRef = useRef(0);
+  const siteLoadingKeyRef = useRef<string | null>(null);
+  const agentLoadingKeyRef = useRef<string | null>(null);
+  const siteLoadedKeyRef = useRef<string | null>(null);
+  const agentLoadedKeyRef = useRef<string | null>(null);
+  const catalogsMountedRef = useRef(true);
+  const sitesLoading = sitesStatus === "loading" || sitesStatus === "loadingMore";
+  const agentsLoading = agentsStatus === "loading" || agentsStatus === "loadingMore";
   const [isMutating, setIsMutating] = useState(false);
 
   const [mode, setMode] = useState<PlanningMode>("site");
@@ -600,26 +630,125 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
 
 
 
-  const loadInitialData = useCallback(async () => {
+  const loadSiteOptions = useCallback(async (search = "", append = false) => {
     if (!tenantId) return;
-    setSitesLoading(true);
-    setAgentsLoading(true);
+    const queryText = search.trim();
+    const loadedKey = `${tenantId}:${queryText}`;
+    if (!append && siteLoadedKeyRef.current === loadedKey) return;
+    const cursor = append && queryText === siteQueryRef.current ? sitesCursorRef.current : null;
+    if (append && !cursor) return;
+    const requestKey = `${queryText}:${append ? cursor : "first"}`;
+    if (siteLoadingKeyRef.current === requestKey) return;
+    siteLoadingKeyRef.current = requestKey;
+    const requestId = ++siteRequestRef.current;
+
+    if (!append) {
+      siteQueryRef.current = queryText;
+      sitesCursorRef.current = null;
+      setSiteOptions([]);
+      setSitesHasMore(false);
+    }
+    setSitesError(null);
+    setSitesStatus(append ? "loadingMore" : "loading");
+
+    const params = new URLSearchParams({ limit: "50", pageSize: "50", isActive: "true" });
+    if (queryText) {
+      params.set("search", queryText);
+      params.set("q", queryText);
+    }
+    if (cursor) params.set("cursor", cursor);
+
     try {
-      const [sResp, aResp] = await Promise.all([
-        apiFetch<{ ok: boolean, sites: SiteApiItem[] }>("/api/sites"),
-        apiFetch<{ ok: boolean, agents: AgentApiItem[] }>("/api/agents"),
-      ]);
-      if (sResp?.ok && Array.isArray(sResp.sites)) setSites(sResp.sites);
-      if (aResp?.ok && Array.isArray(aResp.agents)) setAgents(aResp.agents);
-    } catch (e) {
-      console.error("Context data load error", e);
+      const response = await apiFetch<{
+        ok: boolean;
+        sites?: SiteApiItem[];
+        items?: SiteApiItem[];
+        nextCursor?: string | null;
+        hasMore?: boolean;
+      }>(`/api/sites?${params.toString()}`);
+      if (!catalogsMountedRef.current || requestId !== siteRequestRef.current) return;
+      const rows = response.sites ?? response.items ?? [];
+      setSites((current) => Array.from(new Map([...current, ...rows].map((item) => [item.id, item])).values()));
+      setSiteOptions((current) => append
+        ? Array.from(new Map([...current, ...rows].map((item) => [item.id, item])).values())
+        : rows
+      );
+      sitesCursorRef.current = response.nextCursor ?? null;
+      siteLoadedKeyRef.current = loadedKey;
+      setSitesHasMore(response.hasMore !== false && Boolean(response.nextCursor));
+      setSitesStatus("idle");
+    } catch {
+      if (!catalogsMountedRef.current || requestId !== siteRequestRef.current) return;
+      setSitesError("Impossible de charger les sites.");
+      setSitesStatus("error");
     } finally {
-      setSitesLoading(false);
-      setAgentsLoading(false);
+      if (requestId === siteRequestRef.current) siteLoadingKeyRef.current = null;
     }
   }, [tenantId]);
 
-  useEffect(() => { loadInitialData(); }, [loadInitialData]);
+  const loadAgentOptions = useCallback(async (search = "", append = false) => {
+    if (!tenantId) return;
+    const queryText = search.trim();
+    const loadedKey = `${tenantId}:${queryText}`;
+    if (!append && agentLoadedKeyRef.current === loadedKey) return;
+    const cursor = append && queryText === agentQueryRef.current ? agentsCursorRef.current : null;
+    if (append && !cursor) return;
+    const requestKey = `${queryText}:${append ? cursor : "first"}`;
+    if (agentLoadingKeyRef.current === requestKey) return;
+    agentLoadingKeyRef.current = requestKey;
+    const requestId = ++agentRequestRef.current;
+
+    if (!append) {
+      agentQueryRef.current = queryText;
+      agentsCursorRef.current = null;
+      setAgentOptions([]);
+      setAgentsHasMore(false);
+    }
+    setAgentsError(null);
+    setAgentsStatus(append ? "loadingMore" : "loading");
+
+    const params = new URLSearchParams({ pageSize: "50", limit: "50", status: "active" });
+    if (queryText) params.set("q", queryText);
+    if (cursor) params.set("cursor", cursor);
+
+    try {
+      const response = await apiFetch<{
+        ok: boolean;
+        agents?: AgentApiItem[];
+        items?: AgentApiItem[];
+        pageInfo?: { hasMore?: boolean; nextCursor?: string | null };
+      }>(`/api/agents?${params.toString()}`);
+      if (!catalogsMountedRef.current || requestId !== agentRequestRef.current) return;
+      const rows = response.agents ?? response.items ?? [];
+      setAgents((current) => Array.from(new Map([...current, ...rows].map((item) => [item.id, item])).values()));
+      setAgentOptions((current) => append
+        ? Array.from(new Map([...current, ...rows].map((item) => [item.id, item])).values())
+        : rows
+      );
+      agentsCursorRef.current = response.pageInfo?.nextCursor ?? null;
+      agentLoadedKeyRef.current = loadedKey;
+      setAgentsHasMore(Boolean(response.pageInfo?.hasMore && response.pageInfo.nextCursor));
+      setAgentsStatus("idle");
+    } catch {
+      if (!catalogsMountedRef.current || requestId !== agentRequestRef.current) return;
+      setAgentsError("Impossible de charger les agents.");
+      setAgentsStatus("error");
+    } finally {
+      if (requestId === agentRequestRef.current) agentLoadingKeyRef.current = null;
+    }
+  }, [tenantId]);
+
+  useEffect(() => {
+    catalogsMountedRef.current = true;
+    void Promise.all([loadSiteOptions(), loadAgentOptions()]);
+    return () => {
+      catalogsMountedRef.current = false;
+      siteRequestRef.current += 1;
+      agentRequestRef.current += 1;
+      siteLoadingKeyRef.current = null;
+      agentLoadingKeyRef.current = null;
+    };
+  }, [loadSiteOptions, loadAgentOptions]);
   const refresh = useCallback(async () => { await mutate(); }, [mutate]);
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
@@ -1432,6 +1561,9 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const value: PlanningContextType = {
     vacations, filteredVacations, sites, agents, loading, sitesLoading, agentsLoading,
+    siteOptions, agentOptions, sitesHasMore, agentsHasMore,
+    sitesStatus, agentsStatus, sitesError, agentsError,
+    loadSiteOptions, loadAgentOptions,
     mode, setMode, viewDensity, setViewDensity, siteId, setSiteId, agentId, setAgentId, range, setRange, stats, conflictIndex,
     tensionMode, setTensionMode, selectedIds, setSelectedIds, clearSelection,
     showAbsences, setShowAbsences,

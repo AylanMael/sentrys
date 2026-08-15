@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Sparkles,
@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { apiFetch } from "@/lib/api/client-fetch";
+import { apiFetch, isApiFetchError } from "@/lib/api/client-fetch";
 import { cn } from "@/lib/utils";
 
 type Risk = {
@@ -30,31 +30,70 @@ type AnalysisResult = {
   overallScore: number;
 };
 
+type AnalysisContext = {
+  window: { from: string; to: string };
+  vacations: number;
+  sites: number;
+  agents: number;
+};
+
 export function AiRiskAlerts() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [analysisContext, setAnalysisContext] = useState<AnalysisContext | null>(null);
   const [expanded, setExpanded] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const requestInFlightRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const runAnalysis = async () => {
+    if (requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
     setLoading(true);
     setError(null);
+    setResult(null);
+    setAnalysisContext(null);
     try {
-      const res = await apiFetch<{ ok: boolean; analysis?: AnalysisResult; error?: string }>("/api/ai/schedule-risk", {
-        method: "POST"
+      const from = new Date();
+      const to = new Date(from.getTime() + 7 * 24 * 60 * 60 * 1_000);
+      const res = await apiFetch<{
+        ok: boolean;
+        analysis?: AnalysisResult;
+        context?: AnalysisContext;
+        error?: string;
+      }>("/api/ai/schedule-risk", {
+        method: "POST",
+        body: {
+          from: from.toISOString(),
+          to: to.toISOString(),
+        },
       });
+      if (!mountedRef.current) return;
       if (res?.ok && res.analysis) {
         setResult(res.analysis);
+        setAnalysisContext(res.context ?? null);
         setExpanded(true);
       } else {
-        setError(res?.error || "Une erreur inconnue est survenue.");
+        setError("Impossible d’analyser cette période.");
       }
-    } catch (e) {
-      console.error("AI Analysis failed", e);
-      setError("Impossible de contacter le service d'audit IA.");
+    } catch (cause) {
+      if (!mountedRef.current) return;
+      setError(
+        isApiFetchError(cause) && cause.status === 422
+          ? "Cette période contient trop d’éléments. Réduisez la période analysée."
+          : "Impossible de contacter le service d’audit IA."
+      );
     } finally {
-      setLoading(false);
+      requestInFlightRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
   };
 
@@ -68,7 +107,7 @@ export function AiRiskAlerts() {
             </div>
             <div>
               <h3 className="text-2xl font-black tracking-tighter text-foreground">Audit SENTRY-AI</h3>
-              <p className="text-base font-semibold text-muted-foreground/60 mt-1">Identifiez les angles morts de votre dispositif de sécurité.</p>
+              <p className="text-base font-semibold text-muted-foreground/60 mt-1">Analyse des risques sur les 7 prochains jours</p>
             </div>
           </div>
           <Button
@@ -120,6 +159,11 @@ export function AiRiskAlerts() {
               )}
             </div>
             <p className="text-sm font-bold text-muted-foreground/60 mt-1 leading-relaxed max-w-2xl">{result?.summary}</p>
+            {analysisContext ? (
+              <p className="mt-1 text-xs font-semibold text-muted-foreground/60">
+                Période analysée : {new Date(analysisContext.window.from).toLocaleDateString("fr-FR")} – {new Date(analysisContext.window.to).toLocaleDateString("fr-FR")}
+              </p>
+            ) : null}
           </div>
         </div>
 

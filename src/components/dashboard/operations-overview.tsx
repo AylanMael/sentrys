@@ -130,6 +130,26 @@ type OperationsOverviewProps = {
   activeSitesCount: number;
 };
 
+type CockpitResponse = {
+  ok: boolean;
+  kpis: {
+    coverageRate: number;
+    todayVacations: number;
+    uncoveredPosts: number;
+    startsNextTwoHours: number;
+    criticalIncidents: number;
+    openIncidents: number;
+  };
+  priorities: Array<{
+    id: string;
+    href: string;
+    title: string;
+    detail: string;
+    actionLabel: string;
+    tone: "critical" | "warning" | "info" | "success";
+  }>;
+};
+
 function startOfToday() {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
@@ -222,6 +242,7 @@ export function OperationsOverview({
   const [sites, setSites] = useState<SiteRow[]>([]);
   const [agents, setAgents] = useState<AgentRow[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
+  const [cockpit, setCockpit] = useState<CockpitResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -233,50 +254,18 @@ export function OperationsOverview({
       setError(null);
 
       try {
-        const from = startOfToday().toISOString();
-        const to = startOfTomorrow().toISOString();
-
-        const [vacationsRes, incidentsRes, sitesRes, agentsRes] = await Promise.all([
-          apiFetch<{ ok: boolean; vacations?: VacationRow[] }>(
-            `/api/vacations?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&max=200`
-          ),
-          apiFetch<{ ok: boolean; incidents?: IncidentRow[] }>(
-            "/api/incidents?max=20"
-          ),
-          apiFetch<{ ok: boolean; sites?: SiteRow[] }>(
-            "/api/sites?max=200&isActive=true"
-          ),
-          apiFetch<{ ok: boolean; agents?: AgentRow[] }>(
-            "/api/agents?max=200&status=active"
-          ),
-        ]);
+        const response = await apiFetch<CockpitResponse>("/api/operations/cockpit");
 
         if (!mounted) return;
-
-        const vacationIds = (vacationsRes.vacations ?? [])
-          .map((vacation) => vacation.id)
-          .filter(Boolean);
-
-        let assignmentsRes: { ok: boolean; assignments?: AssignmentRow[] } | null = null;
-
-        if (vacationIds.length > 0) {
-          assignmentsRes = await apiFetch<{ ok: boolean; assignments?: AssignmentRow[] }>(
-            `/api/assignments?vacationIds=${encodeURIComponent(vacationIds.join(","))}`
-          );
-        }
-
-        setVacations(vacationsRes.vacations ?? []);
-        setIncidents(incidentsRes.incidents ?? []);
-        setSites(sitesRes.sites ?? []);
-        setAgents(agentsRes.agents ?? []);
-        setAssignments(assignmentsRes?.assignments ?? []);
-      } catch (err: unknown) {
+        setCockpit(response);
+        setVacations([]);
+        setIncidents([]);
+        setSites([]);
+        setAgents([]);
+        setAssignments([]);
+      } catch {
         if (!mounted) return;
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Impossible de charger la vue exploitation."
-        );
+        setError("Impossible de charger la vue exploitation.");
       } finally {
         if (!mounted) return;
         setLoading(false);
@@ -293,6 +282,31 @@ export function OperationsOverview({
   }, []);
 
   const summary = useMemo(() => {
+    if (cockpit) {
+      const urgencyItems: UrgencyItem[] = cockpit.priorities.slice(0, 6).map((item) => ({
+        id: item.id,
+        href: item.href,
+        label: item.title,
+        detail: item.detail,
+        actionLabel: item.actionLabel,
+        tone: item.tone === "success" ? "info" : item.tone,
+      }));
+      return {
+        activeVacationsCount: cockpit.kpis.todayVacations,
+        unresolvedIncidentsCount: cockpit.kpis.openIncidents,
+        criticalIncidentsCount: cockpit.kpis.criticalIncidents,
+        fieldEscalationsCount: 0,
+        uncoveredCount: cockpit.kpis.uncoveredPosts,
+        partialCount: 0,
+        startingSoonCount: cockpit.kpis.startsNextTwoHours,
+        coverageRate: cockpit.kpis.coverageRate,
+        urgencyItems,
+        missingCheckIns: [] as MissingCheckInCard[],
+        replacementCards: [] as ReplacementCard[],
+        tensionSites: [] as TensionSite[],
+        criticalIncidentCards: [] as CriticalIncidentCard[],
+      };
+    }
     const now = new Date();
     const soonThreshold = new Date(now.getTime() + 2 * 60 * 60 * 1000);
     const sitesById = new Map(sites.map((site) => [site.id, site]));
@@ -632,7 +646,7 @@ export function OperationsOverview({
       tensionSites,
       criticalIncidentCards,
     };
-  }, [agents, assignments, incidents, sites, vacations]);
+  }, [agents, assignments, cockpit, incidents, sites, vacations]);
 
   return (
     <section className="space-y-6">

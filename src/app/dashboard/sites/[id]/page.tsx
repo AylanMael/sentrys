@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -27,13 +27,9 @@ import {
   Navigation,
 } from "lucide-react";
 import {
-  collection,
   doc,
   onSnapshot,
-  orderBy,
-  query,
   Timestamp,
-  where,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase/client";
@@ -72,14 +68,9 @@ type Severity = "Faible" | "Moyenne" | "Élevée";
 type Status = "Ouvert" | "Clos";
 
 type IncidentDoc = {
-  tenantId: string;
-  siteId: string;
-  siteName?: string;
-  severity: Severity;
-  status: Status;
-  description: string;
-  createdAt?: Timestamp;
-  createdBy?: { uid: string; email?: string | null };
+  severity: Severity | "low" | "medium" | "high" | "critical";
+  status: Status | "open" | "investigating" | "resolved" | "closed";
+  createdAtIso: string | null;
 };
 
 type IncidentRow = IncidentDoc & { id: string };
@@ -99,8 +90,10 @@ type ApiWarning = {
   acceptedCount?: number;
 };
 
-function tsToDate(ts?: Timestamp) {
-  return ts?.toDate?.() ?? new Date(0);
+function incidentDate(value: string | null) {
+  if (!value) return new Date(0);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
 }
 
 function safeArr(v: unknown): string[] {
@@ -240,6 +233,12 @@ export default function SiteDétailPage() {
 
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [incidentsLoading, setIncidentsLoading] = useState(true);
+  const [incidentsLoadingMore, setIncidentsLoadingMore] = useState(false);
+  const [incidentsError, setIncidentsError] = useState<string | null>(null);
+  const [incidentsHasMore, setIncidentsHasMore] = useState(false);
+  const incidentsCursorRef = useRef<string | null>(null);
+  const incidentsRequestRef = useRef(0);
+  const incidentsLoadingRef = useRef(false);
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignSaving, setAssignSaving] = useState(false);
@@ -331,40 +330,61 @@ export default function SiteDétailPage() {
     return () => unsub();
   }, [id, toast, (user as any)?.tenantId, (user as any)?.uid, isAdmin, assignOpen]);
 
-  useEffect(() => {
-    if (!id || !(user as any)?.tenantId) {
-      setIncidents([]);
-      setIncidentsLoading(false);
-      return;
-    }
+  const loadIncidents = useCallback(async (append: boolean) => {
+    if (!id || incidentsLoadingRef.current) return;
 
-    if (!db) {
-      setIncidentsLoading(false);
-      return;
-    }
+    const requestId = ++incidentsRequestRef.current;
+    incidentsLoadingRef.current = true;
+    setIncidentsError(null);
+    if (append) setIncidentsLoadingMore(true);
+    else setIncidentsLoading(true);
 
-    setIncidentsLoading(true);
+    try {
+      const qs = new URLSearchParams({ siteId: id, limit: "10" });
+      if (append && incidentsCursorRef.current) qs.set("cursor", incidentsCursorRef.current);
 
-    const qy = query(
-      collection(db, "incidents"),
-      where("tenantId", "==", (user as any).tenantId),
-      where("siteId", "==", id),
-      orderBy("createdAt", "desc")
-    );
+      const response = await apiFetch<{
+        ok: boolean;
+        items: IncidentRow[];
+        nextCursor: string | null;
+        hasMore: boolean;
+      }>(`/api/incidents?${qs.toString()}`);
 
-    const unsub = onSnapshot(
-      qy,
-      (snap) => {
-        setIncidents(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
-        setIncidentsLoading(false);
-      },
-      () => {
-        setIncidentsLoading(false);
+      if (requestId !== incidentsRequestRef.current) return;
+      incidentsCursorRef.current = response.nextCursor;
+      setIncidentsHasMore(response.hasMore);
+      setIncidents((current) => {
+        const source = append ? [...current, ...response.items] : response.items;
+        return Array.from(new Map(source.map((incident) => [incident.id, incident])).values());
+      });
+    } catch {
+      if (requestId === incidentsRequestRef.current) {
+        setIncidentsError("Impossible de charger l’historique des incidents.");
       }
-    );
+    } finally {
+      if (requestId === incidentsRequestRef.current) {
+        incidentsLoadingRef.current = false;
+        setIncidentsLoading(false);
+        setIncidentsLoadingMore(false);
+      }
+    }
+  }, [id]);
 
-    return () => unsub();
-  }, [id, (user as any)?.tenantId]);
+  useEffect(() => {
+    incidentsRequestRef.current += 1;
+    incidentsLoadingRef.current = false;
+    incidentsCursorRef.current = null;
+    setIncidents([]);
+    setIncidentsHasMore(false);
+    setIncidentsError(null);
+
+    if (!id || !(user as any)?.tenantId) {
+      setIncidentsLoading(false);
+      return;
+    }
+
+    void loadIncidents(false);
+  }, [id, (user as any)?.tenantId, loadIncidents]);
 
   useEffect(() => {
     if (!assignOpen) return;
@@ -1090,12 +1110,17 @@ export default function SiteDétailPage() {
                 <div className="py-10 flex justify-center">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
+              ) : incidentsError && incidents.length === 0 ? (
+                <div className="py-10 text-center text-sm text-destructive">
+                  {incidentsError}
+                </div>
               ) : incidents.length === 0 ? (
                 <div className="py-10 text-center text-sm text-muted-foreground">
                   Aucun incident rapporté sur ce site.
                 </div>
               ) : (
-                <Table>
+                <>
+                  <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="text-xs font-medium text-muted-foreground h-10">
@@ -1140,7 +1165,7 @@ export default function SiteDétailPage() {
                           </span>
                         </TableCell>
                         <TableCell className="py-3 text-xs text-muted-foreground">
-                          {format(tsToDate(it.createdAt), "dd MMM yyyy", { locale: fr })}
+                          {format(incidentDate(it.createdAtIso), "dd MMM yyyy", { locale: fr })}
                         </TableCell>
                         <TableCell className="py-3 text-right">
                           <Button asChild variant="ghost" size="sm" className="h-7 text-xs rounded-md">
@@ -1150,7 +1175,25 @@ export default function SiteDétailPage() {
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                  </Table>
+                  <div className="border-t p-3 text-center">
+                    {incidentsError ? (
+                      <p className="mb-2 text-xs text-destructive">{incidentsError}</p>
+                    ) : null}
+                    {incidentsHasMore ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={incidentsLoadingMore}
+                        onClick={() => void loadIncidents(true)}
+                      >
+                        {incidentsLoadingMore ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Charger 10 précédents
+                      </Button>
+                    ) : null}
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

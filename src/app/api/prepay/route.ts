@@ -5,6 +5,10 @@ import {
   requireTenantUser,
 } from "@/app/api/_utils/withTenant";
 import {
+  loadDispatchVacationWindow,
+  VacationWindowError,
+} from "@/app/api/planning-dispatches/_vacation-window";
+import {
   normalizeText,
   parseDateTimeIso,
   safeArr,
@@ -19,6 +23,11 @@ import { normalizePrepaySettings } from "@/lib/payroll/settings";
 
 export const runtime = "nodejs";
 
+const MAX_PREPAY_RANGE_DAYS = 32;
+const MAX_PREPAY_AGENT_REFERENCES = 5000;
+const ISO_DATE_TIME =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
 function json(status: number, body: unknown) {
   const res = NextResponse.json(body, { status });
   res.headers.set("Cache-Control", "no-store");
@@ -29,19 +38,12 @@ function bad(message: string) {
   return json(400, { ok: false, error: message });
 }
 
-function defaultMonthRange() {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return { from, to };
-}
-
 function agentName(agent: Record<string, unknown> | undefined, fallback: string) {
   if (!agent) return fallback;
   const firstName = normalizeText(agent.firstName);
   const lastName = normalizeText(agent.lastName);
   const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
-  return fullName || normalizeText(agent.email) || fallback;
+  return fullName || fallback;
 }
 
 function monthlyContractHours(agent: Record<string, unknown> | undefined) {
@@ -67,60 +69,94 @@ export async function GET(req: NextRequest) {
   }
 
   const url = new URL(req.url);
-  const defaults = defaultMonthRange();
+  const allowedParams = new Set(["from", "to"]);
+  if ([...url.searchParams.keys()].some((key) => !allowedParams.has(key))) {
+    return bad("Unexpected query parameter");
+  }
+  if (url.searchParams.getAll("from").length !== 1 || url.searchParams.getAll("to").length !== 1) {
+    return bad("from and to are required once");
+  }
   const fromParam = normalizeText(url.searchParams.get("from"));
   const toParam = normalizeText(url.searchParams.get("to"));
-  const from = fromParam ? parseDateTimeIso(fromParam) : defaults.from;
-  const to = toParam ? parseDateTimeIso(toParam) : defaults.to;
+  if (!ISO_DATE_TIME.test(fromParam)) return bad("from must be an ISO date-time");
+  if (!ISO_DATE_TIME.test(toParam)) return bad("to must be an ISO date-time");
+  const from = parseDateTimeIso(fromParam);
+  const to = parseDateTimeIso(toParam);
 
   if (!from) return bad("from must be an ISO date");
   if (!to) return bad("to must be an ISO date");
   if (to.getTime() <= from.getTime()) return bad("to must be after from");
+  if (to.getTime() - from.getTime() > MAX_PREPAY_RANGE_DAYS * 24 * 60 * 60 * 1000) {
+    return json(422, {
+      ok: false,
+      error: "Periode trop large pour garantir une prepaie exhaustive.",
+    });
+  }
 
-  const vacationsSnap = await adminDb
-    .collection("vacations")
-    .where("tenantId", "==", auth.tenantId)
-    .limit(5000)
-    .get();
+  let vacationDocs: FirebaseFirestore.QueryDocumentSnapshot[];
+  try {
+    vacationDocs = await loadDispatchVacationWindow({ tenantId: auth.tenantId, from, to });
+  } catch (error: unknown) {
+    if (error instanceof VacationWindowError) {
+      return json(422, {
+        ok: false,
+        error: "Periode trop large ou trop dense pour garantir une prepaie exhaustive.",
+      });
+    }
+    console.error("[prepay.GET] vacation window failed", error);
+    return json(500, { ok: false, error: "Internal error" });
+  }
+
+  if (
+    vacationDocs.some(
+      (doc) => (doc.data() as Record<string, unknown>).tenantId !== auth.tenantId
+    )
+  ) {
+    return json(422, { ok: false, error: "Prepay data is incomplete" });
+  }
+
   const tenantSnap = await adminDb.collection("tenants").doc(auth.tenantId).get();
   const tenant = tenantSnap.exists
     ? (tenantSnap.data() as Record<string, unknown>)
     : {};
   const settings = normalizePrepaySettings(tenant.prepaySettings);
 
-  const scopedVacationDocs = vacationsSnap.docs.filter((doc) => {
-    const data = doc.data() as Record<string, unknown>;
-    const startAtIso = toIso(data.startAt);
-    const endAtIso = toIso(data.endAt);
-    if (!startAtIso || !endAtIso) return true;
-
-    const startMs = new Date(startAtIso).getTime();
-    const endMs = new Date(endAtIso).getTime();
-    return startMs < to.getTime() && endMs > from.getTime();
-  });
-
   const agentIds = Array.from(
     new Set(
-      scopedVacationDocs.flatMap((doc) =>
+      vacationDocs.flatMap((doc) =>
         safeArr((doc.data() as Record<string, unknown>).assignedAgentIds).slice(0, 1)
       )
     )
   );
+  if (agentIds.length > MAX_PREPAY_AGENT_REFERENCES) {
+    return json(422, { ok: false, error: "Prepay data is too dense" });
+  }
   const agentMap = new Map<string, Record<string, unknown>>();
+  let invalidAgentReference = false;
 
   for (let index = 0; index < agentIds.length; index += 200) {
     const part = agentIds.slice(index, index + 200);
     const refs = part.map((agentId) => adminDb.collection("agents").doc(agentId));
     const snaps = await adminDb.getAll(...refs);
     snaps.forEach((snap, snapIndex) => {
-      if (!snap.exists) return;
+      if (!snap.exists) {
+        invalidAgentReference = true;
+        return;
+      }
       const data = snap.data() as Record<string, unknown>;
-      if (data.tenantId !== auth.tenantId) return;
+      if (data.tenantId !== auth.tenantId) {
+        invalidAgentReference = true;
+        return;
+      }
       agentMap.set(part[snapIndex], data);
     });
   }
 
-  const vacations: PrepayVacationInput[] = scopedVacationDocs.map((doc) => {
+  if (invalidAgentReference || agentMap.size !== agentIds.length) {
+    return json(422, { ok: false, error: "Prepay data is incomplete" });
+  }
+
+  const vacations: PrepayVacationInput[] = vacationDocs.map((doc) => {
     const data = doc.data() as Record<string, unknown>;
     const agentId = safeArr(data.assignedAgentIds)[0] ?? null;
     const agent = agentId ? agentMap.get(agentId) : undefined;

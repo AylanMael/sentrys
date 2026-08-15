@@ -14,10 +14,7 @@ import {
   ArrowRight,
   ShieldCheck,
   AlertTriangle,
-  Search,
   XCircle,
-  ChevronLeft,
-  ChevronRight,
   Users,
 } from "lucide-react";
 
@@ -64,8 +61,6 @@ type VacationStatus =
   | "closed"
   | "cancelled";
 
-type CoverageFilter = "all" | "uncovered" | "partial" | "complete";
-
 type SiteApi = {
   id: string;
   name?: string;
@@ -86,23 +81,7 @@ type VacationApi = {
   notes?: string | null;
 };
 
-const STATUS_OPTIONS: Array<{ value: "all" | VacationStatus; label: string }> = [
-  { value: "all", label: "Tous les statuts" },
-  { value: "planned", label: "Planifiee" },
-  { value: "partially_filled", label: "Partielle" },
-  { value: "filled", label: "Complete" },
-  { value: "closed", label: "Cloturee" },
-  { value: "cancelled", label: "Annulee" },
-];
-
-const COVERAGE_OPTIONS: Array<{ value: CoverageFilter; label: string }> = [
-  { value: "all", label: "Toutes couvertures" },
-  { value: "uncovered", label: "A pourvoir" },
-  { value: "partial", label: "Partielles" },
-  { value: "complete", label: "Completes" },
-];
-
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /* ================= helpers ================= */
 
@@ -203,18 +182,19 @@ export default function VacationsPage() {
 
   // DATA
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [rows, setRows] = useState<VacationApi[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const nextCursorRef = useRef<string | null>(null);
+  const requestRef = useRef(0);
+  const loadingKeyRef = useRef<string | null>(null);
 
   // FILTRES
   const [siteId, setSiteId] = useState<string>("all");
-  const [status, setStatus] = useState<"all" | VacationStatus>("all");
-  const [coverage, setCoverage] = useState<CoverageFilter>("all");
-  const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [pageSize, setPageSize] = useState(25);
-  const [page, setPage] = useState(1);
 
   // SITES DROPDOWN
   const [sitesLoading, setSitesLoading] = useState(false);
@@ -244,9 +224,8 @@ export default function VacationsPage() {
 
   const queryString = useMemo(() => {
     const qs = new URLSearchParams();
-    qs.set("max", "500");
+    qs.set("limit", String(pageSize));
     if (siteId !== "all") qs.set("siteId", siteId);
-    qs.set("status", status === "all" ? "all" : status);
 
     const fromIso = dateInputToIso(fromDate);
     const toIso = dateInputToIso(toDate, true);
@@ -254,58 +233,10 @@ export default function VacationsPage() {
     if (toIso) qs.set("to", toIso);
 
     return qs.toString();
-  }, [fromDate, siteId, status, toDate]);
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
-    return rows.filter((v) => {
-      const assigned = (v.assignedAgentIds ?? []).length;
-      const required = v.requiredAgents ?? 1;
-      const isCancelled = v.status === "cancelled";
-
-      if (coverage === "uncovered" && (isCancelled || assigned !== 0)) {
-        return false;
-      }
-      if (
-        coverage === "partial" &&
-        (isCancelled || assigned === 0 || assigned >= required)
-      ) {
-        return false;
-      }
-      if (coverage === "complete" && (isCancelled || assigned < required)) {
-        return false;
-      }
-
-      if (!q) return true;
-
-      const siteLabel = v.siteName || siteLabelById.get(v.siteId) || v.siteId;
-      const haystack = [
-        siteLabel,
-        v.siteId,
-        v.notes,
-        v.status,
-        v.startAtIso,
-        v.endAtIso,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(q);
-    });
-  }, [coverage, rows, search, siteLabelById]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const pageStartIndex = filteredRows.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const pageEndIndex = Math.min(safePage * pageSize, filteredRows.length);
-  const paginatedRows = useMemo(
-    () => filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize),
-    [filteredRows, pageSize, safePage]
-  );
+  }, [fromDate, pageSize, siteId, toDate]);
 
   const summary = useMemo(() => {
-    return filteredRows.reduce(
+    return rows.reduce(
       (acc, v) => {
         const assigned = (v.assignedAgentIds ?? []).length;
         const required = v.requiredAgents ?? 1;
@@ -321,35 +252,53 @@ export default function VacationsPage() {
       },
       { assigned: 0, cancelled: 0, complete: 0, partial: 0, required: 0, uncovered: 0 }
     );
-  }, [filteredRows]);
+  }, [rows]);
 
-  const loadVacations = useCallback(async () => {
-    setLoading(true);
+  const loadVacations = useCallback(async (append = false) => {
+    const cursor = append ? nextCursorRef.current : null;
+    const requestKey = `${queryString}:${cursor ?? "first"}`;
+    if (loadingKeyRef.current === requestKey || (append && !cursor)) return;
+    loadingKeyRef.current = requestKey;
+    const requestId = requestRef.current;
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     setError(null);
 
     try {
       const data = await apiFetch<{
         ok: boolean;
+        items?: VacationApi[];
         vacations?: VacationApi[];
+        nextCursor?: string | null;
+        hasMore?: boolean;
         error?: string;
-      }>(`/api/vacations?${queryString}`);
+      }>(`/api/vacations?${queryString}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
 
-      if (!aliveRef.current) return;
+      if (!aliveRef.current || requestId !== requestRef.current) return;
 
       if (!data.ok) {
-        setRows([]);
-        setError(data.error ?? "Impossible de charger les vacations.");
+        if (!append) setRows([]);
+        setError("Impossible de charger les vacations.");
         return;
       }
-
-      setRows(data.vacations ?? []);
-    } catch (e: any) {
-      if (!aliveRef.current) return;
-      setRows([]);
-      setError(e?.message ?? "Impossible de charger les vacations.");
+      const incoming = data.items ?? data.vacations ?? [];
+      setRows((current) => {
+        if (!append) return incoming;
+        const byId = new Map(current.map((item) => [item.id, item]));
+        for (const item of incoming) byId.set(item.id, item);
+        return Array.from(byId.values());
+      });
+      nextCursorRef.current = data.nextCursor ?? null;
+      setHasMore(Boolean(data.hasMore && data.nextCursor));
+    } catch {
+      if (!aliveRef.current || requestId !== requestRef.current) return;
+      if (!append) setRows([]);
+      setError("Impossible de charger les vacations.");
     } finally {
-      if (!aliveRef.current) return;
-      setLoading(false);
+      if (loadingKeyRef.current === requestKey) loadingKeyRef.current = null;
+      if (!aliveRef.current || requestId !== requestRef.current) return;
+      if (append) setLoadingMore(false);
+      else setLoading(false);
     }
   }, [queryString]);
 
@@ -361,7 +310,7 @@ export default function VacationsPage() {
         ok: boolean;
         sites?: any[];
         error?: string;
-      }>(`/api/sites?max=200&isActive=true`);
+      }>(`/api/sites?limit=50&isActive=true`);
 
       if (!aliveRef.current) return;
 
@@ -409,12 +358,12 @@ export default function VacationsPage() {
   }, [loadSitesOnce]);
 
   useEffect(() => {
-    void loadVacations();
+    requestRef.current += 1;
+    nextCursorRef.current = null;
+    setHasMore(false);
+    setRows([]);
+    void loadVacations(false);
   }, [loadVacations]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [coverage, fromDate, pageSize, search, siteId, status, toDate]);
 
   useEffect(() => {
     if (!createOpen) return;
@@ -695,7 +644,7 @@ export default function VacationsPage() {
                 Resultats
               </p>
               <p className="mt-1 text-2xl font-black text-emerald-900 dark:text-emerald-50">
-                {filteredRows.length}
+                {rows.length}
               </p>
               <p className="mt-1 text-xs font-semibold text-emerald-800/70 dark:text-emerald-100/70">
                 sur {rows.length} chargee(s)
@@ -765,7 +714,7 @@ export default function VacationsPage() {
                 <p className="text-sm font-black">Filtrer le registre</p>
               </div>
               <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                Affichage {pageStartIndex}-{pageEndIndex} sur {filteredRows.length} vacation(s).
+                {rows.length} vacation(s) chargée(s).
               </p>
             </div>
             <Button
@@ -773,10 +722,7 @@ export default function VacationsPage() {
               variant="ghost"
               className="h-9 w-fit rounded-xl px-3 text-xs font-black text-muted-foreground"
               onClick={() => {
-                setSearch("");
                 setSiteId("all");
-                setStatus("all");
-                setCoverage("all");
                 setFromDate("");
                 setToDate("");
                 setPageSize(25);
@@ -787,17 +733,7 @@ export default function VacationsPage() {
             </Button>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(220px,1.2fr)_220px_210px_210px_150px_150px_130px]">
-            <div className="relative xl:col-span-2 2xl:col-span-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Rechercher site, note, statut..."
-                className="h-11 rounded-xl border-border/60 bg-background pl-9 font-semibold"
-              />
-            </div>
-
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Select value={siteId} onValueChange={setSiteId}>
               <SelectTrigger className="h-11 rounded-xl border-border/60 bg-background font-bold">
                 <SelectValue placeholder="Tous les sites" />
@@ -809,32 +745,6 @@ export default function VacationsPage() {
                 {sites.map((s) => (
                   <SelectItem key={s.id} value={s.id} className="font-medium">
                     {s.name ?? s.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={status ?? "all"} onValueChange={(v) => setStatus(v as any)}>
-              <SelectTrigger className="h-11 rounded-xl border-border/60 bg-background font-bold">
-                <SelectValue placeholder="Tous les statuts" />
-              </SelectTrigger>
-              <SelectContent className="rounded-2xl border shadow-2xl">
-                {STATUS_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value as any} className="font-medium">
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={coverage} onValueChange={(v) => setCoverage(v as CoverageFilter)}>
-              <SelectTrigger className="h-11 rounded-xl border-border/60 bg-background font-bold">
-                <SelectValue placeholder="Couverture" />
-              </SelectTrigger>
-              <SelectContent className="rounded-2xl border shadow-2xl">
-                {COVERAGE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value} className="font-medium">
-                    {o.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -885,13 +795,13 @@ export default function VacationsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={loadVacations}
+                onClick={() => void loadVacations(false)}
                 className="mt-2 bg-background"
               >
                 Réessayer
               </Button>
             </div>
-          ) : filteredRows.length === 0 ? (
+          ) : rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center px-4">
               <div className="bg-muted p-6 rounded-full mb-4">
                 <CalendarClock className="h-10 w-10 text-muted-foreground/50" />
@@ -930,7 +840,7 @@ export default function VacationsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedRows.map((v) => {
+                  {rows.map((v) => {
                     const sd = isoToDate(v.startAtIso);
                     const ed = isoToDate(v.endAtIso);
                     const assigned = (v.assignedAgentIds ?? []).length;
@@ -1003,37 +913,23 @@ export default function VacationsPage() {
             </div>
           )}
 
-          {!loading && !error && filteredRows.length > 0 ? (
+          {!loading && !error && rows.length > 0 ? (
             <div className="flex flex-col gap-3 border-t border-border/60 bg-muted/10 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
               <p className="text-xs font-bold text-muted-foreground">
-                Affichage {pageStartIndex}-{pageEndIndex} sur {filteredRows.length} vacation(s).
+                {rows.length} vacation(s) chargée(s).
               </p>
               <div className="flex items-center gap-2">
-                <Button
+                {hasMore ? <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="h-9 rounded-xl font-black"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={loadingMore}
+                  onClick={() => void loadVacations(true)}
                 >
-                  <ChevronLeft className="mr-1 h-4 w-4" />
-                  Precedent
-                </Button>
-                <Badge variant="outline" className="rounded-xl px-3 py-1.5 font-black">
-                  Page {safePage} / {totalPages}
-                </Badge>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-9 rounded-xl font-black"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                >
-                  Suivant
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
+                  {loadingMore ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Charger la suite
+                </Button> : null}
               </div>
             </div>
           ) : null}

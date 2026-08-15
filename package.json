@@ -18,7 +18,7 @@
         "agent-files:repair": "node scripts/migrate-agent-file-tokens.cjs --repair",
         "agent-links:audit": "node scripts/audit-agent-user-links.cjs",
         "agent-links:repair": "node scripts/audit-agent-user-links.cjs --repair",
-        "test": "node --import tsx --test --test-isolation=none tests/*.test.mjs",
+        "test": "node --import tsx --test --experimental-test-isolation=none tests/*.test.mjs",
         "quality:check": "npm run lint:ci && npm run typecheck && npm test && npm run security:check && npm run build",
         "lint:ci": "eslint . --quiet"
     },

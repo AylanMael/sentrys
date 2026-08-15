@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 
-import { SidebarMenuButton } from "@/components/ui/sidebar";
+import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
 interface NavLinkProps {
@@ -22,6 +22,7 @@ export default function NavLink({
   match = "startsWith",
 }: NavLinkProps) {
   const pathname = usePathname() ?? "";
+  const { setOpenMobile } = useSidebar();
 
   const isActive =
     match === "exact" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
@@ -37,8 +38,13 @@ export default function NavLink({
       )}
       tooltip={label}
     >
-      <Link href={href} className="flex items-center gap-3">
-        <Icon className={cn("size-4 transition-transform group-hover:scale-110", isActive ? "text-primary" : "text-muted-foreground")} />
+      <Link
+        href={href}
+        aria-current={isActive ? "page" : undefined}
+        onClick={() => setOpenMobile(false)}
+        className="flex items-center gap-3"
+      >
+        <Icon aria-hidden="true" className={cn("size-4 transition-transform group-hover:scale-110", isActive ? "text-primary" : "text-muted-foreground")} />
         <span className={cn("transition-colors", isActive ? "text-foreground" : "text-muted-foreground/80")}>{label}</span>
       </Link>
     </SidebarMenuButton>

@@ -27,8 +27,14 @@ import {
   safeArr,
   toIso,
 } from "@/app/api/vacations/_shared";
+import {
+  loadDispatchVacationWindow,
+  VacationWindowError,
+} from "@/app/api/planning-dispatches/_vacation-window";
 
 export const runtime = "nodejs";
+const MAX_BODY_CHARS = 50_000;
+const MAX_REFERENCED_SITES = 250;
 
 type SiteDispatchSite = {
   id: string;
@@ -213,6 +219,9 @@ async function loadSites(input: {
   const sites: SiteDispatchSite[] = [];
 
   if (input.siteIds.length > 0) {
+    if (input.siteIds.length > MAX_REFERENCED_SITES) {
+      throw new VacationWindowError("PERIOD_TOO_DENSE");
+    }
     for (const part of chunk(input.siteIds, 200)) {
       const refs = part.map((siteId) => adminDb.collection("sites").doc(siteId));
       const snaps = await adminDb.getAll(...refs);
@@ -241,8 +250,12 @@ async function loadSites(input: {
     .collection("sites")
     .where("tenantId", "==", input.tenantId)
     .where("clientId", "==", input.clientId)
-    .limit(250)
+    .limit(MAX_REFERENCED_SITES + 1)
     .get();
+
+  if (snap.size > MAX_REFERENCED_SITES) {
+    throw new VacationWindowError("PERIOD_TOO_DENSE");
+  }
 
   snap.docs.forEach((doc) => {
     const data = doc.data() as Record<string, unknown>;
@@ -325,10 +338,16 @@ export async function POST(req: NextRequest) {
 
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    const rawBody = await req.text();
+    if (!rawBody || rawBody.length > MAX_BODY_CHARS) return bad("Invalid JSON");
+    const parsed = JSON.parse(rawBody);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return bad("Invalid JSON");
+    body = parsed as Record<string, unknown>;
   } catch {
     return bad("Invalid JSON");
   }
+  const allowedKeys = new Set(["from", "to", "siteIds", "clientId", "channel"]);
+  if (Object.keys(body).some((key) => !allowedKeys.has(key))) return bad("Invalid JSON");
 
   const from = parseDateTimeIso(body.from);
   const to = parseDateTimeIso(body.to);
@@ -343,11 +362,25 @@ export async function POST(req: NextRequest) {
     return bad("siteIds or clientId are required");
   }
 
-  const sites = await loadSites({
-    tenantId: auth.tenantId,
-    siteIds: requestedSiteIds,
-    clientId: requestedClientId,
-  });
+  let sites: SiteDispatchSite[];
+  try {
+    sites = await loadSites({
+      tenantId: auth.tenantId,
+      siteIds: requestedSiteIds,
+      clientId: requestedClientId,
+    });
+  } catch (error) {
+    if (error instanceof VacationWindowError) {
+      return json(422, {
+        ok: false,
+        error: "Periode trop large ou trop dense. Reduisez la periode.",
+      });
+    }
+    throw error;
+  }
+  if (requestedSiteIds.length > 0 && sites.length !== new Set(requestedSiteIds).size) {
+    return json(422, { ok: false, error: "Les sites demandes ne peuvent pas etre verifies." });
+  }
   const siteIds = Array.from(new Set(sites.map((site) => site.id)));
 
   if (siteIds.length === 0) {
@@ -355,13 +388,24 @@ export async function POST(req: NextRequest) {
   }
 
   const siteIdSet = new Set(siteIds);
-  const vacationsSnap = await adminDb
-    .collection("vacations")
-    .where("tenantId", "==", auth.tenantId)
-    .limit(2000)
-    .get();
+  let vacationDocs: FirebaseFirestore.QueryDocumentSnapshot[];
+  try {
+    vacationDocs = await loadDispatchVacationWindow({
+      tenantId: auth.tenantId,
+      from,
+      to,
+    });
+  } catch (error) {
+    if (error instanceof VacationWindowError) {
+      return json(422, {
+        ok: false,
+        error: "Periode trop large ou trop dense. Reduisez la periode.",
+      });
+    }
+    throw error;
+  }
 
-  const vacations: SiteDispatchVacation[] = vacationsSnap.docs.flatMap((doc) => {
+  const vacations: SiteDispatchVacation[] = vacationDocs.flatMap((doc) => {
     const data = doc.data() as Record<string, unknown>;
     const siteId = normalizeText(data.siteId);
     if (!siteId || !siteIdSet.has(siteId)) return [];

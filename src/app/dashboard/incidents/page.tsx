@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -273,6 +274,7 @@ function IncidentsSkeleton() {
 export default function IncidentsPage() {
   const { loading: authLoading } = useAuth();
   const feedback = useAppFeedback();
+  const params = useSearchParams();
 
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [sites, setSites] = useState<SiteRow[]>([]);
@@ -442,6 +444,12 @@ export default function IncidentsPage() {
   useEffect(() => {
     void loadData({ quiet: true });
   }, [loadData]);
+
+  useEffect(() => {
+    if (params.get("new") === "1") {
+      setDialogOpen(true);
+    }
+  }, [params]);
 
   const captureLocation = useCallback(() => {
     if (!navigator.geolocation) {

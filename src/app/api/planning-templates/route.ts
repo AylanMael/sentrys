@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
+import { appLogger } from "@/lib/observability/logger";
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import {
   normalizeTemplateText,
@@ -76,9 +77,8 @@ export async function GET(req: NextRequest) {
 
     return json(200, { ok: true, templates });
   } catch (error) {
-    return bad(
-      error instanceof Error ? error.message : "Impossible de charger les templates."
-    );
+    appLogger.error("planning_templates.list.failed", error, { tenantId: auth.tenantId });
+    return json(500, { ok: false, error: "Impossible de charger les plannings types." });
   }
 }
 
@@ -180,12 +180,7 @@ export async function POST(req: NextRequest) {
       ),
     });
   } catch (error) {
-    return json(500, {
-      ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Impossible d'enregistrer le planning type.",
-    });
+    appLogger.error("planning_templates.save.failed", error, { tenantId: auth.tenantId });
+    return json(500, { ok: false, error: "Impossible d'enregistrer le planning type." });
   }
 }

@@ -376,15 +376,13 @@ export default function BillingPage() {
                   ))}
                 </div>
 
-                <Button
-                  className={cn("w-full h-12 rounded-xl font-black shadow-lg transition-all active:scale-95",
-                    p.highlight ? "bg-background text-primary hover:bg-background/90 shadow-black/10" : "bg-primary"
-                  )}
-                  disabled={isCurrent}
-                  onClick={() => alert("Connexion Stripe Checkout en cours...")}
-                >
-                  {isCurrent ? "Votre plan" : `Passer au plan ${p.name}`}
-                </Button>
+                {isCurrent ? (
+                  <Button className="h-12 w-full rounded-xl font-black" disabled>Votre plan</Button>
+                ) : (
+                  <Button asChild className={cn("h-12 w-full rounded-xl font-black shadow-lg", p.highlight ? "bg-background text-primary hover:bg-background/90 shadow-black/10" : "bg-primary")}>
+                    <Link href={`/contact?reason=tarifs&plan=${p.id}`}>Demander le plan {p.name}</Link>
+                  </Button>
+                )}
               </div>
             );
           })}
@@ -406,12 +404,12 @@ export default function BillingPage() {
                     Historique des factures
                   </CardTitle>
                   <CardDescription className="font-medium">
-                    Pret pour Stripe Billing: reçus, statuts et PDF centralises.
+                    La facturation en ligne n&apos;est pas activée. Contactez-nous pour faire évoluer votre offre.
                   </CardDescription>
                 </div>
               </div>
               <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest">
-                A brancher
+                Non activé
               </Badge>
             </div>
           </CardHeader>
@@ -428,7 +426,7 @@ export default function BillingPage() {
                 <div>
                   <p className="font-black text-foreground">Aucune facture synchronisee</p>
                   <p className="mt-1 text-xs font-medium text-muted-foreground">
-                    Les factures apparaîtront ici après connexion du compte Stripe.
+                    Les documents de facturation apparaîtront ici lorsqu&apos;ils seront disponibles.
                   </p>
                 </div>
                 <span className="font-bold text-muted-foreground">--</span>
@@ -530,7 +528,7 @@ export default function BillingPage() {
               </div>
             </div>
             <Badge variant="outline" className="w-fit rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest">
-              Stripe requis
+              Sur demande
             </Badge>
           </div>
         </CardHeader>
@@ -545,14 +543,8 @@ export default function BillingPage() {
                   {addon.detail}
                 </p>
               </div>
-              <Button
-                variant="outline"
-                className="rounded-xl font-bold"
-                onClick={() =>
-                  alert("Les add-ons seront actives via Stripe Billing après configuration du paiement.")
-                }
-              >
-                Preparer l'option
+              <Button asChild variant="outline" className="rounded-xl font-bold">
+                <Link href="/contact?reason=tarifs">Demander cette option</Link>
               </Button>
             </div>
           ))}

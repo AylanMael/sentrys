@@ -58,7 +58,10 @@ type AgentsResponse = {
 
 type VacationsResponse = {
   ok: boolean;
-  vacations: VacationPrintItem[];
+  items?: VacationPrintItem[];
+  vacations?: VacationPrintItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
 };
 
 type AgencyProfileResponse = {
@@ -70,6 +73,11 @@ type DayColumn = {
   key: string;
   date: Date;
 };
+
+const PRINT_PAGE_SIZE = 50;
+const PRINT_MAX_PAGES = 20;
+const PRINT_MAX_ITEMS = 1000;
+const PRINT_MAX_RANGE_DAYS = 31;
 
 type SitePlanRow = {
   id: string;
@@ -536,14 +544,17 @@ function SitePlanningPrintContent() {
       setError(null);
 
       try {
-        const params = new URLSearchParams({
-          from: fromIso,
-          to: toIso,
-          max: "500",
-        });
-
-        if (selectedSiteId && selectedSiteId !== "all") {
-          params.set("siteId", selectedSiteId);
+        if (!selectedSiteId || selectedSiteId === "all") {
+          throw new Error("Selectionnez un site avant de lancer l'impression.");
+        }
+        const fromTime = new Date(fromIso).getTime();
+        const toTime = new Date(toIso).getTime();
+        const rangeDays = (toTime - fromTime) / (24 * 60 * 60 * 1000);
+        if (!Number.isFinite(fromTime) || !Number.isFinite(toTime) || rangeDays <= 0) {
+          throw new Error("La periode d'impression est invalide.");
+        }
+        if (rangeDays > PRINT_MAX_RANGE_DAYS) {
+          throw new Error(`La periode d'impression est limitee a ${PRINT_MAX_RANGE_DAYS} jours.`);
         }
 
         const sitesParams = new URLSearchParams({
@@ -555,21 +566,47 @@ function SitePlanningPrintContent() {
           sitesParams.set("clientId", selectedClientId);
         }
 
-        const [sitesResponse, vacationsResponse, profileResponse] = await Promise.all([
+        const [sitesResponse, profileResponse] = await Promise.all([
           apiFetch<SitesResponse>(`/api/sites?${sitesParams.toString()}`),
-          apiFetch<VacationsResponse>(`/api/vacations?${params.toString()}`),
           apiFetch<AgencyProfileResponse>("/api/agency-profile").catch(() => null),
         ]);
         const loadedSites = sitesResponse.sites ?? [];
-        const allowedSiteIds =
-          selectedClientId && selectedSiteId !== "all"
-            ? new Set(loadedSites.map((site) => site.id))
-            : null;
-        const loadedVacations = allowedSiteIds
-          ? (vacationsResponse.vacations ?? []).filter(
-              (vacation) => vacation.siteId && allowedSiteIds.has(vacation.siteId)
-            )
-          : vacationsResponse.vacations ?? [];
+        const loadedById = new Map<string, VacationPrintItem>();
+        const seenCursors = new Set<string>();
+        let cursor: string | null = null;
+        let complete = false;
+        for (let page = 0; page < PRINT_MAX_PAGES; page += 1) {
+          if (!mounted) return;
+          const params = new URLSearchParams({
+            from: fromIso,
+            to: toIso,
+            siteId: selectedSiteId,
+            limit: String(PRINT_PAGE_SIZE),
+          });
+          if (cursor) params.set("cursor", cursor);
+          const response = await apiFetch<VacationsResponse>(
+            `/api/vacations?${params.toString()}`
+          );
+          for (const vacation of response.items ?? response.vacations ?? []) {
+            loadedById.set(vacation.id, vacation);
+          }
+          if (loadedById.size > PRINT_MAX_ITEMS) {
+            throw new Error("Le volume depasse le plafond d'impression autorise.");
+          }
+          if (!response.hasMore) {
+            complete = true;
+            break;
+          }
+          if (!response.nextCursor || seenCursors.has(response.nextCursor)) {
+            throw new Error("La pagination d'impression est invalide ou repetee.");
+          }
+          seenCursors.add(response.nextCursor);
+          cursor = response.nextCursor;
+        }
+        if (!complete) {
+          throw new Error("Le plafond de pages a ete atteint avant la fin; impression annulee.");
+        }
+        const loadedVacations = Array.from(loadedById.values());
 
         const assignedIds = Array.from(
           new Set(

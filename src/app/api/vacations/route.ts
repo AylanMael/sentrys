@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { createHash } from "node:crypto";
+import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import {
   requireTenantUser,
@@ -15,11 +16,8 @@ import {
   parseDateTimeIso,
   safeArr,
   uniq,
-  parseMax,
   pickVacationApi,
   computeStatus,
-  isMissingIndexError,
-  extractIndexUrl,
   toTs,
 } from "@/app/api/vacations/_shared";
 import { normalizeMissionType } from "@/lib/planning/mission-types";
@@ -58,251 +56,110 @@ function serverError(e: unknown, tag: string) {
 
 /* ================= GET ================= */
 
+const VACATION_PAGE_DEFAULT = 25;
+const VACATION_PAGE_MAX = 50;
+
+function parseVacationPageSize(raw: string | null) {
+  if (!raw) return VACATION_PAGE_DEFAULT;
+  if (!/^\d+$/.test(raw)) return null;
+  const value = Number(raw);
+  return value >= 1 && value <= VACATION_PAGE_MAX ? value : null;
+}
+function digest(value: string) {
+  return createHash("sha256").update(value).digest("base64url");
+}
+type VacationCursor = {
+  v: 1; id: string; seconds: number; nanoseconds: number;
+  tenantHash: string; filtersHash: string; direction: "asc" | "desc";
+};
+function decodeVacationCursor(raw: string): VacationCursor | null {
+  if (!raw || raw.length > 2048 || !/^[A-Za-z0-9_-]+$/.test(raw)) return null;
+  try {
+    const value = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as Partial<VacationCursor>;
+    if (value.v !== 1 || typeof value.id !== "string" || !value.id ||
+      value.id.length > 1500 || value.id.includes("/") ||
+      !Number.isSafeInteger(value.seconds) || !Number.isInteger(value.nanoseconds) ||
+      (value.nanoseconds ?? -1) < 0 || (value.nanoseconds ?? 1_000_000_000) >= 1_000_000_000 ||
+      typeof value.tenantHash !== "string" || typeof value.filtersHash !== "string" ||
+      (value.direction !== "asc" && value.direction !== "desc")) return null;
+    return value as VacationCursor;
+  } catch { return null; }
+}
+function encodeVacationCursor(value: VacationCursor) {
+  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
-
   const canReadAll = canReadBackoffice(auth.role);
   const isAgentUser = isAgent(auth.role);
-
-  if (!canReadAll && !isAgentUser) {
-    return forbidden("Insufficient rights");
-  }
-
+  if (!canReadAll && !isAgentUser) return forbidden("Insufficient rights");
   const url = new URL(req.url);
-
   const siteId = normalizeText(url.searchParams.get("siteId"));
-  const agentId = normalizeText(url.searchParams.get("agentId"));
-  const statusParam = normalizeText(url.searchParams.get("status")).toLowerCase();
-  const statusFilter = statusParam && statusParam !== "all" ? statusParam : "all";
-
-  const max = parseMax(url.searchParams.get("max"), 50);
-  const fetchLimit = canReadAll ? max : Math.min(Math.max(max * 10, 200), 1000);
-
+  const pageSize = parseVacationPageSize(url.searchParams.get("limit") ?? url.searchParams.get("max"));
+  if (!pageSize) return bad("Invalid pagination parameters");
+  for (const unsupported of ["q", "coverage", "agentId"]) {
+    if (url.searchParams.has(unsupported)) return bad("Unsupported filter");
+  }
+  const status = normalizeText(url.searchParams.get("status"));
+  if (status && status !== "all") return bad("Unsupported filter");
   const fromIso = normalizeText(url.searchParams.get("from"));
-  const toIsoStr = normalizeText(url.searchParams.get("to"));
-
+  const toIso = normalizeText(url.searchParams.get("to"));
   const from = fromIso ? parseDateTimeIso(fromIso) : null;
-  const to = toIsoStr ? parseDateTimeIso(toIsoStr) : null;
-
-  if (fromIso && !from) return bad("from must be an ISO date");
-  if (toIsoStr && !to) return bad("to must be an ISO date");
-  if (from && to && to.getTime() < from.getTime()) return bad("to must be >= from");
-
-  const allowedStatus = new Set([
-    "planned",
-    "partially_filled",
-    "filled",
-    "closed",
-    "cancelled",
-    "all",
-  ]);
-
-  if (!allowedStatus.has(statusFilter)) {
-    return bad("Invalid status filter", { allowed: Array.from(allowedStatus) });
-  }
-
-  let accessibleSiteIds: Set<string> | null = null;
+  const to = toIso ? parseDateTimeIso(toIso) : null;
+  if ((fromIso && !from) || (toIso && !to) || (from && to && to.getTime() <= from.getTime())) return bad("Invalid date range");
   if (!canReadAll) {
-    accessibleSiteIds = await listAccessibleSiteIdsForUser({
-      tenantId: auth.tenantId,
-      uid: auth.uid,
-    });
-
-    if (siteId && !accessibleSiteIds.has(siteId)) {
-      return forbidden("Access denied for this site");
-    }
+    const accessibleSiteIds = await listAccessibleSiteIdsForUser({ tenantId: auth.tenantId, uid: auth.uid });
+    if (!siteId) return bad("siteId is required for this role");
+    if (!accessibleSiteIds.has(siteId)) return forbidden("Access denied for this site");
   }
-
-  const base: FirebaseFirestore.Query = adminDb
-    .collection("vacations")
-    .where("tenantId", "==", auth.tenantId);
-
-  const warnings: any[] = [];
-
   try {
-    let q = base;
-
-    if (from && to) {
-      q = q
-        .where("startAt", "<", toTs(to))
-        .where("endAt", ">", toTs(from))
-        .orderBy("startAt", "desc")
-        .limit(fetchLimit);
-    } else if (from) {
-      q = q
-        .where("endAt", ">", toTs(from))
-        .orderBy("endAt", "desc")
-        .limit(fetchLimit);
-    } else if (to) {
-      q = q
-        .where("startAt", "<", toTs(to))
-        .orderBy("startAt", "desc")
-        .limit(fetchLimit);
-    } else {
-      q = q.orderBy("startAt", "desc").limit(fetchLimit);
-    }
-
-    const snap = await q.get();
-    let vacations = snap.docs.map((d) => pickVacationApi(d.data() as Record<string, unknown>, d.id));
-
-    if (accessibleSiteIds) {
-      vacations = vacations.filter(
-        (v) => !!v.siteId && accessibleSiteIds!.has(v.siteId)
-      );
-    }
-
-    if (siteId) {
-      vacations = vacations.filter((v) => v.siteId === siteId);
-    }
-
-    if (agentId) {
-      vacations = vacations.filter((v) => safeArr(v.assignedAgentIds).includes(agentId));
-    }
-
-    if (statusFilter !== "all") {
-      vacations = vacations.filter((v) => String(v.status) === statusFilter);
-    }
-
-    vacations = vacations.slice(0, max);
-
-    return json(200, {
-      ok: true,
-      tenantId: auth.tenantId,
-      count: vacations.length,
-      vacations,
-      warnings: warnings.length ? warnings : undefined,
-    });
-  } catch (e: any) {
-    if (!isMissingIndexError(e)) {
-      return serverError(e, "vacations.GET");
-    }
-
-    const indexUrl = extractIndexUrl(e);
-
-    warnings.push({
-      code: "missing_index_fallback",
-      message:
-        "Firestore index manquant pour la requête overlap. Fallback activé (filtrage en mémoire).",
-      indexUrl,
-    });
-
-    try {
-      let q2: FirebaseFirestore.Query = base;
-
-      const rangeTo = to ? toTs(to) : null;
-      const fromMinus = from
-        ? new Date(from.getTime() - 7 * 24 * 60 * 60 * 1000)
-        : null;
-      const rangeFrom = fromMinus ? toTs(fromMinus) : null;
-
-      if (rangeFrom) q2 = q2.where("startAt", ">=", rangeFrom);
-      if (rangeTo) q2 = q2.where("startAt", "<", rangeTo);
-
-      q2 = q2.orderBy("startAt", "desc").limit(fetchLimit);
-
-      const snap2 = await q2.get();
-      let vacations = snap2.docs.map((d) => pickVacationApi(d.data() as Record<string, unknown>, d.id));
-
-      if (from && to) {
-        const fromMs = from.getTime();
-        const toMs = to.getTime();
-
-        vacations = vacations.filter((v) => {
-          const s = v.startAtIso ? new Date(v.startAtIso).getTime() : 0;
-          const en = v.endAtIso ? new Date(v.endAtIso).getTime() : 0;
-          return s < toMs && en > fromMs;
-        });
-      } else if (from) {
-        const fromMs = from.getTime();
-        vacations = vacations.filter((v) => {
-          const en = v.endAtIso ? new Date(v.endAtIso).getTime() : 0;
-          return en > fromMs;
-        });
-      } else if (to) {
-        const toMs = to.getTime();
-        vacations = vacations.filter((v) => {
-          const s = v.startAtIso ? new Date(v.startAtIso).getTime() : 0;
-          return s < toMs;
-        });
+    const sortDirection: "asc" | "desc" = siteId ? "asc" : "desc";
+    const filtersHash = digest(JSON.stringify({
+      siteId: siteId || null, from: from?.toISOString() ?? null,
+      to: to?.toISOString() ?? null, sortDirection,
+    }));
+    const tenantHash = digest(auth.tenantId);
+    const rawCursor = normalizeText(url.searchParams.get("cursor"));
+    const cursor = rawCursor ? decodeVacationCursor(rawCursor) : null;
+    if (rawCursor && (!cursor || cursor.tenantHash !== tenantHash ||
+      cursor.filtersHash !== filtersHash || cursor.direction !== sortDirection)) return bad("Invalid cursor");
+    let q: FirebaseFirestore.Query = adminDb.collection("vacations")
+      .where("tenantId", "==", auth.tenantId);
+    if (siteId) q = q.where("siteId", "==", siteId);
+    if (from) q = q.where("startAt", ">=", Timestamp.fromDate(from));
+    if (to) q = q.where("startAt", "<", Timestamp.fromDate(to));
+    q = q.orderBy("startAt", sortDirection)
+      .orderBy(FieldPath.documentId(), sortDirection);
+    if (cursor) {
+      const cursorSnap = await adminDb.collection("vacations").doc(cursor.id).get();
+      if (!cursorSnap.exists || cursorSnap.data()?.tenantId !== auth.tenantId) return bad("Invalid cursor");
+      const cursorData = cursorSnap.data();
+      if (siteId && (typeof cursorData?.siteId !== "string" || cursorData.siteId !== siteId)) {
+        console.warn("[vacations.GET] Cursor site mismatch");
+        return bad("Invalid cursor");
       }
-
-      if (accessibleSiteIds) {
-        vacations = vacations.filter(
-          (v) => !!v.siteId && accessibleSiteIds!.has(v.siteId)
-        );
-      }
-
-      if (siteId) {
-        vacations = vacations.filter((v) => v.siteId === siteId);
-      }
-
-      if (agentId) {
-        vacations = vacations.filter((v) => safeArr(v.assignedAgentIds).includes(agentId));
-      }
-
-      if (statusFilter !== "all") {
-        vacations = vacations.filter((v) => String(v.status) === statusFilter);
-      }
-
-      vacations = vacations.slice(0, max);
-
-      return json(200, {
-        ok: true,
-        tenantId: auth.tenantId,
-        count: vacations.length,
-        vacations,
-        warnings,
-      });
-    } catch (e2: any) {
-      // --- ULTRA FALLBACK (Zero index) ---
-      // Si même la requête partitionnée sur startAt échoue (index manquant),
-      // on récupère TOUTES les vacations du tenant et on filtre en mémoire.
-      try {
-        console.warn("[vacations.GET] Ultra-fallback activation (NO INDEX MODE)");
-        const snap3 = await base.limit(1000).get();
-        let vacations = snap3.docs.map((d) =>
-          pickVacationApi(d.data() as Record<string, unknown>, d.id)
-        );
-
-        // Filtrage mémoire complet
-        if (from || to) {
-          const fromMs = from?.getTime() ?? 0;
-          const toMs = to?.getTime() ?? Infinity;
-          vacations = vacations.filter((v) => {
-             const s = v.startAtIso ? new Date(v.startAtIso).getTime() : 0;
-             const en = v.endAtIso ? new Date(v.endAtIso).getTime() : 0;
-             // Overlap: start < to AND end > from
-             return s < toMs && en > fromMs;
-          });
-        }
-
-        if (accessibleSiteIds) {
-          vacations = vacations.filter((v) => v.siteId && accessibleSiteIds!.has(v.siteId));
-        }
-        if (siteId) {
-          vacations = vacations.filter((v) => v.siteId === siteId);
-        }
-        if (agentId) {
-          vacations = vacations.filter((v) => safeArr(v.assignedAgentIds).includes(agentId));
-        }
-        if (statusFilter !== "all") {
-          vacations = vacations.filter((v) => String(v.status) === statusFilter);
-        }
-
-        vacations = vacations.slice(0, max);
-
-        return json(200, {
-          ok: true,
-          tenantId: auth.tenantId,
-          count: vacations.length,
-          vacations,
-          warnings: [...warnings, { code: "ultra_fallback", message: "Filtrage 100% mémoire car les index Firestore sont absents." }],
-        });
-      } catch (e3: any) {
-        return serverError(e3, "vacations.GET.ultra_fallback");
-      }
+      const storedStart = cursorData?.startAt;
+      if (!(storedStart instanceof Timestamp) || storedStart.seconds !== cursor.seconds ||
+        storedStart.nanoseconds !== cursor.nanoseconds) return bad("Invalid cursor");
+      q = q.startAfter(new Timestamp(cursor.seconds, cursor.nanoseconds), cursor.id);
     }
+    const snap = await q.limit(pageSize + 1).get();
+    const hasMore = snap.size > pageSize;
+    const pageDocs = snap.docs.slice(0, pageSize);
+    const items = pageDocs.map((doc) => pickVacationApi(doc.data() as Record<string, unknown>, doc.id));
+    const last = hasMore ? pageDocs.at(-1) : null;
+    const lastStart = last?.data().startAt;
+    const nextCursor = last && lastStart instanceof Timestamp
+      ? encodeVacationCursor({
+          v: 1, id: last.id, seconds: lastStart.seconds, nanoseconds: lastStart.nanoseconds,
+          tenantHash, filtersHash, direction: sortDirection,
+        })
+      : null;
+    return json(200, { ok: true, items, nextCursor, hasMore });
+  } catch (e: unknown) {
+    return serverError(e, "vacations.GET");
   }
 }
 

@@ -121,21 +121,45 @@ test("planning catalog selectors use shared searchable pagination", () => {
   assert.match(filters, /Rechercher un site/);
   assert.match(filters, /Rechercher un agent/);
 });
-test("vacations list uses server filters and opaque cursor pagination", () => {
-  const page = read("src/app/dashboard/vacations/page.tsx");
-  const api = read("src/app/api/vacations/route.ts");
-  assert.doesNotMatch(page, /qs\.set\("max", "500"\)/);
-  assert.match(page, /qs\.set\("limit", String\(pageSize\)\)/);
-  assert.match(page, /qs\.set\("q", debouncedSearch\)/);
-  assert.match(page, /qs\.set\("coverage", coverage\)/);
-  assert.match(page, /nextCursorRef/);
-  assert.match(page, /Charger la suite/);
-  assert.match(page, /api\/sites\?limit=50/);
-  assert.match(api, /decodeVacationCursor/);
-  assert.match(api, /cursorSnap\.data\(\)\?\.tenantId !== auth\.tenantId/);
-  assert.match(api, /matchesListFilters/);
-  assert.match(api, /nextCursor:/);
-});
+  test("vacations list uses server filters and opaque cursor pagination", () => {
+    const page = read("src/app/dashboard/vacations/page.tsx");
+    const api = read("src/app/api/vacations/route.ts");
+    const get = api.slice(
+      api.indexOf("export async function GET"),
+      api.indexOf("/* ================= POST")
+    );
+
+    assert.doesNotMatch(page, /qs\.set\("max", "500"\)/);
+    assert.match(page, /qs\.set\("limit", String\(pageSize\)\)/);
+    assert.doesNotMatch(page, /qs\.set\("q"/);
+    assert.doesNotMatch(page, /qs\.set\("coverage"/);
+    assert.doesNotMatch(page, /collection\(db/);
+    assert.doesNotMatch(page, /onSnapshot/);
+    assert.doesNotMatch(page, /filteredRows|rows\.filter\(/);
+    assert.match(page, /nextCursorRef/);
+    assert.match(page, /data\.nextCursor/);
+    assert.match(page, /data\.hasMore/);
+    assert.match(page, /nextCursorRef\.current = null/);
+    assert.match(page, /Charger la suite/);
+    assert.match(page, /api\/sites\?limit=50/);
+    assert.match(get, /parseVacationPageSize/);
+    assert.match(get, /\.where\("tenantId", "==", auth\.tenantId\)/);
+    assert.match(get, /\.where\("siteId", "==", siteId\)/);
+    assert.match(get, /\.where\("startAt", ">=",/);
+    assert.match(get, /\.where\("startAt", "<",/);
+    assert.match(get, /\.orderBy\("startAt", sortDirection\)/);
+    assert.match(get, /\.orderBy\(FieldPath\.documentId\(\), sortDirection\)/);
+    assert.match(get, /decodeVacationCursor/);
+    assert.match(get, /filtersHash/);
+    assert.match(get, /cursorSnap\.data\(\)\?\.tenantId !== auth\.tenantId/);
+    assert.match(get, /\.limit\(pageSize \+ 1\)/);
+    assert.match(get, /return json\(200, \{[^}]*nextCursor(?:\s*:|\s*[,}])/);
+    assert.match(get, /hasMore/);
+    assert.doesNotMatch(get, /matchesListFilters/);
+    assert.doesNotMatch(get, /\.filter\(/);
+    assert.doesNotMatch(get, /\.limit\((?:500|1000)\)/);
+    assert.doesNotMatch(get, /while\s*\(/);
+  });
 test("command stats uses aggregate counts and bounded map previews", () => {
   const api = read("src/app/api/command/stats/route.ts");
   assert.match(api, /sitesQuery\.count\(\)\.get\(\)/);

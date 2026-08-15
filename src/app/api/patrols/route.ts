@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireTenantUser } from "@/app/api/_utils/withTenant";
+import { canWrite, requireTenantUser } from "@/app/api/_utils/withTenant";
 import { PatrolTemplateSchema } from "@/lib/api/schemas";
 import { FieldValue } from "firebase-admin/firestore";
+import { appLogger } from "@/lib/observability/logger";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
+  if (!canWrite(auth.role)) return json(403, { ok: false, error: "Forbidden" });
 
   try {
     const body = await req.json();
@@ -62,7 +64,8 @@ export async function POST(req: NextRequest) {
     const ref = await adminDb.collection("patrolTemplates").add(payload);
 
     return json(201, { ok: true, id: ref.id });
-  } catch (e: any) {
+  } catch (error: unknown) {
+    appLogger.error("patrols.create.failed", error);
     return json(500, { ok: false, error: "Internal error" });
   }
 }

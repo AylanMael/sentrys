@@ -674,24 +674,6 @@ export default function AgentPlanningPrintPage() {
         return;
       }
 
-      try {
-        const cached = window.localStorage.getItem(
-          `sentrys:print-dispatch:${params.id}`
-        );
-
-        if (cached) {
-          const parsed = JSON.parse(cached) as AgentDispatchRow;
-          if (mounted && parsed?.id === params.id) {
-            setDispatch(parsed);
-            setLoading(false);
-            setError(null);
-            return;
-          }
-        }
-      } catch {
-        // Non bloquant : on retombe sur l'API.
-      }
-
       if (authLoading) return;
 
       if (!firebaseUser) {

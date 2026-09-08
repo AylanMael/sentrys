@@ -78,6 +78,14 @@ SEC-03B ne sera pas défini implicitement par le correctif : le choix entre cons
 
 Revue indépendante SEC-03A favorable sur le code, initialement conditionnée aux tests finaux. La QA a demandé deux compléments : agence active et création de son propre document d'agence absent. Ces cas sont ajoutés et relus. Résultats finaux : **104/104 tests d'immutabilité et 453/453 tests du document d'agence**, aucun échec. La condition de réexécution est levée. Les suites comptes (596) et API/métier (138) passent également ; TypeScript, lint et contrôles de sécurité réussis. Voir `recette-integrite-agences.md` pour les limites. Aucun commit, push ou déploiement ; réception globale SEC-03 toujours ouverte.
 
+### D-008 — SEC-03B : politique approuvée et candidat vérifié localement
+
+L'utilisateur a validé les deux modes : commercial (consultation et exception terrain bornée) et sécurité (aucun accès métier). Le candidat conserve le cutoff lors d'un changement de mode et réserve la réactivation à la plateforme autorisée. Voir `recette-suspension-agences.md`.
+
+Résultats finaux de tests : **308/308 serveur**, **596/596 comptes**, **104/104 immutabilité**, **453/453 document d'agence**, **142/142 suspension Firestore/Storage**. Soit 1 295 tests d'émulateur, sans échec. Revue indépendante favorable sur le delta ; conditions de réexécution des règles levées. TypeScript, lint, sécurité et Functions lint/build réussis. Le build Next final isolé est réussi (114 pages statiques) ; sa configuration de démonstration n'est pas destinée au déploiement.
+
+Travaux uniquement sur `agent/platform-access`, départ `ab8f810`. Aucun commit/push/déploiement pour SEC-03B, aucune clé ni donnée de production utilisée. CI distante, recette navigateur et validation des règles/index réellement déployés restent nécessaires. Les anciennes URL de téléchargement publiques ne sont pas révoquées par ce patch ; leur inventaire est une condition de livraison.
+
 ## Backlog ordonné
 
 | ID | Périmètre | Priorité | État initial | Critère de réception |
@@ -85,7 +93,7 @@ Revue indépendante SEC-03A favorable sur le code, initialement conditionnée au
 | REF-01 | Référence, L1, CI et travail local | Prérequis | Référence vérifiée ; revue L1 demandée | Reproduire les validations sur révision précise ; documenter les divergences utiles |
 | SEC-01 | Champs d'autorité comptes et règles | Critique | Candidat isolé implémenté, tests et revue technique réussis ; non intégré | Aucun rôle ne peut s'auto-promouvoir, se réactiver ou relier arbitrairement un agent ; tests d'émulateur positifs et négatifs |
 | SEC-02 | Autorité plateforme des API | Critique, complément SEC-01 | Implémenté, testé localement, revue technique bornée ; non intégré | Politique commune ; refus agence/sans rôle/hors plateforme avant toute opération métier ; tests et revue |
-| SEC-03 | Suspension, champs immuables, écritures directes | Élevée | A : tests et revue réussis, non intégré ; B : politique de suspension en attente du choix utilisateur | Politique active/pending/suspendue validée ; ajout/suppression/remplacement testés ; pas de contournement direct des invariants |
+| SEC-03 | Suspension, champs immuables, écritures directes | Élevée | A poussé sur branche candidate ; B implémenté, tests et revue locale réussis, non livré | Politique active/pending/suspendue validée ; ajout/suppression/remplacement testés ; pas de contournement direct des invariants |
 | TER-01 | Identité agent et pointage | Élevée | À traiter | Pointage autorisé au bon agent/tenant ; refus des autres ; reprises et concurrence maîtrisées |
 | PAY-01 | Temps, absences et pré-paie | Élevée | Reproductions disponibles dans l'audit | Notes sans effet sur nature de l'absence ; fuseau explicite ; frontières calendaires et export validés par référent paie |
 | PLN-01 | Affectations et opérations groupées | Élevée | À traiter | Pas d'incohérence sous concurrence ; échec partiel explicite ; reprise idempotente |

@@ -37,6 +37,7 @@ jobs:
           java-version: "21"
       - run: npm run test:rules:accounts
       - run: npm run test:rules:integrity
+      - run: npm run test:rules:suspension
       - run: npm --prefix functions run lint
       - run: npm --prefix functions run build
       - run: npm run build

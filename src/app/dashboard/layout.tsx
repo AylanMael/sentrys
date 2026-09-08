@@ -82,6 +82,7 @@ import { cn } from "@/lib/utils";
 import { DashboardGate } from "@/components/auth/DashboardGate";
 import { useBillingUsage } from "@/hooks/use-billing-usage";
 import { apiFetch } from "@/lib/api/client-fetch";
+import { suspensionMode } from "@/lib/auth/tenant-suspension";
 
 const userAvatar = PlaceHolderImages.find((p) => p.id === "user-avatar-1");
 
@@ -285,10 +286,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return norm((user as any)?.tenant?.onboarding?.status);
   }, [user]);
   const isPlatformSuperAdmin = role === "super_admin" && user?.tenantId === "platform";
+  const agencySuspension = isPlatformSuperAdmin ? "none" : suspensionMode(user?.tenant);
   const needsAgencyOnboarding = useMemo(() => {
     if (!user?.tenantId || user.tenantId === "platform") return false;
     if (!hasRole(role, ["owner", "admin", "manager"])) return false;
     if (!tenantStatus) return false;
+    if (tenantStatus === "suspended") return false;
     return !["active", "trial", "trialing", "ok"].includes(tenantStatus);
   }, [role, tenantStatus, user?.tenantId]);
 
@@ -572,6 +575,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
     );
   }
+
+  if (user?.tenantId && agencySuspension === "security") return (
+    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-5 p-6">
+      <ShieldCheck className="h-10 w-10 text-primary" aria-hidden="true" />
+      <h1 className="text-2xl font-semibold">Accès métier suspendu</h1>
+      <p className="text-muted-foreground">Votre agence fait l’objet d’une suspension de sécurité. Aucun accès aux données métier n’est disponible. Contactez le support pour la suite.</p>
+      <Button asChild><Link href="/contact?reason=support">Contacter le support</Link></Button>
+      <Button variant="outline" onClick={() => window.location.reload()}>Vérifier mon accès</Button>
+      <Button variant="ghost" onClick={() => auth.signOut()}>Se déconnecter</Button>
+    </main>
+  );
 
   return (
     <DashboardGate>
@@ -969,6 +983,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     : "max-w-[1600px] min-h-[calc(100vh-14rem)]"
                 )}
               >
+                {agencySuspension === "commercial" && (
+                  <aside role="status" className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+                    <p className="font-semibold">Agence suspendue — consultation seule</p>
+                    <p>Les modifications sont bloquées. Les agents affectés peuvent uniquement pointer et déclarer un incident sur les missions déjà commencées, jusqu’à leur fin prévue.</p>
+                    {role === "agent" && <Link className="mt-2 inline-block font-semibold underline" href="/dashboard/terrain">Ouvrir mes actions terrain</Link>}
+                    <Link className="ml-3 inline-block underline" href="/contact?reason=support">Contacter le support</Link>
+                  </aside>
+                )}
                 {children}
               </div>
             </div>

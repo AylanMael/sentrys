@@ -14,6 +14,7 @@ import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import type { Role } from "@/lib/types";
 import { FirebaseErrorListener } from "@/components/FirebaseErrorListener";
+import { suspensionMode } from "@/lib/auth/tenant-suspension";
 
 /** Réponse attendue de GET /api/me */
 type MeResponse = {
@@ -25,11 +26,13 @@ type MeResponse = {
   role?: string | null;
   status?: string | null; // "active" | "disabled" etc
   hasTenant?: boolean;
+  agentId?: string | null;
   tenant?: any | null;
   error?: string; // optionnel si /api/me renvoie une erreur
 };
 
 interface UserData {
+  agentId?: string | null;
   uid: string;
   email: string | null;
   tenantId: string | null;
@@ -111,6 +114,7 @@ function toUserData(firebaseUser: FirebaseUser, me: MeResponse): UserData {
     role,
     status: me.status ?? null,
     tenant: me.tenant ?? null,
+    agentId: me.agentId ?? null,
     isProvisioned,
   };
 }
@@ -230,10 +234,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, [pathname]);
 
+  const privatePage = /^\/(dashboard|platform|agent-planning|site-planning|prepay|conduite)(\/|$)/.test(pathname ?? "");
+  useEffect(() => {
+    if (!privatePage || !firebaseUser) return;
+    const onFocus = () => { void refresh(); };
+    const timer = window.setInterval(onFocus, 30000);
+    window.addEventListener("focus", onFocus);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+  }, [privatePage, firebaseUser, refresh]);
+  const blocked = privatePage && firebaseUser && !loading
+    && (user?.status !== "active" || !user?.isProvisioned
+      || (!(user?.role === "super_admin" && user?.tenantId === "platform")
+        && suspensionMode(user?.tenant) === "security"));
+
   return (
     <AuthContext.Provider value={{ user, firebaseUser, loading, refresh, getToken }}>
       <FirebaseErrorListener />
-      {children}
+      {privatePage && loading ? <p role="status" className="p-6">Vérification de votre accès…</p> : blocked ? (
+        <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-5 p-6">
+          <h1 className="text-2xl font-semibold">Accès métier indisponible</h1>
+          <p>Votre accès ne peut pas être autorisé ou votre agence est suspendue pour sécurité. Les données métier ne sont pas accessibles.</p>
+          <a className="font-semibold underline" href="/contact?reason=support">Contacter le support</a>
+          <button className="rounded-lg border p-3" onClick={() => void refresh()}>Vérifier mon accès</button>
+          <button className="underline" onClick={() => void auth.signOut()}>Se déconnecter</button>
+        </main>
+      ) : children}
     </AuthContext.Provider>
   );
 }

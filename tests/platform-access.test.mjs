@@ -30,7 +30,7 @@ function load(file, mocks, cache = new Map()) {
     require(specifier) {
       if (Object.hasOwn(mocks, specifier)) return mocks[specifier];
       const local = `${specifier.replace(/^@\//, "src/")}.ts`;
-      assert.ok([guard, tenantAuth, rolePolicy].includes(local), `Unmocked import: ${specifier}`);
+      assert.ok([guard, tenantAuth, rolePolicy, "src/lib/auth/tenant-suspension.ts"].includes(local), `Unmocked import: ${specifier}`);
       return load(local, mocks, cache);
     },
     console: { error() {}, warn() {} },

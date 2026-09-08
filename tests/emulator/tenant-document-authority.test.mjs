@@ -40,14 +40,14 @@ const ACTORS = [
 ];
 const CREATED = Timestamp.fromMillis(Date.UTC(2026, 0, 1));
 const tenant = () => ({
-  name: "Fixture agency", status: "suspended", planId: "starter", plan: "starter",
+  name: "Fixture agency", status: "active", planId: "starter", plan: "starter",
   billing: { plan: "starter", limits: { agents: 5 } },
   subscription: { planId: "starter", status: "trialing" },
   onboarding: { status: "pending_setup" }, provisioning: { status: "pending" },
   limits: { agents: 5 }, createdAt: CREATED, createdBy: "fixture-server",
 });
 const REPLACEMENTS = {
-  status: "active", planId: "growth", plan: "growth",
+  status: "suspended", planId: "growth", plan: "growth",
   billing: { plan: "growth", limits: { agents: 999999 } },
   subscription: { planId: "growth", status: "active" },
   onboarding: { status: "active" }, provisioning: { status: "complete" },
@@ -62,7 +62,7 @@ async function denied(operation) {
   });
 }
 
-async function fixture(t, actor, { missingField, tenantStatus = "suspended" } = {}) {
+async function fixture(t, actor, { missingField, tenantStatus = "active" } = {}) {
   const id = `sec03-${randomUUID()}`;
   const uid = `${id}-actor`;
   const tenantId = actor.platform ? "platform" : `${id}-agency`;
@@ -131,7 +131,7 @@ describe("SEC-03: tenant documents are server-owned", { concurrency: false }, ()
         const newRef = doc(f.db, f.own(`tenants/${f.uid}-new`));
         const actions = {
           overwrite: () => setDoc(f.ref, { name: "Replacement", status: "active" }),
-          merge: () => setDoc(f.ref, { status: "active" }, { merge: true }),
+          merge: () => setDoc(f.ref, { status: "suspended" }, { merge: true }),
           delete: () => deleteDoc(f.ref),
           create: () => setDoc(newRef, tenant()),
         };

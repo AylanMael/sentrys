@@ -77,9 +77,11 @@ export async function GET(req: NextRequest) {
     return json(403, { ok: false, error: "Forbidden" });
   }
 
-  await ensureComplianceReminderNotifications(auth.tenantId).catch((error) => {
-    console.error("[compliance.summary.reminders]", error);
-  });
+  if (auth.suspension !== "commercial") {
+    await ensureComplianceReminderNotifications(auth.tenantId).catch((error) => {
+      console.error("[compliance.summary.reminders]", error);
+    });
+  }
 
   const snap = await adminDb
     .collection("planningDispatches")

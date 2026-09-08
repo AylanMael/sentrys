@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
 
 type Assignment = {
   id: string;
@@ -40,13 +41,18 @@ export function AgentMissions() {
   const { toast } = useToast();
   const [missions, setMissions] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
+  const [incidentFor, setIncidentFor] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
+  const [sendingIncident, setSendingIncident] = useState(false);
 
   useEffect(() => {
     if (!user?.uid || !tenantId) return;
 
-    const q = qAgentAssignments(db, tenantId, user.uid);
+    const q = qAgentAssignments(db, tenantId, user.agentId || user.uid);
     const unsubscribe = onSnapshot(q, async (snap) => {
+      setLoadError(false);
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Assignment));
 
       // Fetch site names for the missions
@@ -61,12 +67,12 @@ export function AgentMissions() {
 
       setMissions(withNames);
       setLoading(false);
-    });
+    }, () => { setMissions([]); setLoadError(true); setLoading(false); });
 
     return () => unsubscribe();
-  }, [user?.uid, tenantId]);
+  }, [user?.uid, user?.agentId, tenantId]);
 
-  const handleCheckIn = async (assignmentId: string) => {
+  const handleCheckIn = async (assignmentId: string, present: boolean) => {
     setCheckingIn(assignmentId);
 
     try {
@@ -82,7 +88,7 @@ export function AgentMissions() {
       const { latitude, longitude } = position.coords;
 
       // 2. Call API
-      const res = await apiFetch<any>(`/api/assignments/${assignmentId}/check-in`, {
+      const res = await apiFetch<any>(`/api/assignments/${assignmentId}/${present ? "check-out" : "check-in"}`, {
         method: "POST",
         body: { latitude, longitude }
       });
@@ -93,7 +99,7 @@ export function AgentMissions() {
 
       toast({
         title: "Pointage réussi",
-        description: "Votre présence a été enregistrée avec succès.",
+        description: present ? "Votre fin de service est enregistrée." : "Votre présence a été enregistrée avec succès.",
       });
 
     } catch (err: any) {
@@ -115,6 +121,8 @@ export function AgentMissions() {
       </div>
     );
   }
+
+  if (loadError) return <p role="alert" className="rounded-xl border border-destructive/40 p-4">Impossible de charger vos missions. Vérifiez votre accès et réessayez ; contactez le support si le problème persiste.</p>;
 
   if (missions.length === 0) {
     return (
@@ -151,18 +159,18 @@ export function AgentMissions() {
                   </h4>
                   <div className="flex items-center gap-2 mt-1">
                     <Badge variant="outline" className="text-[10px] font-bold uppercase py-0 px-2 rounded-md border-primary/20 bg-primary/5 text-primary">
-                      Assigné
+                      {m.status === "present" ? "En service" : "Assigné"}
                     </Badge>
                     <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      En attente de pointage
+                      {m.status === "present" ? "Prise de service enregistrée" : "En attente de pointage"}
                     </span>
                   </div>
                 </div>
               </div>
 
               <Button
-                onClick={() => handleCheckIn(m.id)}
+                onClick={() => handleCheckIn(m.id, m.status === "present")}
                 disabled={checkingIn === m.id}
                 className="h-12 rounded-xl px-6 font-black shadow-lg shadow-primary/20 hover:translate-y-[-2px] active:scale-95 transition-all text-sm uppercase tracking-wider"
               >
@@ -174,11 +182,29 @@ export function AgentMissions() {
                 ) : (
                   <>
                     <CheckCircle2 className="mr-2 h-5 w-5" />
-                    Signaler ma Présence
+                    {m.status === "present" ? "Signaler ma fin de service" : "Signaler ma présence"}
                   </>
                 )}
               </Button>
+              <Button variant="outline" onClick={() => { setIncidentFor(m.id); setDescription(""); }}>Déclarer un incident</Button>
             </div>
+            {incidentFor === m.id && <form className="space-y-3 border-t p-5" onSubmit={async e => {
+              e.preventDefault(); setSendingIncident(true);
+              try {
+                await apiFetch("/api/incidents", { method: "POST", body: {
+                  title: "Signalement terrain", description, siteId: m.siteId,
+                  vacationId: m.vacationId, severity: "medium",
+                } });
+                toast({ title: "Incident enregistré" }); setIncidentFor(null); setDescription("");
+              } catch (error) {
+                toast({ variant: "destructive", title: "Déclaration impossible", description: error instanceof Error ? error.message : "Veuillez réessayer." });
+              } finally { setSendingIncident(false); }
+            }}>
+              <label className="text-sm font-medium" htmlFor={`incident-${m.id}`}>Description de l’incident</label>
+              <Textarea id={`incident-${m.id}`} value={description} onChange={e => setDescription(e.target.value)} minLength={5} maxLength={5000} required disabled={sendingIncident} />
+              <Button type="submit" disabled={sendingIncident || description.trim().length < 5}>{sendingIncident ? "Enregistrement…" : "Enregistrer l’incident"}</Button>
+              <Button type="button" variant="ghost" disabled={sendingIncident} onClick={() => setIncidentFor(null)}>Annuler</Button>
+            </form>}
           </Card>
         ))}
       </div>

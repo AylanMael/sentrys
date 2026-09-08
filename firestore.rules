@@ -24,11 +24,42 @@ service cloud.firestore {
     }
 
     function myTenantId() {
-      return hasTU() ? tu().data.tenantId : null;
+      // Callers authorize membership once; avoid recursively repeating hasTU.
+      return tu().data.get("tenantId", null);
     }
 
     function myRole() {
-      return hasTU() ? tu().data.role : null;
+      return tu().data.get("role", null);
+    }
+
+    function tenantPath() {
+      return /databases/$(database)/documents/tenants/$(myTenantId());
+    }
+
+    function hasTenant() {
+      return hasTU() && myTenantId() is string && exists(tenantPath());
+    }
+
+    function platformRecovery() {
+      return hasTU() && myTenantId() == "platform" && myRole() == "super_admin";
+    }
+
+    function tenantSuspended() {
+      return get(tenantPath()).data.get("status", "") == "suspended";
+    }
+
+    function commercialSuspension() {
+      return hasTenant() && tenantSuspended()
+        && get(tenantPath()).data.get("suspensionMode", "security") == "commercial";
+    }
+
+    function canReadTenantData() {
+      return hasTenant()
+        && (platformRecovery() || !tenantSuspended() || commercialSuspension());
+    }
+
+    function canWriteTenantData() {
+      return hasTenant() && (platformRecovery() || !tenantSuspended());
     }
 
     function isSuperAdmin() {
@@ -59,7 +90,7 @@ service cloud.firestore {
       return hasTU() && myRole() == "client";
     }
     function myAgentId() {
-      return hasTU() && ("agentId" in tu().data)
+      return hasTU() && ("agentId" in tu().data) && tu().data.agentId is string && tu().data.agentId.size() > 0
         ? tu().data.agentId
         : uid();
     }
@@ -149,6 +180,52 @@ service cloud.firestore {
         && data.managerIds.concat(data.agentIds).hasAll(data.accessUids);
     }
 
+    // Legacy planning classifies absences from title/notes. Keep this narrow
+    // exception fail-closed for those records as well as explicit absence flags.
+    function absenceText(value) {
+      return value is string
+        && value.lower().matches('(?s).*(absence|conge|congé|maladie|repos|rtt|vacances).*');
+    }
+
+    function ongoingAssignedVacation(vacationId, tenantId, agentId, cutoff) {
+      let path = /databases/$(database)/documents/vacations/$(vacationId);
+      let vacation = get(path).data;
+      return exists(path)
+        && vacation.tenantId == tenantId
+        && vacation.siteId == request.resource.data.siteId
+        && vacation.assignedAgentIds is list
+        && agentId is string
+        && vacation.assignedAgentIds.hasAny([agentId])
+        && cutoff is timestamp
+        && vacation.startAt is timestamp && vacation.endAt is timestamp
+        && vacation.startAt <= cutoff
+        && cutoff <= request.time
+        && vacation.startAt <= request.time && request.time < vacation.endAt
+        && vacation.status is string
+        && !(vacation.status.lower() in ["cancelled", "canceled", "closed", "completed", "absence"])
+        && vacation.get("isAbsence", false) == false
+        && vacation.get("isDeleted", false) == false
+        && !absenceText(vacation.get("type", null))
+        && !absenceText(vacation.get("kind", null))
+        && !absenceText(vacation.get("missionType", null))
+        && !absenceText(vacation.get("title", null))
+        && !absenceText(vacation.get("notes", null));
+    }
+
+    function commercialIncidentException() {
+      let member = tu().data;
+      let tenant = get(/databases/$(database)/documents/tenants/$(member.tenantId)).data;
+      let linkedId = member.get("agentId", null);
+      let agentId = linkedId is string && linkedId.size() > 0 ? linkedId : uid();
+      return member.status == "active" && member.role == "agent"
+        && tenant.status == "suspended" && tenant.get("suspensionMode", "security") == "commercial"
+        && request.resource.data.createdBy == uid()
+        && request.resource.data.vacationId is string
+        && request.resource.data.vacationId.size() > 0
+        && !request.resource.data.vacationId.matches('.*[/].*')
+        && ongoingAssignedVacation(request.resource.data.vacationId, member.tenantId, agentId, tenant.get("suspendedAt", null));
+    }
+
     /* =========================
        tenantUsers
        Recommandation :
@@ -175,11 +252,11 @@ service cloud.firestore {
       allow read: if signedIn()
         && (
           userId == uid()
-          || (isManager() && resource.data.tenantId == myTenantId())
+          || (canReadTenantData() && isManager() && resource.data.tenantId == myTenantId())
         );
 
       // Tous les champs d'autorité restent serveur uniquement, quel que soit le rôle.
-      allow update: if hasTU()
+      allow update: if canWriteTenantData()
         && userId == uid()
         && validSelfProfileUpdate();
 
@@ -196,7 +273,7 @@ service cloud.firestore {
 
       allow create: if false;
 
-      allow read: if hasTU() && tenantId == myTenantId();
+      allow read: if canReadTenantData() && tenantId == myTenantId();
 
       allow update: if false;
 
@@ -209,7 +286,7 @@ service cloud.firestore {
 
     match /sites/{id} {
 
-      allow create: if canManagePlanning()
+      allow create: if canWriteTenantData() && canManagePlanning()
         && sameTenantOnCreate()
         && request.resource.data.name is string
         && request.resource.data.name.size() > 1
@@ -217,18 +294,18 @@ service cloud.firestore {
         && accessUidsIsUnion(request.resource.data)
         && request.resource.data.managerIds.hasAny([uid()]);
 
-      allow read: if sameTenantResource()
+      allow read: if canReadTenantData() && sameTenantResource()
         && (
           canReadBackoffice()
           || isAssignedToSite(id)
         );
 
-      allow update: if sameTenantResource()
+      allow update: if canWriteTenantData() && sameTenantResource()
         && canManagePlanning()
         && forbidChange(["tenantId", "createdAt", "createdBy"])
         && accessUidsIsUnion(request.resource.data);
 
-      allow delete: if isAdmin() && sameTenantResource();
+      allow delete: if canWriteTenantData() && isAdmin() && sameTenantResource();
     }
 
     /* =========================
@@ -237,23 +314,23 @@ service cloud.firestore {
 
     match /agents/{id} {
 
-      allow create: if canManagePlanning()
+      allow create: if canWriteTenantData() && canManagePlanning()
         && sameTenantOnCreate()
         && request.resource.data.firstName is string
         && request.resource.data.lastName is string
         && request.resource.data.status in ["active", "inactive", "disabled"];
 
-      allow read: if sameTenantResource()
+      allow read: if canReadTenantData() && sameTenantResource()
         && (
           canManagePlanning()
           || isOwnAgent(id)
         );
 
-      allow update: if canManagePlanning()
+      allow update: if canWriteTenantData() && canManagePlanning()
         && sameTenantResource()
         && forbidChange(["tenantId", "createdAt", "createdBy"]);
 
-      allow delete: if isAdmin() && sameTenantResource();
+      allow delete: if canWriteTenantData() && isAdmin() && sameTenantResource();
     }
 
     /* =========================
@@ -267,8 +344,9 @@ service cloud.firestore {
         && request.resource.data.siteId is string
         && siteSameTenant(request.resource.data.siteId)
         && (
-          canReadBackoffice()
-          || isAssignedToSite(request.resource.data.siteId)
+          (canWriteTenantData()
+            && (canReadBackoffice() || isAssignedToSite(request.resource.data.siteId)))
+          || commercialIncidentException()
         )
         && request.resource.data.description is string
         && request.resource.data.status in ["Ouvert", "Clos", "ouvert", "clos"]
@@ -277,13 +355,13 @@ service cloud.firestore {
           "faible", "moyenne", "elevee", "élevée"
         ];
 
-      allow read: if sameTenantResource()
+      allow read: if canReadTenantData() && sameTenantResource()
         && (
           canReadBackoffice()
           || isAssignedToSite(resource.data.siteId)
         );
 
-      allow update: if sameTenantResource()
+      allow update: if canWriteTenantData() && sameTenantResource()
         && (
           (
             canManagePlanning()
@@ -304,7 +382,7 @@ service cloud.firestore {
           )
         );
 
-      allow delete: if isAdmin() && sameTenantResource();
+      allow delete: if canWriteTenantData() && isAdmin() && sameTenantResource();
 
       match /comments/{commentId} {
 
@@ -321,9 +399,9 @@ service cloud.firestore {
             );
         }
 
-        allow read: if incidentOk() && canSeeIncidentSite();
+        allow read: if canReadTenantData() && incidentOk() && canSeeIncidentSite();
 
-        allow create: if incidentOk()
+        allow create: if canWriteTenantData() && incidentOk()
           && canSeeIncidentSite()
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
@@ -339,7 +417,7 @@ service cloud.firestore {
 
     match /vacations/{id} {
 
-      allow create: if canManagePlanning()
+      allow create: if canWriteTenantData() && canManagePlanning()
         && sameTenantOnCreate()
         && request.resource.data.siteId is string
         && siteSameTenant(request.resource.data.siteId)
@@ -347,17 +425,17 @@ service cloud.firestore {
         && request.resource.data.endAt is timestamp
         && request.resource.data.requiredAgents is int;
 
-      allow read: if sameTenantResource()
+      allow read: if canReadTenantData() && sameTenantResource()
         && (
           canReadBackoffice()
           || isAssignedToSite(resource.data.siteId)
         );
 
-      allow update: if sameTenantResource()
+      allow update: if canWriteTenantData() && sameTenantResource()
         && canManagePlanning()
         && forbidChange(["tenantId", "createdAt", "createdBy"]);
 
-      allow delete: if isAdmin() && sameTenantResource();
+      allow delete: if canWriteTenantData() && isAdmin() && sameTenantResource();
     }
 
     /* =========================
@@ -366,20 +444,20 @@ service cloud.firestore {
 
     match /assignments/{id} {
 
-      allow create: if canManagePlanning()
+      allow create: if canWriteTenantData() && canManagePlanning()
         && sameTenantOnCreate()
         && request.resource.data.agentId is string
         && request.resource.data.vacationId is string
         && request.resource.data.siteId is string
         && siteSameTenant(request.resource.data.siteId);
 
-      allow read: if sameTenantResource()
+      allow read: if canReadTenantData() && sameTenantResource()
         && (
           canReadBackoffice()
-          || resource.data.agentId == uid()
+          || isOwnAgent(resource.data.agentId)
         );
 
-      allow update: if sameTenantResource()
+      allow update: if canWriteTenantData() && sameTenantResource()
         && (
           (
             canManagePlanning()
@@ -395,7 +473,7 @@ service cloud.firestore {
           )
         );
 
-      allow delete: if isAdmin() && sameTenantResource();
+      allow delete: if canWriteTenantData() && isAdmin() && sameTenantResource();
     }
 
     /* =========================

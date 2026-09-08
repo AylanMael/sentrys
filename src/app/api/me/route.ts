@@ -4,6 +4,7 @@ import { getAuth } from "firebase-admin/auth";
 import { adminDb } from "@/lib/firebase/admin";
 import { normalizeRole } from "@/lib/auth/role";
 import { appLogger } from "@/lib/observability/logger";
+import { suspensionMode } from "@/lib/auth/tenant-suspension";
 
 export const runtime = "nodejs";
 
@@ -131,7 +132,7 @@ export async function GET(req: NextRequest) {
     const role = normalizeRole(tenantUser?.role);
     const status = normalizeStatus(tenantUser?.status);
 
-    if (status === "disabled") {
+    if (status !== "active" || !role) {
       return forbidden("User disabled");
     }
 
@@ -143,12 +144,16 @@ export async function GET(req: NextRequest) {
       if (tenantSnap.exists) {
         const tenantData = tenantSnap.data() as Record<string, unknown>;
 
-        tenant = {
+        tenant = suspensionMode(tenantData) === "security" && !(tenantId === "platform" && role === "super_admin")
+          ? { id: tenantSnap.id, status: "suspended", suspensionMode: "security" }
+          : {
           id: tenantSnap.id,
           ...tenantData,
           createdAtIso: toIso(tenantData?.createdAt),
           updatedAtIso: toIso(tenantData?.updatedAt),
         };
+      } else {
+        tenant = { id: tenantId, status: "suspended", suspensionMode: "security" };
       }
     }
 
@@ -161,6 +166,7 @@ export async function GET(req: NextRequest) {
       role,
       status,
       hasTenant: Boolean(tenantId),
+      agentId: normalizeText(tenantUser?.agentId),
       createdAtIso: toIso(tenantUser?.createdAt),
       updatedAtIso: toIso(tenantUser?.updatedAt),
       tenant,

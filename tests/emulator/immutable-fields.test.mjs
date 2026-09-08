@@ -85,6 +85,8 @@ async function fixture(t, spec, { missingField, foreign = false } = {}) {
   if (missingField) delete data[missingField];
   const rows = new Map([
     [`tenantUsers/${uid}`, { uid, tenantId, role: spec.role, status: "active", name: "Fixture actor" }],
+    [`tenants/${tenantId}`, { name: "Active fixture agency", status: "active" }],
+    [`tenants/${otherTenantId}`, { name: "Foreign fixture agency", status: "active" }],
     [`sites/${siteId}`, site],
     // Replacing siteId uses a real, assigned site in the same resource tenant,
     // so a missing-site failure cannot conceal a broken immutable-field rule.

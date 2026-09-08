@@ -34,6 +34,7 @@ import {
   type OwnerInviteResult,
   type PlatformPlanId,
   type SupportScope,
+  type SuspensionMode,
   type TenantDétailResponse,
   type TenantWorkspaceTab,
 } from "./types";
@@ -54,6 +55,8 @@ export default function PlatformTenantDétailPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusActionOpen, setStatusActionOpen] = useState(false);
+  const [statusActionTarget, setStatusActionTarget] = useState<"active" | "suspended">("suspended");
+  const [statusActionMode, setStatusActionMode] = useState<SuspensionMode>("commercial");
   const [statusActionReason, setStatusActionReason] = useState("");
   const [statusActionConfirmation, setStatusActionConfirmation] = useState("");
   const [statusActionSubmitting, setStatusActionSubmitting] = useState(false);
@@ -319,7 +322,7 @@ export default function PlatformTenantDétailPage() {
 
   async function submitTenantStatusAction(
     targetStatus: "active" | "suspended",
-    expectedConfirmation: string
+    suspensionMode: SuspensionMode
   ) {
     const tenant = data?.tenant;
     if (!tenant) return;
@@ -333,6 +336,7 @@ export default function PlatformTenantDétailPage() {
         method: "PATCH",
         body: {
           status: targetStatus,
+          ...(targetStatus === "suspended" ? { suspensionMode } : {}),
           reason: statusActionReason,
           confirmation: statusActionConfirmation,
         },
@@ -340,7 +344,7 @@ export default function PlatformTenantDétailPage() {
 
       setStatusActionSuccess(
         targetStatus === "suspended"
-          ? "Agence suspendue et action journalisee."
+          ? `Suspension ${suspensionMode === "commercial" ? "commerciale" : "de sécurité"} appliquée et action journalisée.`
           : "Agence réactivee et action journalisee."
       );
       setStatusActionReason("");
@@ -694,6 +698,8 @@ export default function PlatformTenantDétailPage() {
                 />
                 <StatusGovernanceAction
                   tenant={tenant}
+                  targetStatus={statusActionTarget}
+                  suspensionMode={statusActionMode}
                   open={statusActionOpen}
                   reason={statusActionReason}
                   confirmation={statusActionConfirmation}
@@ -702,10 +708,22 @@ export default function PlatformTenantDétailPage() {
                   success={statusActionSuccess}
                   onOpenChange={(nextOpen) => {
                     setStatusActionOpen(nextOpen);
+                    setStatusActionTarget(tenant?.status === "suspended" ? "active" : "suspended");
+                    setStatusActionMode(tenant?.status === "suspended"
+                      ? (tenant.suspensionMode === "commercial" ? "security" : "commercial") : "commercial");
+                    setStatusActionConfirmation("");
                     setStatusActionError(null);
                     setStatusActionSuccess(null);
                   }}
                   onReasonChange={setStatusActionReason}
+                  onTargetChange={(target) => {
+                    setStatusActionTarget(target);
+                    setStatusActionConfirmation("");
+                  }}
+                  onModeChange={(mode) => {
+                    setStatusActionMode(mode);
+                    setStatusActionConfirmation("");
+                  }}
                   onConfirmationChange={setStatusActionConfirmation}
                   onSubmit={submitTenantStatusAction}
                 />

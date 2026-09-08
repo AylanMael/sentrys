@@ -15,6 +15,7 @@
         "typecheck": "tsc --noEmit --incremental false",
         "security:check": "node scripts/security-regression-check.mjs",
         "test:rules:accounts": "firebase emulators:exec --config firebase.emulators.json --only firestore --project demo-sentrys-accounts \"node --test --experimental-test-isolation=none tests/emulator/tenant-user-authority.test.mjs\"",
+        "test:rules:suspension": "firebase emulators:exec --config firebase.emulators.json --only firestore,storage --project demo-sentrys-accounts \"node --test --experimental-test-isolation=none tests/emulator/tenant-suspension.test.mjs\"",
         "test:rules:integrity": "firebase emulators:exec --config firebase.emulators.json --only firestore --project demo-sentrys-accounts \"node --test --experimental-test-isolation=none tests/emulator/immutable-fields.test.mjs && node --test --experimental-test-isolation=none tests/emulator/tenant-document-authority.test.mjs\"",
         "agent-files:audit": "node scripts/migrate-agent-file-tokens.cjs",
         "agent-files:repair": "node scripts/migrate-agent-file-tokens.cjs --repair",

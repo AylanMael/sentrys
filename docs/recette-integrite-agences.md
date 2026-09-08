@@ -41,11 +41,11 @@ La CI lance désormais `test:rules:integrity` après `test:rules:accounts`. Le s
 
 Revue indépendante favorable sur SEC-03A ; les deux compléments de QA ont été relus puis exécutés avec succès. Ces résultats ne clôturent pas SEC-03B et ne démontrent pas le fonctionnement complet des API serveur de provisioning. Aucun nouveau changement de dépendances dans SEC-03A ; les modifications du lockfile appartiennent au lot SEC-01 précédent.
 
-## SEC-03B — Effet de la suspension : décision requise
+## SEC-03B — Décision validée, implémentation candidate
 
-Le code actuel enregistre `status: suspended` dans le document d'agence, mais le garde API principal vérifie le statut du membre, pas celui de l'agence. Les règles Firestore et Storage vérifient également le membre sans appliquer une politique de suspension d'agence. Protéger le document contre l'auto-réactivation ne suffit donc pas à rendre la suspension effective.
+Le diagnostic initial constatait que le statut de suspension n'était pas appliqué aux accès métier. Le candidat SEC-03B ajoute désormais ces contrôles aux API, règles et parcours concernés. Voir `recette-suspension-agences.md` pour la politique approuvée, les limites et la recette de livraison.
 
-La décision utilisateur attendue distingue :
+La décision utilisateur validée distingue :
 
 - Consultation seule : conserver lectures et exports, refuser les écritures métier.
 - Blocage métier total : conserver uniquement connexion, diagnostic et contact support.

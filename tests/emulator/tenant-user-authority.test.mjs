@@ -93,6 +93,7 @@ async function fixture(t, actor, { status = "active", missingField, target = "se
   };
   const rows = new Map([
     [`tenantUsers/${uid}`, account], [`tenantUsers/${peerUid}`, peer],
+    [`tenants/${tenantId}`, { name: "Active fixture agency", status: "active" }],
     [`tenants/${foreignTenantId}`, { name: "Foreign fixture" }],
     [`sites/${siteId}`, site], [`incidents/${incidentId}`, incident],
     [`assignments/${assignmentId}`, {
@@ -100,7 +101,7 @@ async function fixture(t, actor, { status = "active", missingField, target = "se
       status: "planned", createdAt: CREATED, createdBy: "fixture-server",
     }],
   ]);
-  const ownedPaths = new Set(rows.keys());
+  const ownedPaths = new Set();
   const own = path => { ownedPaths.add(path); return path; };
   // Registered before seeding: partial fixture failures are cleaned too.
   t.after(async () => {
@@ -113,8 +114,11 @@ async function fixture(t, actor, { status = "active", missingField, target = "se
   });
   await env.withSecurityRulesDisabled(async context => {
     const db = context.firestore();
+    for (const path of rows.keys()) {
+      assert.equal((await getDoc(doc(db, path))).exists(), false, `Fixture collision: ${path}`);
+    }
     const batch = writeBatch(db);
-    for (const [path, data] of rows) batch.set(doc(db, path), data);
+    for (const [path, data] of rows) batch.set(doc(db, own(path)), data);
     await batch.commit();
   });
   const db = env.authenticatedContext(uid).firestore();

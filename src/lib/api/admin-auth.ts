@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase/admin";
+import { requireTenantUser } from "@/app/api/_utils/withTenant";
 
 export type AdminRole = "global_admin" | "tenant_admin" | "support";
 
@@ -49,13 +50,35 @@ export async function requireAdmin(
       }
     }
 
-    // 4. Validation explicite du tenant (TargetTenantId)
+    // Claims remain necessary, but current membership and suspension are authoritative.
+    // In particular, bootstrap is recovery by a provisioned platform user, not self-provisioning.
+    const current = await requireTenantUser(req);
+    if (!current.ok) return { error: current.res };
+    if (current.uid !== decodedToken.uid) {
+      return { error: NextResponse.json({ ok: false, error: "Forbidden: Identity mismatch" }, { status: 403 }) };
+    }
+    const platformMember = current.role === "super_admin" && current.tenantId === "platform";
+    if ((isGlobalAdmin || isSupport) && !platformMember) {
+      return { error: NextResponse.json({ ok: false, error: "Forbidden: Current platform administrator required" }, { status: 403 }) };
+    }
+    if (!isGlobalAdmin && !isSupport && (
+      !isTenantAdmin || current.tenantId === "platform"
+      || !["owner", "admin", "super_admin"].includes(current.role)
+      || decodedToken.tenantId !== current.tenantId
+      || !options?.targetTenantId || options.targetTenantId !== current.tenantId
+    )) {
+      return { error: NextResponse.json({ ok: false, error: "Forbidden: Current tenant administrator and matching target required" }, { status: 403 }) };
+    }
+
+    // 4. Preserve explicit target and support cross-tenant opt-in restrictions.
     if (options?.targetTenantId) {
       if (isGlobalAdmin) {
-        // Accès global autorisé sans condition
+        // Global claim plus current active platform membership.
       } else if (isSupport && options.allowSupportCrossTenant === true) {
         // Accès cross-tenant explicitement autorisé pour le support
-      } else if (isTenantAdmin && decodedToken.tenantId === options.targetTenantId) {
+      } else if (isTenantAdmin && current.tenantId !== "platform"
+        && ["owner", "admin", "super_admin"].includes(current.role)
+        && decodedToken.tenantId === current.tenantId && current.tenantId === options.targetTenantId) {
         // Le tenant_admin agit sur son propre tenant validé
       } else {
         // Tout autre cas est interdit / mismatch

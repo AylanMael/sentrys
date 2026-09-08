@@ -162,7 +162,7 @@ export async function requireTenantUser(req: NextRequest): Promise<TenantAuth> {
       return { ok: false, res: unauthorized("No tenant assigned") };
     }
 
-    const status = String(tu?.status ?? "active").trim().toLowerCase();
+    const status = String(tu?.status ?? "").trim().toLowerCase();
     if (status !== "active") {
       return { ok: false, res: unauthorized("User disabled", { status }) };
     }

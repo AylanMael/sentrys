@@ -26,8 +26,15 @@ test("contact requests are validated, rate-limited and visible to platform admin
   assert.match(publicApi, /runTransaction/);
   assert.match(publicApi, /RATE_LIMIT/);
   assert.match(publicApi, /contactRequests/);
-  assert.match(platformApi, /isSuperAdmin/);
-  assert.match(platformApi, /tenantId !== "platform"/);
+  const platformGuard = read("src/lib/auth/platform.ts");
+  assert.match(platformApi, /import \{ requirePlatformUser as authorize \} from "@\/lib\/auth\/platform"/);
+  for (const method of ["GET", "PATCH"]) {
+    assert.match(platformApi, new RegExp(`export async function ${method}\\(req: NextRequest\\) \\{ const auth = await authorize\\(req\\); if \\(!auth.ok\\) return auth.res;`));
+  }
+  assert.match(platformGuard, /await requireTenantUser\(req\);\s*if \(!auth.ok\) return auth;/);
+  assert.match(platformGuard, /auth.role !== "super_admin" \|\| auth.tenantId !== "platform"/);
+  // platform-access.test.mjs also executes both handlers and checks that every
+  // rejected identity returns before any resource, request body or params access.
 });
 
 test("billing page does not pretend Stripe checkout is active", () => {

@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 
-import {
-  forbidden,
-  isSuperAdmin,
-  requireTenantUser,
-} from "@/app/api/_utils/withTenant";
+import { requirePlatformUser } from "@/lib/auth/platform";
 import {
   computeEffectiveLimits,
   getPlan,
@@ -525,12 +521,8 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireTenantUser(req);
+  const auth = await requirePlatformUser(req, "Super admin SaaS required");
   if (!auth.ok) return auth.res;
-
-  if (!isSuperAdmin(auth.role)) {
-    return forbidden("Super admin SaaS required");
-  }
 
   const { id: rawId } = await ctx.params;
   const tenantId = decodeURIComponent(rawId ?? "").trim();
@@ -703,12 +695,8 @@ export async function PATCH(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireTenantUser(req);
+  const auth = await requirePlatformUser(req, "Super admin SaaS required");
   if (!auth.ok) return auth.res;
-
-  if (!isSuperAdmin(auth.role)) {
-    return forbidden("Super admin SaaS required");
-  }
 
   const { id: rawId } = await ctx.params;
   const tenantId = decodeURIComponent(rawId ?? "").trim();

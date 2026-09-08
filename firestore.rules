@@ -14,7 +14,9 @@ service cloud.firestore {
     }
 
     function hasTU() {
-      return signedIn() && exists(tuPath());
+      return signedIn() && exists(tuPath())
+        && ("status" in get(tuPath()).data)
+        && get(tuPath()).data.status == "active";
     }
 
     function tu() {
@@ -87,7 +89,7 @@ service cloud.firestore {
     }
 
     function forbidChange(keys) {
-      return !request.resource.data.diff(resource.data).changedKeys().hasAny(keys);
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys);
     }
 
     /* =========================
@@ -155,6 +157,19 @@ service cloud.firestore {
 
     match /tenantUsers/{userId} {
 
+      function validSelfProfileUpdate() {
+        let changed = request.resource.data.diff(resource.data).affectedKeys();
+        return changed.hasOnly(["name", "updatedAt"])
+          && (!changed.hasAny(["name"])
+            || (("name" in request.resource.data)
+              && request.resource.data.name is string
+              && request.resource.data.name.size() >= 1
+              && request.resource.data.name.size() <= 120))
+          && (!changed.hasAny(["updatedAt"])
+            || (("updatedAt" in request.resource.data)
+              && request.resource.data.updatedAt is timestamp));
+      }
+
       allow create: if false;
 
       allow read: if signedIn()
@@ -163,15 +178,10 @@ service cloud.firestore {
           || (isManager() && resource.data.tenantId == myTenantId())
         );
 
-      // self update : pas le droit de modifier uid / role / tenantId
-      allow update: if signedIn()
+      // Tous les champs d'autorité restent serveur uniquement, quel que soit le rôle.
+      allow update: if hasTU()
         && userId == uid()
-        && forbidChange(["uid", "role", "tenantId", "createdAt", "createdBy"]);
-
-      // admin-like : gestion des users du tenant
-      allow update: if isAdmin()
-        && resource.data.tenantId == myTenantId()
-        && forbidChange(["uid", "tenantId", "createdAt", "createdBy"]);
+        && validSelfProfileUpdate();
 
       allow delete: if false;
     }
@@ -188,9 +198,7 @@ service cloud.firestore {
 
       allow read: if hasTU() && tenantId == myTenantId();
 
-      allow update: if isAdmin()
-        && tenantId == myTenantId()
-        && forbidChange(["createdBy", "createdAt"]);
+      allow update: if false;
 
       allow delete: if false;
     }

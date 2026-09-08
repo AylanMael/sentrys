@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 
-import {
-  forbidden,
-  isSuperAdmin,
-  requireTenantUser,
-} from "@/app/api/_utils/withTenant";
+import { requirePlatformUser } from "@/lib/auth/platform";
 import { computeEffectiveLimits, getPlan } from "@/lib/billing/limits";
 import { adminDb } from "@/lib/firebase/admin";
 
@@ -61,12 +57,8 @@ async function buildTenantId(name: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireTenantUser(req);
+  const auth = await requirePlatformUser(req, "Super admin SaaS required");
   if (!auth.ok) return auth.res;
-
-  if (!isSuperAdmin(auth.role)) {
-    return forbidden("Super admin SaaS required");
-  }
 
   try {
     const body = (await req.json().catch(() => null)) as

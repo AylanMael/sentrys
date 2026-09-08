@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  forbidden,
-  isSuperAdmin,
-  requireTenantUser,
-} from "@/app/api/_utils/withTenant";
+import { requirePlatformUser } from "@/lib/auth/platform";
 import { adminBucket, adminDb } from "@/lib/firebase/admin";
 import { listPlatformAuditEvents } from "@/lib/platform/audit-log";
 
@@ -281,12 +277,8 @@ function riskForTenant(input: {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireTenantUser(req);
+  const auth = await requirePlatformUser(req, "Super admin SaaS platform required");
   if (!auth.ok) return auth.res;
-
-  if (!isSuperAdmin(auth.role) || auth.tenantId !== "platform") {
-    return forbidden("Super admin SaaS platform required");
-  }
 
   const maxRaw = Number(req.nextUrl.searchParams.get("max") ?? 80);
   const max = Math.min(Math.max(Number.isFinite(maxRaw) ? maxRaw : 80, 1), 150);

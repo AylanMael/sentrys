@@ -210,7 +210,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
 
-  const billing = useBillingUsage(Boolean(user));
+  const billing = useBillingUsage(Boolean(user) && user?.role !== "agent");
   const [complianceOpenCount, setComplianceOpenCount] = useState(0);
   const [notifications, setNotifications] = useState<InternalNotification[]>([]);
   const [notificationsUnreadCount, setNotificationsUnreadCount] = useState(0);
@@ -451,16 +451,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 
   const menuGroups = useMemo(() => {
+    if (role === "agent") return [{ label: "Mon espace agent", items: [
+      { href: "/dashboard/terrain", icon: MapPin, label: "Mes missions", keywords: "terrain présence pointage incident" },
+      { href: "/dashboard/agent-planning", icon: Bell, label: "Mes diffusions", keywords: "planning horaires confirmation" },
+    ] }];
     return [
       {
         label: "Quotidien",
         items: [
           { href: "/dashboard", icon: LayoutDashboard, label: "Vue d'ensemble", keywords: "accueil synthèse" },
-          ...(role === "agent"
-            ? [{ href: "/dashboard/agent-planning", icon: Bell, label: "Mes diffusions", keywords: "missions affectations" }]
-            : []),
           { href: "/dashboard/planning", icon: CalendarDays, label: "Planning", keywords: "calendrier affectations" },
           { href: "/dashboard/vacations", icon: CalendarClock, label: "Vacations", keywords: "missions horaires" },
+          ...(canSeeBackoffice ? [{ href: "/dashboard/pointages", icon: CalendarClock, label: "Pointages", keywords: "présence entrée sortie prise fin service agents" }] : []),
           { href: "/dashboard/incidents", icon: Siren, label: "Incidents", keywords: "alertes déclarations" },
           { href: "/dashboard/commandes", icon: ClipboardList, label: "Commandes clients", keywords: "demandes prestations" },
         ],
@@ -497,7 +499,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ],
       },
     ];
-  }, [canSeeUsersTeam, isPlatformSuperAdmin, needsAgencyOnboarding, role, tenantOnboardingStatus]);
+  }, [canSeeBackoffice, canSeeUsersTeam, isPlatformSuperAdmin, needsAgencyOnboarding, role, tenantOnboardingStatus]);
 
   const navigationResults = useMemo(() => {
     const query = navigationSearch.trim().toLocaleLowerCase("fr");
@@ -507,14 +509,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       ...menuGroups.flatMap((group) =>
         group.items.map((item) => ({ ...item, group: group.label }))
       ),
-      { href: "/dashboard/billing", icon: CreditCard, label: "Abonnement", keywords: "facturation offre quotas", group: "Gestion" },
-      { href: "/dashboard/settings", icon: Settings, label: "Configuration", keywords: "paramètres agence", group: "Gestion" },
+      ...(role === "agent" ? [] : [
+        { href: "/dashboard/billing", icon: CreditCard, label: "Abonnement", keywords: "facturation offre quotas", group: "Gestion" },
+        { href: "/dashboard/settings", icon: Settings, label: "Configuration", keywords: "paramètres agence", group: "Gestion" },
+      ]),
     ]
       .filter((item) =>
         `${item.label} ${item.keywords}`.toLocaleLowerCase("fr").includes(query)
       )
       .slice(0, 8);
-  }, [menuGroups, navigationSearch]);
+  }, [menuGroups, navigationSearch, role]);
 
   const handleLogout = async () => {
     await auth.signOut();
@@ -624,7 +628,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <SidebarSeparator className="mx-4 my-4 opacity-10" />
 
-            <SidebarGroup>
+            {role !== "agent" && <SidebarGroup>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <NavLink
@@ -651,10 +655,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   )}
                 </SidebarMenuItem>
               </SidebarMenu>
-            </SidebarGroup>
+            </SidebarGroup>}
           </SidebarContent>
 
-          <SidebarFooter className={cn("border-t border-border/10", isCompactDisplay ? "p-3" : "p-6")}>
+          {role !== "agent" && <SidebarFooter className={cn("border-t border-border/10", isCompactDisplay ? "p-3" : "p-6")}>
             <SidebarMenu>
               <SidebarMenuItem>
                 <NavLink
@@ -664,7 +668,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 />
               </SidebarMenuItem>
             </SidebarMenu>
-          </SidebarFooter>
+          </SidebarFooter>}
         </Sidebar>
 
         <SidebarInset className="bg-transparent flex flex-col min-h-screen">
@@ -754,7 +758,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </span>
               </Button>
 
-              <DropdownMenu onOpenChange={(open) => open && void loadNotifications()}>
+              {role !== "agent" && <DropdownMenu onOpenChange={(open) => open && void loadNotifications()}>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
@@ -896,7 +900,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     )}
                   </div>
                 </DropdownMenuContent>
-              </DropdownMenu>
+              </DropdownMenu>}
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

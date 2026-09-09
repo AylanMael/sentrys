@@ -117,13 +117,30 @@ const changes = {
   "wrong assignment agent": f => { f.rows.get("assignments/x").agentId = "u"; },
 };
 for (const direction of ["in", "out"]) {
+  for (const scenario of ["future", "at end", "after end", "invalid date"]) {
+    test(`active tenant pointage ${direction} rejects ${scenario}`, async () => {
+      const f = fixture();
+      if (direction === "out") f.rows.get("assignments/x").status = "present";
+      changes[scenario](f);
+      const response = await f.load("src/app/api/assignments/_pointage.ts").pointage(f.req, Promise.resolve({ id: "x" }), direction);
+      assert.equal(response.status, 403);
+      assert.equal(f.writes.length, 0);
+    });
+  }
+}
+for (const direction of ["in", "out"]) {
   test(`commercial current mission ${direction} succeeds with linked agentId`, async () => {
     const f = fixture({ mode: "commercial" });
+    f.rows.set("agents/a", { tenantId: "t", firstName: "Alice", lastName: "Martin" });
+    f.rows.get("sites/s").name = "Site recette";
     if (direction === "out") f.rows.get("assignments/x").status = "present";
     const res = await f.load("src/app/api/assignments/_pointage.ts").pointage(f.req, Promise.resolve({ id: "x" }), direction);
     assert.equal(res.status, 200); assert.equal(f.writes.length, 2);
     assert.equal(f.writes[0].data.status, direction === "in" ? "present" : "completed");
     assert.equal(f.writes[1].path, "activity/generated");
+    assert.equal(f.writes[1].data.actorName, "Alice Martin");
+    assert.equal(f.writes[1].data.meta.agentId, "a");
+    assert.equal(f.writes[1].data.meta.siteName, "Site recette");
   });
   for (const [label, change] of Object.entries(changes)) test(`pointage ${direction} denies ${label}`, async () => {
     const f = fixture({ mode: "commercial" });

@@ -391,6 +391,8 @@ export default function DashboardPage() {
   const usedTenants = billing?.usage?.activeTenants ?? billing?.usage?.tenants ?? 0;
   const atLimitList = useMemo(() => toAtLimitList(billing), [billing]);
 
+  if (isAgent) return <section className="mx-auto max-w-3xl space-y-6"><header><p className="text-xs font-semibold uppercase tracking-widest text-primary">Mon espace agent</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Mes missions terrain</h1><p className="mt-2 text-sm text-muted-foreground">Vos horaires, votre prise de service et vos signalements, au même endroit.</p></header><AgentMissions /></section>;
+
   return (
     <div className="mx-auto max-w-[1500px] animate-in space-y-3 fade-in duration-500 pb-8">
       <section className="overflow-hidden rounded-[1.5rem] border border-border/60 bg-gradient-to-br from-background via-background to-primary/5 p-4 shadow-sm backdrop-blur">

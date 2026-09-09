@@ -25,7 +25,7 @@ export async function pointage(req: NextRequest, params: Promise<{ id: string }>
       const assignment = snap.data();
       if (!snap.exists || assignment?.tenantId !== auth.tenantId
         || assignment.agentId !== (auth.agentId || auth.uid)) return 403;
-      if (!await authorizeMissionWrite(tx, auth, assignment.vacationId, assignment.siteId)) return 403;
+      if (!await authorizeMissionWrite(tx, auth, assignment.vacationId, assignment.siteId, true)) return 403;
       if (assignment.status !== (direction === "in" ? "assigned" : "present")) return 409;
       const site = await tx.get(adminDb.collection("sites").doc(assignment.siteId));
       if (!site.exists || site.data()?.tenantId !== auth.tenantId) return 403;
@@ -33,6 +33,10 @@ export async function pointage(req: NextRequest, params: Promise<{ id: string }>
       const lng = site.data()?.longitude;
       if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)
         && calculateDistance(latitude, longitude, lat, lng) > 300) return 422;
+      const agent = await tx.get(adminDb.collection("agents").doc(assignment.agentId));
+      const agentData = agent.data();
+      const actorName = agentData?.tenantId === auth.tenantId
+        ? [agentData.firstName, agentData.lastName].filter(v => typeof v === "string" && v.trim()).join(" ") : null;
       const now = FieldValue.serverTimestamp();
       tx.update(ref, {
         status: direction === "in" ? "present" : "completed",
@@ -43,10 +47,11 @@ export async function pointage(req: NextRequest, params: Promise<{ id: string }>
       });
       tx.set(adminDb.collection("activity").doc(), {
         tenantId: auth.tenantId, actorUid: auth.uid, actorRole: auth.role,
+        actorName: actorName || null, actorEmail: auth.email ?? null,
         action: direction === "in" ? "assignment.checked_in" : "assignment.checked_out",
         entityType: "assignment", entityId: id, createdAt: now,
         message: direction === "in" ? "Prise de service enregistrée" : "Fin de service enregistrée",
-        severity: "info", meta: { siteId: assignment.siteId, vacationId: assignment.vacationId },
+        severity: "info", meta: { agentId: assignment.agentId, siteId: assignment.siteId, siteName: typeof site.data()?.name === "string" ? site.data()?.name : null, vacationId: assignment.vacationId },
       });
       return 200;
     });

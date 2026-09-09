@@ -15,6 +15,7 @@ import { auth } from "@/lib/firebase/client";
 import type { Role } from "@/lib/types";
 import { FirebaseErrorListener } from "@/components/FirebaseErrorListener";
 import { suspensionMode } from "@/lib/auth/tenant-suspension";
+import { AccessUnavailable } from "@/components/auth/access-unavailable";
 
 /** Réponse attendue de GET /api/me */
 type MeResponse = {
@@ -251,13 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{ user, firebaseUser, loading, refresh, getToken }}>
       <FirebaseErrorListener />
       {privatePage && loading ? <p role="status" className="p-6">Vérification de votre accès…</p> : blocked ? (
-        <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-5 p-6">
-          <h1 className="text-2xl font-semibold">Accès métier indisponible</h1>
-          <p>Votre accès ne peut pas être autorisé ou votre agence est suspendue pour sécurité. Les données métier ne sont pas accessibles.</p>
-          <a className="font-semibold underline" href="/contact?reason=support">Contacter le support</a>
-          <button className="rounded-lg border p-3" onClick={() => void refresh()}>Vérifier mon accès</button>
-          <button className="underline" onClick={() => void auth.signOut()}>Se déconnecter</button>
-        </main>
+        <AccessUnavailable onCheck={refresh} onSignOut={() => auth.signOut()} />
       ) : children}
     </AuthContext.Provider>
   );

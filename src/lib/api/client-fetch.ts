@@ -1,10 +1,12 @@
 // src/lib/api/client-fetch.ts
 import { getAuth } from "firebase/auth";
+import { reportSuspensionFeedback } from "./suspension-feedback";
 
 type ApiError = {
   ok: false;
   error?: string;
   code?: string;
+  suspensionMode?: string;
   details?: unknown;
 };
 
@@ -172,19 +174,31 @@ function makeApiFetchError(input: {
   status?: number | null;
   rawMessage?: unknown;
   code?: string | null;
+  suspensionMode?: string;
   details?: unknown;
 }) {
   const rawMessage = normalizeText(input.rawMessage);
   const status = input.status ?? null;
 
-  return new ApiFetchError({
+  const error = new ApiFetchError({
     url: input.url,
     status,
     code: input.code ?? null,
     rawMessage: rawMessage || null,
     details: input.details,
-    message: messageForStatus(status, rawMessage),
+    message: input.code === "TENANT_SUSPENDED"
+      ? input.suspensionMode === "commercial"
+        ? "Votre agence est suspendue en mode consultation seule. Cette action est temporairement indisponible."
+        : "Les accès métier de votre agence sont suspendus pour sécurité. Contactez le support."
+      : messageForStatus(status, rawMessage),
   });
+  if (status === 403 && input.code === "TENANT_SUSPENDED") {
+    reportSuspensionFeedback({
+      mode: input.suspensionMode === "commercial" ? "commercial" : "security",
+      message: error.message,
+    });
+  }
+  return error;
 }
 
 export async function apiFetch<T>(
@@ -269,6 +283,7 @@ export async function apiFetch<T>(
         status: response.status,
         rawMessage: err.error || `HTTP ${response.status}`,
         code: err.code ?? null,
+        suspensionMode: err.suspensionMode,
         details: err.details,
       });
     }
@@ -296,6 +311,7 @@ export async function apiFetch<T>(
         status: response.status,
         rawMessage: errLike.error || "API error",
         code: errLike.code ?? null,
+        suspensionMode: errLike.suspensionMode,
         details: errLike.details,
       });
     }
@@ -321,6 +337,8 @@ export async function apiFetchBlob(url: string): Promise<Blob> {
       url,
       status: response.status,
       rawMessage: payload?.error || `HTTP ${response.status}`,
+      code: payload?.code ?? null,
+      suspensionMode: payload?.suspensionMode,
     });
   }
 

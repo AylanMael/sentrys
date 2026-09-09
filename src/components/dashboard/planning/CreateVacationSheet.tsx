@@ -32,6 +32,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { usePlanning } from "./PlanningContext";
 import { useToast } from "@/hooks/use-toast";
+import { getApiErrorMessage } from "@/lib/api/client-fetch";
 import { Loader2 } from "lucide-react";
 import { MISSION_TYPE_OPTIONS } from "@/lib/planning/mission-types";
 
@@ -215,6 +216,12 @@ export const CreateVacationSheet: React.FC = () => {
           description: "Impossible de créer la vacation.",
         });
       }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Création impossible",
+        description: getApiErrorMessage(error, "Impossible de créer la vacation. Réessayez dans quelques instants."),
+      });
     } finally {
       setSaving(false);
     }

@@ -35,7 +35,9 @@ function fixture({ mode = "none", role = "agent", method = "POST", tenantExists 
     runTransaction: fn => fn(tx),
   };
   const mocks = {
-    "@/lib/firebase/admin": { adminDb },
+    "@/lib/firebase/admin": { adminDb, adminAuth: { verifyIdToken: async (_token, revoked) => {
+      assert.equal(revoked, true); return { uid: "u" };
+    } } },
     "next/server": { NextResponse: { json: (data, init) => Response.json(data, init) } },
     "firebase-admin/auth": { getAuth: () => ({ verifyIdToken: async (_token, revoked) => {
       assert.equal(revoked, true); return { uid: "u" };

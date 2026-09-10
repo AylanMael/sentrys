@@ -191,7 +191,8 @@ describe("SEC-03B tenant suspension, actual Firestore and Storage rules", { conc
             () => f.newFile(kind).put(new Uint8Array([4]), { contentType: "image/png" }),
             () => ref.put(new Uint8Array([5]), { contentType: "image/png" }), () => ref.delete(),
           ]) {
-            if (policy.write) await assertSucceeds(action()); else await denied(action(), "storage/unauthorized");
+            // Direct SDK writes are server-only, even for an active agency.
+            await denied(action(), "storage/unauthorized");
           }
         }
       });
@@ -300,7 +301,7 @@ describe("SEC-03B tenant suspension, actual Firestore and Storage rules", { conc
       await assertSucceeds(updateDoc(doc(f.db, f.paths.sites), { name: "Recovery site" }));
       await assertSucceeds(updateDoc(doc(f.db, f.paths.profile), { name: "Recovery profile" }));
       await assertSucceeds(f.bucket.ref(f.filePaths.photo).getMetadata());
-      await assertSucceeds(f.newFile("photo").put(new Uint8Array([1]), { contentType: "image/png" }));
+      await denied(f.newFile("photo").put(new Uint8Array([1]), { contentType: "image/png" }), "storage/unauthorized");
       await denied(updateDoc(doc(f.db, f.paths.tenant), { status: "active" })); // Still server-owned.
       await denied(getDoc(doc(f.db, `tenants/${f.uid}-foreign`)));
     });

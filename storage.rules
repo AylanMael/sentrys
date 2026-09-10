@@ -45,15 +45,12 @@ service firebase.storage {
     }
 
     function isOwnAgentRecord(tenantId, agentId) {
+      let linkedAgentId = tenantUser().get("agentId", null);
       return belongsToTenant(tenantId)
         && tenantUser().role == "agent"
-        && (
-          request.auth.uid == agentId
-          || (
-            "agentId" in tenantUser()
-            && tenantUser().agentId == agentId
-          )
-        );
+        && (linkedAgentId is string && linkedAgentId.size() > 0
+          ? linkedAgentId == agentId
+          : (linkedAgentId == null || linkedAgentId == "") && request.auth.uid == agentId);
     }
 
     function canAccessAgentFiles(tenantId, agentId) {
@@ -61,36 +58,15 @@ service firebase.storage {
         || isOwnAgentRecord(tenantId, agentId);
     }
 
-    function isAllowedPhoto() {
-      return request.resource != null
-        && request.resource.size > 0
-        && request.resource.size <= 5 * 1024 * 1024
-        && request.resource.contentType.matches("image/(jpeg|png|webp)");
-    }
-
-    function isAllowedDocument() {
-      return request.resource != null
-        && request.resource.size > 0
-        && request.resource.size <= 12 * 1024 * 1024
-        && request.resource.contentType.matches(
-          "(application/pdf|image/(jpeg|png|webp)|application/msword|application/vnd\\.openxmlformats-officedocument\\.wordprocessingml\\.document)"
-        );
-    }
-
     match /tenants/{tenantId}/agents/{agentId}/photo/{fileName} {
       allow read: if canAccessAgentFiles(tenantId, agentId) && tenantAccess(tenantId, false);
-      allow create, update: if canAccessAgentFiles(tenantId, agentId)
-        && tenantAccess(tenantId, true)
-        && isAllowedPhoto();
-      allow delete: if canAccessAgentFiles(tenantId, agentId) && tenantAccess(tenantId, true);
+      // All file mutations use authenticated server routes (Admin SDK).
+      allow create, update, delete: if false;
     }
 
     match /tenants/{tenantId}/agents/{agentId}/documents/{fileName} {
       allow read: if canAccessAgentFiles(tenantId, agentId) && tenantAccess(tenantId, false);
-      allow create, update: if canAccessAgentFiles(tenantId, agentId)
-        && tenantAccess(tenantId, true)
-        && isAllowedDocument();
-      allow delete: if canAccessAgentFiles(tenantId, agentId) && tenantAccess(tenantId, true);
+      allow create, update, delete: if false;
     }
 
     match /{allPaths=**} {

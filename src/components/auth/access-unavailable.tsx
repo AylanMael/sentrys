@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowUpRight, Headphones, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, CloudOff, Headphones, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 import Logo from "@/components/logo";
 import { Button } from "@/components/ui/button";
 
 type Props = {
+  reason?: "denied" | "verification-unavailable";
   onCheck: () => Promise<unknown>;
   onSignOut: () => Promise<unknown>;
 };
 
-export function AccessUnavailable({ onCheck, onSignOut }: Props) {
+export function AccessUnavailable({ onCheck, onSignOut, reason = "denied" }: Props) {
+  const unavailable = reason === "verification-unavailable";
   const [pending, setPending] = useState<"check" | "logout" | null>(null);
   const [feedback, setFeedback] = useState("");
 
@@ -21,7 +23,7 @@ export function AccessUnavailable({ onCheck, onSignOut }: Props) {
     try {
       await (action === "check" ? onCheck() : onSignOut());
       // If access is restored the parent replaces this screen.
-      if (action === "check") setFeedback("Vérification terminée. Si cet écran reste affiché, contactez le support pour faire vérifier votre accès.");
+      if (action === "check") setFeedback("Nouvelle vérification effectuée. Si votre accès reste indisponible, suivez les indications affichées ci-dessus.");
     } catch {
       setFeedback(action === "check"
         ? "La vérification n’a pas abouti. Réessayez dans un instant ou contactez le support."
@@ -44,15 +46,19 @@ export function AccessUnavailable({ onCheck, onSignOut }: Props) {
           <div aria-hidden="true" className="h-1 w-full bg-gradient-to-r from-primary via-accent to-primary/30" />
           <div className="p-6 sm:p-8">
             <div aria-hidden="true" className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-sm">
-              <LockKeyhole className="h-7 w-7" strokeWidth={1.6} />
+              {unavailable ? <CloudOff className="h-7 w-7" strokeWidth={1.6} /> : <LockKeyhole className="h-7 w-7" strokeWidth={1.6} />}
             </div>
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Protection de votre espace</p>
-            <h1 id="access-unavailable-title" className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">Accès métier indisponible</h1>
-            <p className="mt-4 text-sm leading-6 text-muted-foreground sm:text-base">Votre accès ne peut pas être autorisé ou votre agence est suspendue pour sécurité. Les données métier ne sont pas accessibles.</p>
+            <h1 id="access-unavailable-title" className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">{unavailable ? "Vérification de l’accès indisponible" : "Accès métier indisponible"}</h1>
+            <p className="mt-4 text-sm leading-6 text-muted-foreground sm:text-base">{unavailable
+              ? "La connexion ou le service de vérification est momentanément indisponible. Nous ne pouvons pas confirmer votre accès. Les données métier restent protégées pendant cette interruption."
+              : "Votre accès ne peut pas être autorisé ou votre agence est suspendue pour sécurité. Les données métier ne sont pas accessibles."}</p>
 
             <div className="mt-5 rounded-2xl border border-border/70 bg-muted/40 p-4">
-              <p className="text-sm font-semibold">Besoin de reprendre votre activité ?</p>
-              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">Le support peut vérifier votre situation. Si votre accès vient d’être rétabli, lancez une nouvelle vérification.</p>
+              <p className="text-sm font-semibold">{unavailable ? "Reprise automatique" : "Besoin de reprendre votre activité ?"}</p>
+              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{unavailable
+                ? "Vérifiez votre connexion. Une nouvelle vérification sera lancée à son retour et régulièrement tant que cette page reste ouverte. Vous pouvez aussi réessayer maintenant."
+                : "Le support peut vérifier votre situation. Si votre accès vient d’être rétabli, lancez une nouvelle vérification."}</p>
             </div>
 
             <div className="mt-5 grid gap-3">

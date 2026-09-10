@@ -65,5 +65,5 @@ test('cached, pending, errored and previous-tenant snapshots cannot enable compa
   assert.match(source, /includeMetadataChanges: true/);
   assert.match(source, /!snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites \? tenantId : null/);
   assert.match(source, /confirmedTenant === tenantId/);
-  assert.match(source, /\(err\) => \{\s*setConfirmedTenant\(null\)/);
+  assert.match(source, /\(err\) => \{\s*if \(!active\) return;\s*setConfirmedTenant\(null\)/);
 });

@@ -16,6 +16,7 @@ import type { Role } from "@/lib/types";
 import { FirebaseErrorListener } from "@/components/FirebaseErrorListener";
 import { suspensionMode } from "@/lib/auth/tenant-suspension";
 import { AccessUnavailable } from "@/components/auth/access-unavailable";
+import { readAccessResponse, withAccessDeadline } from "@/lib/auth/access-verification";
 
 /** Réponse attendue de GET /api/me */
 type MeResponse = {
@@ -74,6 +75,7 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 async function fetchMe(firebaseUser: FirebaseUser): Promise<MeResponse> {
+  return withAccessDeadline(async (signal) => {
   const token = await firebaseUser.getIdToken();
 
   const res = await fetch("/api/me", {
@@ -82,22 +84,11 @@ async function fetchMe(firebaseUser: FirebaseUser): Promise<MeResponse> {
       Authorization: `Bearer ${token}`,
     },
     cache: "no-store",
+    signal,
   });
 
-  let data: MeResponse;
-  try {
-    data = (await res.json()) as MeResponse;
-  } catch {
-    // Si jamais la réponse n’est pas du JSON (proxy/CDN/erreur rare)
-    return { ok: false, error: "Invalid JSON from /api/me" };
-  }
-
-  // ✅ FIX TS2783: spread d'abord puis override
-  if (!res.ok) {
-    return { ...data, ok: false };
-  }
-
-  return data;
+  return readAccessResponse(res);
+  });
 }
 
 function toUserData(firebaseUser: FirebaseUser, me: MeResponse): UserData {
@@ -126,9 +117,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [verificationUnavailable, setVerificationUnavailable] = useState(false);
 
   // Anti race-condition si onAuthStateChanged se déclenche plusieurs fois
   const requestIdRef = useRef(0);
+  const refreshInFlight = useRef<{ uid: string; promise: Promise<UserData | null> } | null>(null);
 
   const getToken = useCallback(async (forceRefresh = false) => {
     const u = auth.currentUser;
@@ -136,21 +129,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return u.getIdToken(forceRefresh);
   }, []);
 
-  const refresh = useCallback(async () => {
+  const performRefresh = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     const current = auth.currentUser;
     if (!current) {
       setFirebaseUser(null);
       setUser(null);
+      setVerificationUnavailable(false);
+      setLoading(false);
       return null;
     }
 
     try {
       const me = await fetchMe(current);
+      if (requestId !== requestIdRef.current || auth.currentUser?.uid !== current.uid) return null;
       const next = toUserData(current, me);
+      setVerificationUnavailable(false);
       setFirebaseUser(current);
       setUser(next);
       return next;
     } catch {
+      if (requestId !== requestIdRef.current || auth.currentUser?.uid !== current.uid) return null;
+      setVerificationUnavailable(true);
       // si /api/me échoue, on garde un état minimal (auth ok)
       const next: UserData = {
         uid: current.uid,
@@ -165,13 +165,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setFirebaseUser(current);
       setUser(next);
       return next;
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
+
+  const refresh = useCallback(() => {
+    const uid = auth.currentUser?.uid;
+    if (uid && refreshInFlight.current?.uid === uid) return refreshInFlight.current.promise;
+    const promise = performRefresh();
+    const entry = uid ? { uid, promise } : null;
+    refreshInFlight.current = entry;
+    void promise.finally(() => {
+      if (refreshInFlight.current === entry) refreshInFlight.current = null;
+    });
+    return promise;
+  }, [performRefresh]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(
       auth,
       async (nextFirebaseUser: FirebaseUser | null) => {
+        refreshInFlight.current = null;
         const requestId = ++requestIdRef.current;
 
         try {
@@ -181,6 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (requestId !== requestIdRef.current) return;
             setFirebaseUser(null);
             setUser(null);
+            setVerificationUnavailable(false);
             setLoading(false);
             return;
           }
@@ -193,6 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (requestId !== requestIdRef.current) return;
 
           const next = toUserData(nextFirebaseUser, me);
+          setVerificationUnavailable(false);
           setUser(next);
 
           if (!isSignupRoute && me.ok && me.hasTenant === false) {
@@ -207,6 +224,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error("AuthProvider error:", err);
 
           if (requestId !== requestIdRef.current) return;
+
+          setVerificationUnavailable(true);
 
           const current = auth.currentUser;
 
@@ -232,7 +251,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    return () => unsubscribe();
+    return () => { ++requestIdRef.current; unsubscribe(); };
   }, [pathname]);
 
   const privatePage = /^\/(dashboard|platform|agent-planning|site-planning|prepay|conduite)(\/|$)/.test(pathname ?? "");
@@ -241,10 +260,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const onFocus = () => { void refresh(); };
     const timer = window.setInterval(onFocus, 30000);
     window.addEventListener("focus", onFocus);
-    return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+    window.addEventListener("online", onFocus);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); window.removeEventListener("online", onFocus); };
   }, [privatePage, firebaseUser, refresh]);
   const blocked = privatePage && firebaseUser && !loading
-    && (user?.status !== "active" || !user?.isProvisioned
+    && (verificationUnavailable || user?.status !== "active" || !user?.isProvisioned
       || (!(user?.role === "super_admin" && user?.tenantId === "platform")
         && suspensionMode(user?.tenant) === "security"));
 
@@ -252,7 +272,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{ user, firebaseUser, loading, refresh, getToken }}>
       <FirebaseErrorListener />
       {privatePage && loading ? <p role="status" className="p-6">Vérification de votre accès…</p> : blocked ? (
-        <AccessUnavailable onCheck={refresh} onSignOut={() => auth.signOut()} />
+        <AccessUnavailable reason={verificationUnavailable ? "verification-unavailable" : "denied"} onCheck={refresh} onSignOut={() => auth.signOut()} />
       ) : children}
     </AuthContext.Provider>
   );

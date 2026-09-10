@@ -22,7 +22,7 @@ export function planningIndicatorScope(input: {
     : input.siteId !== "all" || input.publicationFilter !== "all" || !input.showAbsences
       ? "Retirez les filtres de site/publication et incluez les absences pour comparer au contrat mensuel."
       : "Comparaison des heures planifiées au contrat mensuel renseigné, pas des heures pointées.";
-  return { period, filters, reason, canCompareMonthly: input.serverConfirmed && fullMonth && input.siteId === "all" && input.publicationFilter === "all" && input.showAbsences };
+  return { period, filters, reason, serverConfirmed: input.serverConfirmed, canCompareMonthly: input.serverConfirmed && fullMonth && input.siteId === "all" && input.publicationFilter === "all" && input.showAbsences };
 }
 
 export type MonthlyComparison = { hours: number; contract: number; delta: number; ratio: number };

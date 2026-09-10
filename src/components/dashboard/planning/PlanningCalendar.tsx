@@ -28,13 +28,14 @@ import {
   SlotLaneContentArg,
 } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
-import { CalendarPlus, ClipboardList, Focus, GripVertical, RotateCcw, Sparkles, ZoomIn, ZoomOut } from "lucide-react";
+import { CalendarPlus, ClipboardList, Focus, GripVertical, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 import { CalendarEvent } from "./CalendarEvent";
 import { CalendarResource, type CalendarResourceInfo } from "./CalendarResource";
 import { CalendarContextMenu } from "./CalendarContextMenu";
+import { PlanningSiteSummary } from "./PlanningSiteSummary";
 
 type CalendarResourceMetricInfo = {
   resource: { id: string };
@@ -72,6 +73,7 @@ export const PlanningCalendar: React.FC = () => {
     tensionMode,
     stats,
     monthlyComparisons,
+    indicatorScope,
     conflictIndex,
     pasteMode,
     performPasteAt,
@@ -550,7 +552,7 @@ export const PlanningCalendar: React.FC = () => {
     setCreateOpen(true);
   }, [range?.from, setCreateOpen, setInitialCreateData, siteId, sites]);
 
-  const showEmptyStarter = !loading && filteredVacations.length === 0;
+  const showEmptyStarter = indicatorScope.serverConfirmed && !loading && filteredVacations.length === 0;
 
   return (
     <div
@@ -561,93 +563,25 @@ export const PlanningCalendar: React.FC = () => {
         effectiveDensity === "compact" ? "density-compact" : "density-comfortable"
       )}
     >
-      {/* Operational Context Header (inspired by screenshot 1) */}
-      {siteId !== "all" && (
-        <div className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-border/10 p-4 flex flex-wrap items-center gap-6 animate-in slide-in-from-top duration-500">
-           <div className="flex flex-col gap-1">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Client</span>
-             <div className="h-8 px-3 rounded bg-white dark:bg-slate-800 border border-border/50 flex items-center shadow-sm">
-                <span className="text-xs font-bold text-primary truncate max-w-[200px]">SAMSIC SECURITE</span>
-             </div>
-           </div>
-           <div className="flex flex-col gap-1">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Site</span>
-             <div className="h-8 px-3 rounded bg-white dark:bg-slate-800 border border-border/50 flex items-center shadow-sm">
-                <span className="text-xs font-bold truncate max-w-[200px]">{sites.find(s => s.id === siteId)?.name || "SITE"}</span>
-             </div>
-           </div>
-           <div className="flex flex-col gap-1">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Presta</span>
-             <div className="h-8 px-3 rounded bg-white dark:bg-slate-800 border border-border/50 flex items-center shadow-sm">
-                <span className="text-xs font-bold">SURVEILLANCE GARDIENNAGE</span>
-             </div>
-           </div>
-           <div className="flex flex-col gap-1 ml-auto">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Titre</span>
-             <div className="h-8 px-3 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center shadow-sm">
-                <span className="text-[10px] font-black text-indigo-600">ADS</span>
-             </div>
-           </div>
-           <div className="flex flex-col gap-1">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Activite</span>
-             <div className="h-8 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center shadow-sm">
-                <span className="text-[10px] font-black text-emerald-600 uppercase">Agent de Sécurité</span>
-             </div>
-           </div>
-        </div>
-      )}
-
+      {siteId !== "all" && <PlanningSiteSummary site={sites.find(site => site.id === siteId)} />}
       {showEmptyStarter && (
-        <div className="pointer-events-none absolute inset-x-4 top-20 z-30 flex justify-center md:top-24">
-          <div className="pointer-events-auto w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-primary/20 bg-background/95 shadow-2xl shadow-slate-900/10 backdrop-blur-xl dark:bg-slate-950/95">
-            <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
-              <div className="flex min-w-0 items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-black uppercase tracking-[0.22em] text-primary">
-                    Demarrage guide
-                  </p>
-                  <h3 className="mt-1 text-lg font-black text-foreground">
-                    Planning vierge, on le remplit proprement.
-                  </h3>
-                  <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                    Utilise un planning type pour créer une semaine complete par site,
-                    ou ajoute une premiere vacation standard 08h-18h. Le but : que
-                    meme un novice sache quoi faire en moins de dix secondes.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex shrink-0 flex-col gap-2 sm:flex-row md:flex-col">
-                <Button
-                  type="button"
-                  onClick={handleOpenSiteTemplate}
-                  className="h-11 rounded-xl px-4 text-xs font-black uppercase tracking-[0.16em]"
-                >
-                  <ClipboardList className="mr-2 h-4 w-4" />
-                  Remplir un site
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleQuickCreate}
-                  className="h-11 rounded-xl px-4 text-xs font-bold"
-                >
-                  <CalendarPlus className="mr-2 h-4 w-4" />
-                  Vacation 08h-18h
-                </Button>
-              </div>
-            </div>
+        <details className="shrink-0 border-b border-border/40 bg-primary/5 px-3 py-2 text-sm">
+          <summary className="cursor-pointer rounded font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Aucune vacation sur ce périmètre · Créer un planning</summary>
+          <div className="mt-2 flex max-h-28 flex-wrap gap-2 overflow-y-auto">
+            <Button type="button" onClick={handleOpenSiteTemplate} className="h-11 rounded-xl text-xs">
+              <ClipboardList className="mr-2 h-4 w-4" />Remplir un site
+            </Button>
+            <Button type="button" variant="outline" onClick={handleQuickCreate} className="h-11 rounded-xl text-xs">
+              <CalendarPlus className="mr-2 h-4 w-4" />Vacation 08h-18h
+            </Button>
           </div>
-        </div>
+        </details>
       )}
       {autoDensityAllowed && densityPressure && viewDensity !== "compact" && (
         <span className="sr-only">Mode compact automatique actif.</span>
       )}
 
-      <div className="pointer-events-none absolute right-4 top-2.5 z-30 max-md:relative max-md:top-0 max-md:right-0 max-md:p-2 max-md:flex max-md:justify-center max-md:pointer-events-auto">
+      <div className="pointer-events-none absolute right-4 top-2.5 z-30 max-lg:relative max-lg:top-0 max-lg:right-0 max-lg:p-2 max-lg:flex max-lg:justify-center max-lg:pointer-events-auto">
         <div className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-slate-200/80 bg-white/95 p-1 shadow-xl shadow-slate-900/10 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95">
           <Button
             type="button"
@@ -906,17 +840,20 @@ export const PlanningCalendar: React.FC = () => {
           padding-bottom: 10px;
         }
 
-        @media (min-width: 768px) {
+        @media (min-width: 1024px) {
           .excel-grid .fc-header-toolbar {
             padding-right: 160px !important;
           }
         }
 
-        @media (max-width: 767px) {
+        @media (max-width: 1023px) {
           .excel-grid .fc-header-toolbar {
             flex-wrap: wrap;
             justify-content: center;
             gap: 12px;
+          }
+          .excel-grid:has(details[open]) {
+            height: 56rem;
           }
           .excel-grid .fc-toolbar-title {
             font-size: 1.25rem;

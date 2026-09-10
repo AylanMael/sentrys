@@ -15,6 +15,7 @@ import { apiFetch } from "@/lib/api/client-fetch";
 import { useFeedbackToast } from "@/hooks/use-app-feedback";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { observePlanningConnectivity, tenantSnapshotItems } from "@/lib/planning/connectivity";
 import { db } from "@/lib/firebase/client";
 import { buildConflictIndex, ConflictIndex } from "@/lib/planning/conflicts";
 import { computePlanningStats, PlanningStats, VacationEvent } from "@/lib/planning/stats";
@@ -293,6 +294,11 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
   const [agentsError, setAgentsError] = useState<string | null>(null);
   const [sitesHasMore, setSitesHasMore] = useState(false);
   const [confirmedTenant, setConfirmedTenant] = useState<string | null>(null);
+  const [networkOnline, setNetworkOnline] = useState(false);
+  useEffect(() => observePlanningConnectivity(window, (online) => {
+    if (!online) setConfirmedTenant(null);
+    setNetworkOnline(online);
+  }), []);
   const [agentsHasMore, setAgentsHasMore] = useState(false);
   const sitesCursorRef = useRef<string | null>(null);
   const agentsCursorRef = useRef<string | null>(null);
@@ -344,7 +350,8 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
   const clipboardRef = useRef<ClipboardData>({ items: [], baseStartIso: null });
   const [pasteOptions] = useState({ includeAssignments: true, includeNotes: true });
 
-  const [vacations, setVacations] = useState<VacationApiItem[]>([]);
+  const [vacationSnapshot, setVacationSnapshot] = useState<{ tenantId: string; items: VacationApiItem[] } | null>(null);
+  const vacations = useMemo(() => tenantSnapshotItems(vacationSnapshot, tenantId), [vacationSnapshot, tenantId]);
   const [vacsLoading, setVacsLoading] = useState(true);
 
   const setViewDensity = useCallback((density: "compact" | "comfortable") => {
@@ -385,7 +392,7 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (!tenantId) {
       setConfirmedTenant(null);
-      setVacations([]);
+      setVacationSnapshot(null);
       setVacsLoading(false);
       return;
     }
@@ -393,10 +400,17 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
     setVacsLoading(true);
     setConfirmedTenant(null);
 
+    if (!networkOnline) {
+      setVacsLoading(false);
+      return;
+    }
+
     // 🔥 Temps Réel: Écoute globale du Tenant (pas besoin d'index composite pour le tri ou la plage)
     const q = query(collection(db, "vacations"), where("tenantId", "==", tenantId));
 
+    let active = true;
     const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+      if (!active) return;
       setConfirmedTenant(null);
       const items: VacationApiItem[] = [];
       snapshot.forEach(doc => {
@@ -426,18 +440,19 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
          return new Date(b.startAtIso).getTime() - new Date(a.startAtIso).getTime();
       });
 
-      setVacations(items);
+      setVacationSnapshot({ tenantId, items });
       setConfirmedTenant(!snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites ? tenantId : null);
       setVacsLoading(false);
     }, (err) => {
+      if (!active) return;
       setConfirmedTenant(null);
       console.error("[PlanningContext] Sync Error:", err);
       toast({ variant: "destructive", title: "Erreur temps-réel", description: err.message });
       setVacsLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [tenantId, toast]);
+    return () => { active = false; unsubscribe(); };
+  }, [tenantId, toast, networkOnline]);
 
   // --- Effects ---
   useEffect(() => {
@@ -598,12 +613,12 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
   );
   const conflictIndex = useMemo(() => buildConflictIndex(globalStatsInput), [globalStatsInput]);
   const indicatorScope = useMemo(() => planningIndicatorScope({ range, siteId, agentId, publicationFilter, showAbsences,
-    serverConfirmed: !!tenantId && confirmedTenant === tenantId && !loading && vacations.every(v => {
+    serverConfirmed: networkOnline && !!tenantId && confirmedTenant === tenantId && !loading && vacations.every(v => {
       const start = v.startAtIso ? Date.parse(v.startAtIso) : NaN;
       const end = v.endAtIso ? Date.parse(v.endAtIso) : NaN;
       return Number.isFinite(start) && Number.isFinite(end) && end > start;
     }),
-  }), [range, siteId, agentId, publicationFilter, showAbsences, tenantId, confirmedTenant, loading, vacations]);
+  }), [range, siteId, agentId, publicationFilter, showAbsences, tenantId, confirmedTenant, networkOnline, loading, vacations]);
   const monthlyComparisons = useMemo(() => buildMonthlyComparisons(stats.agentMonthlyHours, agentContractualTargets, indicatorScope.canCompareMonthly, agentId),
     [stats.agentMonthlyHours, agentContractualTargets, indicatorScope.canCompareMonthly, agentId]);
 

@@ -186,7 +186,8 @@ describe("SEC-03B tenant suspension, actual Firestore and Storage rules", { conc
         const f = await fixture(t, policy, { role, storage: true });
         for (const kind of ["photo", "documents"]) {
           const ref = f.bucket.ref(f.filePaths[kind]);
-          if (policy.read) await assertSucceeds(ref.getMetadata()); else await denied(ref.getMetadata(), "storage/unauthorized");
+          if (policy.read && (role !== "agent" || kind === "photo")) await assertSucceeds(ref.getMetadata());
+          else await denied(ref.getMetadata(), "storage/unauthorized");
           for (const action of [
             () => f.newFile(kind).put(new Uint8Array([4]), { contentType: "image/png" }),
             () => ref.put(new Uint8Array([5]), { contentType: "image/png" }), () => ref.delete(),

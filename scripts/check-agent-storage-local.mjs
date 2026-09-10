@@ -7,6 +7,7 @@ import { doc, setDoc } from 'firebase/firestore';
 const prefix = `qa-storage-${randomUUID()}`;
 const tenant = `${prefix}-tenant`, uid = `${prefix}-uid`, linked = `${prefix}-linked`;
 const results = [];
+const isolated = process.argv.includes('--isolated');
 let env;
 async function probe(label, operation, expectedAllowed) {
   try {
@@ -20,8 +21,8 @@ async function probe(label, operation, expectedAllowed) {
 try {
   env = await initializeTestEnvironment({
     projectId: 'demo-sentrys-accounts',
-    firestore: { host: '127.0.0.1', port: 8091, rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8') },
-    storage: { host: '127.0.0.1', port: 9199, rules: readFileSync(new URL('../storage.rules', import.meta.url), 'utf8') },
+    firestore: { host: '127.0.0.1', port: isolated ? 8191 : 8091, rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8') },
+    storage: { host: '127.0.0.1', port: isolated ? 9299 : 9199, rules: readFileSync(new URL('../storage.rules', import.meta.url), 'utf8') },
   });
   const file = (agent, kind, name = 'fixture') => `tenants/${tenant}/agents/${agent}/${kind}/${prefix}-${name}.png`;
   const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -41,7 +42,7 @@ try {
   });
   const bucket = env.authenticatedContext(uid).storage();
   for (const kind of ['photo', 'documents']) {
-    await probe(`${kind}: own linked record read`, () => bucket.ref(file(linked, kind)).getMetadata(), true);
+    await probe(`${kind}: own linked record read`, () => bucket.ref(file(linked, kind)).getMetadata(), kind === 'photo');
     await probe(`${kind}: colleague read refused`, () => bucket.ref(file(`${prefix}-colleague`, kind)).getMetadata(), false);
     await probe(`${kind}: UID record distinct from agentId refused`, () => bucket.ref(file(uid, kind)).getMetadata(), false);
     await probe(`${kind}: agent create refused like API`, () => bucket.ref(file(linked, kind, 'new')).put(bytes, metadata), false);
@@ -61,7 +62,8 @@ try {
     await env.withSecurityRulesDisabled(async context => {
       await setDoc(doc(context.firestore(), 'tenantUsers', uid), { tenantId: tenant, role: 'agent', status: 'active', agentId });
     });
-    await probe(`legacy UID fallback ${JSON.stringify(agentId)}`, () => bucket.ref(file(uid, 'documents')).getMetadata(), agentId !== 42);
+    await probe(`legacy photo UID fallback ${JSON.stringify(agentId)}`, () => bucket.ref(file(uid, 'photo')).getMetadata(), agentId !== 42);
+    await probe(`legacy documents denied ${JSON.stringify(agentId)}`, () => bucket.ref(file(uid, 'documents')).getMetadata(), false);
   }
   console.log(JSON.stringify({ prefix, project: 'demo-sentrys-accounts', productionTouched: false, results }, null, 2));
   if (results.some(r => !r.passed)) process.exitCode = 1;

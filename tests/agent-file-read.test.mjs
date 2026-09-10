@@ -5,7 +5,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 const source = readFileSync(new URL('../src/app/api/agents/[id]/files/[fileId]/route.ts', import.meta.url), 'utf8');
 const pathSource = readFileSync(new URL('../src/lib/uploads/agent-file-access.ts', import.meta.url), 'utf8');
-function fixture({ role = 'agent', target = 'a', tenant = 't', path = 'tenants/t/agents/a/documents/test.pdf' } = {}) {
+function fixture({ role = 'agent', target = 'a', tenant = 't', path = 'tenants/t/agents/a/documents/test.pdf', fileId = 'file' } = {}) {
   let reads = 0;
   const helpers = {};
   const compile = value => ts.transpileModule(value, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -21,20 +21,20 @@ function fixture({ role = 'agent', target = 'a', tenant = 't', path = 'tenants/t
       forbidden: () => Response.json({ ok: false }, { status: 403 }),
     },
     '@/lib/agents/profile': { normalizeAgentDocuments: items => items },
-    '@/lib/firebase/admin': { adminDb: { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => ({ tenantId: tenant, profile: { documents: [{ id: 'file', path, fileName: 'test.pdf', mimeType: 'application/pdf' }] } }) }) }) }) } },
+    '@/lib/firebase/admin': { adminDb: { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => ({ tenantId: tenant, profile: { photoPath: path, documents: [{ id: 'file', path, fileName: 'test.pdf', mimeType: 'application/pdf' }] } }) }) }) }) } },
     '@/lib/uploads/agent-file-access': helpers,
   };
   const exports = {};
   runInNewContext(compile(source), { exports, Buffer, Uint8Array, console, process: { env: { NODE_ENV: 'test' }, cwd: () => '/local' }, require: name => { assert.ok(name in mocks, name); return mocks[name]; } });
-  return { get: () => exports.GET({}, { params: Promise.resolve({ id: target, fileId: 'file' }) }), reads: () => reads };
+  return { get: () => exports.GET({}, { params: Promise.resolve({ id: target, fileId }) }), reads: () => reads };
 }
-test('own file is downloadable with private no-store headers', async () => {
-  const f = fixture(), response = await f.get();
+test('manager file is downloadable with private no-store headers', async () => {
+  const f = fixture({ role: 'manager' }), response = await f.get();
   assert.equal(response.status, 200);
   assert.match(response.headers.get('cache-control'), /private, no-store/);
   assert.equal(await response.text(), 'PRIVATE TEST FILE');
 });
-for (const options of [{ target: 'b' }, { role: 'viewer' }, { tenant: 'foreign' }, { path: 'tenants/t/agents/b/documents/test.pdf' }, { path: 'tenants/t/agents/a/documents/../secret.pdf' }]) {
+for (const options of [{}, { target: 'b' }, { role: 'viewer' }, { role: 'manager', tenant: 'foreign' }, { role: 'manager', path: 'tenants/t/agents/b/documents/test.pdf' }, { role: 'manager', path: 'tenants/t/agents/a/documents/../secret.pdf' }]) {
   test(`private file blocked before reading bytes: ${JSON.stringify(options)}`, async () => {
     const f = fixture(options);
     assert.ok([403, 404].includes((await f.get()).status));
@@ -44,4 +44,11 @@ for (const options of [{ target: 'b' }, { role: 'viewer' }, { tenant: 'foreign' 
 test('manager can download same-tenant document but not foreign-tenant file', async () => {
   assert.equal((await fixture({ role: 'manager' }).get()).status, 200);
   assert.equal((await fixture({ role: 'manager', tenant: 'foreign' }).get()).status, 404);
+});
+test('own profile photo remains accessible but cannot alias a document', async () => {
+  assert.equal((await fixture({ fileId: 'photo', path: 'tenants/t/agents/a/photo/test.png' }).get()).status, 200);
+  const alias = fixture({ fileId: 'photo' });
+  assert.equal((await alias.get()).status, 403);
+  assert.equal(alias.reads(), 0);
+  assert.equal((await fixture({ fileId: 'photo', target: 'b' }).get()).status, 403);
 });

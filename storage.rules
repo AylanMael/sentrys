@@ -65,7 +65,7 @@ service firebase.storage {
     }
 
     match /tenants/{tenantId}/agents/{agentId}/documents/{fileName} {
-      allow read: if canAccessAgentFiles(tenantId, agentId) && tenantAccess(tenantId, false);
+      allow read: if isTenantDocumentManager(tenantId) && tenantAccess(tenantId, false);
       allow create, update, delete: if false;
     }
 

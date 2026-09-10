@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { parisDayKey, parisFields, parisMonthStart, parisDays, parisFullDay, parisEndDaySuffix, parisCivilRangeDays, PLANNING_TIME_ZONE } from "@/lib/planning/paris-display";
+import { parsePlanningDateTime } from "@/lib/planning/paris-time";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Loader2, Printer } from "lucide-react";
 
@@ -108,61 +110,25 @@ function toMillis(value?: string | null) {
 }
 
 function toDayKey(value?: string | Date | null) {
-  if (!value) return null;
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return parisDayKey(value);
 }
 
 function defaultRange() {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-  return {
-    fromIso: from.toISOString(),
-    toIso: to.toISOString(),
-  };
+  return { fromIso: parisMonthStart(now).toISOString(), toIso: parisMonthStart(now, 1).toISOString() };
 }
 
 function coerceDateIso(value: string | null, fallbackIso: string) {
-  if (!value) return fallbackIso;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? fallbackIso : date.toISOString();
+  return parsePlanningDateTime(value)?.toISOString() ?? fallbackIso;
 }
 
-function buildDays(fromIso: string, toIso: string) {
-  const from = new Date(fromIso);
-  const to = new Date(toIso);
-  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
-
-  if (end.getTime() <= start.getTime()) {
-    return Array.from({ length: 31 }, (_, index) => {
-      const date = new Date(start.getFullYear(), start.getMonth(), index + 1);
-      return { key: toDayKey(date) ?? `${index}`, date };
-    });
-  }
-
-  const days: DayColumn[] = [];
-  for (
-    let cursor = new Date(start);
-    cursor < end && days.length < 62;
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1)
-  ) {
-    days.push({ key: toDayKey(cursor) ?? `${days.length}`, date: new Date(cursor) });
-  }
-
-  return days;
+function buildDays(fromIso: string, toIso: string): DayColumn[] {
+  return parisDays(fromIso, toIso);
 }
 
 function formatMonthLabel(fromIso: string) {
   return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     month: "long",
     year: "numeric",
   }).format(new Date(fromIso));
@@ -170,8 +136,9 @@ function formatMonthLabel(fromIso: string) {
 
 function formatRange(fromIso: string, toIso: string) {
   const from = new Date(fromIso);
-  const to = new Date(new Date(toIso).getTime() - 24 * 60 * 60 * 1000);
+  const to = new Date(new Date(toIso).getTime() - 1);
   const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -182,6 +149,7 @@ function formatRange(fromIso: string, toIso: string) {
 
 function formatPrintDate() {
   return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -192,6 +160,7 @@ function formatPrintDate() {
 
 function formatDayHeader(date: Date) {
   return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     weekday: "narrow",
   }).format(date);
 }
@@ -200,6 +169,7 @@ function formatHour(value?: string | null) {
   if (!value) return "--:--";
 
   return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
@@ -214,37 +184,9 @@ function formatCompactHour(value?: string | null) {
 }
 
 function formatCompactHourRange(vacation: VacationPrintItem) {
-  const start = vacation.startAtIso ? new Date(vacation.startAtIso) : null;
-  const end = vacation.endAtIso ? new Date(vacation.endAtIso) : null;
-
-  if (
-    start &&
-    end &&
-    !Number.isNaN(start.getTime()) &&
-    !Number.isNaN(end.getTime()) &&
-    start.getHours() === 0 &&
-    start.getMinutes() === 0
-  ) {
-    const sameDayEnd =
-      start.getFullYear() === end.getFullYear() &&
-      start.getMonth() === end.getMonth() &&
-      start.getDate() === end.getDate() &&
-      end.getHours() === 23 &&
-      end.getMinutes() >= 55;
-    const nextDayMidnight =
-      end.getTime() ===
-      new Date(
-        start.getFullYear(),
-        start.getMonth(),
-        start.getDate() + 1
-      ).getTime();
-
-    if (sameDayEnd || nextDayMidnight) return "00h-24h";
-  }
-
-  return `${formatCompactHour(vacation.startAtIso)}-${formatCompactHour(
-    vacation.endAtIso
-  )}`;
+  const { startAtIso, endAtIso } = vacation;
+  if (parisFullDay(startAtIso, endAtIso)) return "00h-24h";
+  return `${formatCompactHour(startAtIso)}-${formatCompactHour(endAtIso)}${parisEndDaySuffix(startAtIso, endAtIso)}`;
 }
 
 function getVacationDurationHours(vacation: VacationPrintItem) {
@@ -312,7 +254,7 @@ function getMissionCode(vacation: VacationPrintItem) {
 }
 
 function isWeekend(date: Date) {
-  const day = date.getDay();
+  const day = parisFields(date).weekday;
   return day === 0 || day === 6;
 }
 
@@ -549,7 +491,8 @@ function SitePlanningPrintContent() {
         }
         const fromTime = new Date(fromIso).getTime();
         const toTime = new Date(toIso).getTime();
-        const rangeDays = (toTime - fromTime) / (24 * 60 * 60 * 1000);
+        const rangeDays = Number.isFinite(fromTime) && Number.isFinite(toTime)
+          ? parisCivilRangeDays(new Date(fromTime), new Date(toTime)) : NaN;
         if (!Number.isFinite(fromTime) || !Number.isFinite(toTime) || rangeDays <= 0) {
           throw new Error("La periode d'impression est invalide.");
         }
@@ -849,7 +792,7 @@ function SitePlanningPrintContent() {
                         {formatMonthLabel(fromIso)}
                       </h1>
                       <p className="mt-1 text-[11px] font-semibold text-slate-600">
-                        {formatRange(fromIso, toIso)}
+                        {formatRange(fromIso, toIso)} · Heure de Paris
                       </p>
                       <div className="mt-2 inline-flex gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-slate-600">
                         {plan.vacations.length} service(s) -{" "}
@@ -928,7 +871,7 @@ function SitePlanningPrintContent() {
                                     : "text-slate-900",
                                 ].join(" ")}
                               >
-                                {day.date.getDate()}
+                                {parisFields(day.date).day}
                               </div>
                             </th>
                           ))}

@@ -84,6 +84,7 @@ export const PropagateVacationSheet: React.FC = () => {
           <SheetDescription>
             Reproduis automatiquement <strong>{sourceLabel}</strong> sur les prochaines
             semaines, les prochains mois ou toute la semaine ouvree.
+            Les horaires sont conservés en heure de Paris. Un horaire ambigu ou un jour absent du mois cible bloque la copie.
           </SheetDescription>
         </SheetHeader>
 

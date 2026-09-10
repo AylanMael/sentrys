@@ -6,6 +6,9 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
+import luxonPlugin from "@fullcalendar/luxon3";
+import { PLANNING_TIME_ZONE } from "@/lib/planning/paris-time";
+import { calendarParisMutation, parisCalendarDay, parisMonthDisplay } from "@/lib/planning/calendar-paris";
 import frLocale from "@fullcalendar/core/locales/fr";
 import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
@@ -32,15 +35,6 @@ import { Button } from "@/components/ui/button";
 import { CalendarEvent } from "./CalendarEvent";
 import { CalendarResource, type CalendarResourceInfo } from "./CalendarResource";
 import { CalendarContextMenu } from "./CalendarContextMenu";
-
-function toLocalDateTimeValue(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
 
 type CalendarResourceMetricInfo = {
   resource: { id: string };
@@ -282,15 +276,9 @@ export const PlanningCalendar: React.FC = () => {
         let displayEnd = v.endAtIso!;
 
         if (currentView === "resourceTimelineMonth") {
-           const s = new Date(v.startAtIso!);
-           s.setHours(0, 0, 0, 0);
-           displayStart = s.toISOString();
-
-           const e = new Date(v.endAtIso!);
-           if (e.getHours() !== 0 || e.getMinutes() !== 0) {
-             e.setHours(23, 59, 59, 999);
-             displayEnd = e.toISOString();
-           }
+          const display = parisMonthDisplay(v.startAtIso!, v.endAtIso!);
+          displayStart = display.start;
+          displayEnd = display.end;
         }
 
         const baseProps = {
@@ -326,6 +314,7 @@ export const PlanningCalendar: React.FC = () => {
             originalEnd: v.endAtIso!
           },
           editable: v.status !== "cancelled" && v.status !== "closed",
+          durationEditable: currentView !== "resourceTimelineMonth" && v.status !== "cancelled" && v.status !== "closed",
         };
 
         if (mode === "agent") {
@@ -473,25 +462,7 @@ export const PlanningCalendar: React.FC = () => {
     if (pasteMode && !pasteBusy) {
       performPasteAt(arg.date);
     } else {
-      const clickedDate = arg.date as Date;
-      const start = new Date(
-        clickedDate.getFullYear(),
-        clickedDate.getMonth(),
-        clickedDate.getDate(),
-        8,
-        0,
-        0,
-        0
-      );
-      const end = new Date(
-        clickedDate.getFullYear(),
-        clickedDate.getMonth(),
-        clickedDate.getDate(),
-        18,
-        0,
-        0,
-        0
-      );
+      const { day } = parisCalendarDay(arg.date);
       const dateClick = arg as DateClickWithResource;
       const clickedResourceId =
         mode === "site" && dateClick.resource?.id && dateClick.resource.id !== "unassigned"
@@ -499,8 +470,8 @@ export const PlanningCalendar: React.FC = () => {
           : undefined;
 
       setInitialCreateData({
-        startAt: toLocalDateTimeValue(start),
-        endAt: toLocalDateTimeValue(end),
+        startAt: `${day}T08:00`,
+        endAt: `${day}T18:00`,
         siteId: clickedResourceId,
       });
       setCreateOpen(true);
@@ -511,11 +482,18 @@ export const PlanningCalendar: React.FC = () => {
   const handleEventChange = useCallback(async (arg: EventDropArg | EventResizeDoneArg) => {
     const v = arg.event.extendedProps.v as VacationApiItem;
     if (v.status === "cancelled" || v.status === "closed") { arg.revert(); return; }
-    const id = arg.event.id.split("-")[0];
-    const patch: Partial<VacationApiItem> = {
-      startAt: arg.event.startStr,
-      endAt: arg.event.endStr,
-    };
+    const id = v.id;
+    let patch: Partial<VacationApiItem>;
+    try {
+      if (!v.startAtIso || !v.endAtIso) throw new Error("Horaires source incomplets.");
+      patch = calendarParisMutation(v.startAtIso, v.endAtIso,
+        "delta" in arg ? arg.delta : arg.startDelta,
+        "delta" in arg ? arg.delta : arg.endDelta);
+    } catch (error) {
+      arg.revert();
+      toast({ variant: "destructive", title: "Déplacement impossible", description: error instanceof Error ? error.message : "Vérifiez les horaires." });
+      return;
+    }
     captureScrollPosition();
 
     const resourceChange = arg as EventChangeWithResource;
@@ -559,17 +537,13 @@ export const PlanningCalendar: React.FC = () => {
   const handleQuickCreate = useCallback(() => {
     const baseDate = range?.from ? new Date(range.from) : new Date();
     const anchorDate = Number.isFinite(baseDate.getTime()) ? baseDate : new Date();
-    const start = new Date(anchorDate);
-    start.setHours(8, 0, 0, 0);
-
-    const end = new Date(anchorDate);
-    end.setHours(18, 0, 0, 0);
+    const { day } = parisCalendarDay(anchorDate);
 
     const preferredSiteId = siteId !== "all" ? siteId : sites[0]?.id;
 
     setInitialCreateData({
-      startAt: toLocalDateTimeValue(start),
-      endAt: toLocalDateTimeValue(end),
+      startAt: `${day}T08:00`,
+      endAt: `${day}T18:00`,
       ...(preferredSiteId ? { siteId: preferredSiteId } : {}),
     });
     setCreateOpen(true);
@@ -703,7 +677,8 @@ export const PlanningCalendar: React.FC = () => {
       </div>
       <FullCalendar
         ref={calendarRef}
-        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, resourceTimelinePlugin]}
+        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, resourceTimelinePlugin, luxonPlugin]}
+        timeZone={PLANNING_TIME_ZONE}
         initialView="resourceTimelineMonth"
         schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
         resourceAreaWidth={`${resourceAreaWidthPx}px`}
@@ -778,13 +753,14 @@ export const PlanningCalendar: React.FC = () => {
         eventMinHeight={eventMinHeightPx}
         slotLaneClassNames={(arg: SlotLaneContentArg) => {
           if (!arg.date) return [];
-          const hour = arg.date.getHours();
+          const { hour, weekday } = parisCalendarDay(arg.date);
           const isNight = hour < 6 || hour >= 21;
-          const isWeekend = arg.date.getDay() === 0 || arg.date.getDay() === 6;
+          const isWeekend = weekday === 0 || weekday === 6;
           return [isNight ? "slot-night" : "", isWeekend ? "slot-weekend" : ""].filter(Boolean);
         }}
         slotLabelClassNames={(arg: SlotLabelContentArg) => {
-          const isWeekend = arg.date.getDay() === 0 || arg.date.getDay() === 6;
+          const { weekday } = parisCalendarDay(arg.date);
+          const isWeekend = weekday === 0 || weekday === 6;
           return isWeekend ? ["slot-weekend-label"] : [];
         }}
         headerToolbar={{
@@ -850,7 +826,7 @@ export const PlanningCalendar: React.FC = () => {
         snapDuration="00:15:00"
         scrollTimeReset={false}
         editable={true}
-        eventDurationEditable={true}
+        eventDurationEditable={currentView !== "resourceTimelineMonth"}
         selectable={true}
         selectMirror={true}
         unselectAuto={true}

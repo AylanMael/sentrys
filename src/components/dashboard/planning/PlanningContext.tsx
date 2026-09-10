@@ -20,6 +20,7 @@ import { buildConflictIndex, ConflictIndex } from "@/lib/planning/conflicts";
 import { computePlanningStats, PlanningStats, VacationEvent } from "@/lib/planning/stats";
 import { type AgentDocumentItem } from "@/lib/agents/profile";
 import { cn } from "@/lib/utils";
+import { parisRecurrenceTargets, parisTargetWeekOffsets, parisWeekWindow, pasteParisWindow, shiftParisWindow } from "@/lib/planning/paris-recurrence";
 
 // --- Types ---
 export type PlanningMode = "site" | "agent";
@@ -867,14 +868,12 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsMutating(true);
     try {
       const baseStart = new Date(clip.baseStartIso);
-      const anchorMs = anchor.getTime();
       const operations: any[] = [];
 
       for (const it of clip.items) {
-        const deltaMs = new Date(it.startAtIso).getTime() - baseStart.getTime();
-        const durMs = new Date(it.endAtIso).getTime() - new Date(it.startAtIso).getTime();
-        const nextStart = new Date(anchorMs + deltaMs);
-        const nextEnd = new Date(nextStart.getTime() + durMs);
+        const { start: nextStart, end: nextEnd } = pasteParisWindow(
+          new Date(it.startAtIso), new Date(it.endAtIso), baseStart, anchor
+        );
 
         operations.push({
           type: "create",
@@ -901,7 +900,7 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
       setPasteMode(false);
       toast({ title: "Collage effectué" });
     } catch (e) {
-      toast({ variant: "destructive", title: "Erreur lors du collage" });
+      toast({ variant: "destructive", title: "Erreur lors du collage", description: e instanceof Error ? e.message : "Impossible de coller les vacations." });
     } finally {
       setIsMutating(false);
     }
@@ -1105,7 +1104,6 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const sourceStart = new Date(source.startAtIso);
     const sourceEnd = new Date(source.endAtIso);
-    const sourceDurationMs = sourceEnd.getTime() - sourceStart.getTime();
     const existingFingerprints = new Set(
       vacations.map((vacation) =>
         buildVacationFingerprint(vacation.siteId, vacation.startAtIso, vacation.endAtIso, vacation.title)
@@ -1115,47 +1113,12 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
     const operations: Array<{ type: "create"; data: Record<string, unknown> }> = [];
     let skipped = 0;
 
-    const targets: Array<{ start: Date; end: Date }> = [];
-
-    if (options.frequency === "weekdays") {
-      const weekMonday = new Date(sourceStart);
-      const weekday = sourceStart.getDay();
-      const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
-      weekMonday.setDate(weekMonday.getDate() + mondayOffset);
-      weekMonday.setHours(0, 0, 0, 0);
-
-      for (let index = 0; index < 5; index += 1) {
-        const nextStart = new Date(weekMonday);
-        nextStart.setDate(weekMonday.getDate() + index);
-        nextStart.setHours(
-          sourceStart.getHours(),
-          sourceStart.getMinutes(),
-          sourceStart.getSeconds(),
-          sourceStart.getMilliseconds()
-        );
-
-        if (nextStart.toDateString() === sourceStart.toDateString()) {
-          continue;
-        }
-
-        const nextEnd = new Date(nextStart.getTime() + sourceDurationMs);
-        targets.push({ start: nextStart, end: nextEnd });
-      }
-    } else {
-      for (let index = 1; index <= options.occurrences; index += 1) {
-        const nextStart = new Date(sourceStart);
-        const nextEnd = new Date(sourceEnd);
-
-        if (options.frequency === "month") {
-          nextStart.setMonth(nextStart.getMonth() + index);
-          nextEnd.setMonth(nextEnd.getMonth() + index);
-        } else {
-          nextStart.setDate(nextStart.getDate() + index * 7);
-          nextEnd.setDate(nextEnd.getDate() + index * 7);
-        }
-
-        targets.push({ start: nextStart, end: nextEnd });
-      }
+    let targets: Array<{ start: Date; end: Date }>;
+    try {
+      targets = parisRecurrenceTargets(sourceStart, sourceEnd, options.frequency, options.occurrences);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Propagation impossible", description: error instanceof Error ? error.message : "Vérifiez les horaires." });
+      return;
     }
 
     for (const target of targets) {
@@ -1233,145 +1196,97 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
   const propagateWeekPlan = useCallback(async (weekStart: Date, options: PropagateWeekOptions) => {
     if (!tenantId) return;
 
-    const sourceStart = new Date(weekStart);
-    const sourceEnd = new Date(sourceStart);
-    sourceEnd.setDate(sourceEnd.getDate() + 7);
-
-    const sourceVacations = vacations.filter((vacation) => {
-      if (!vacation.startAtIso || !vacation.endAtIso) return false;
-      if (vacation.status === "cancelled" || vacation.status === "closed") return false;
-      if (isAbsenceVacation(vacation)) return false;
-      const start = new Date(vacation.startAtIso);
-      return start >= sourceStart && start < sourceEnd;
-    });
-
-    if (sourceVacations.length === 0) {
-      toast({
-        title: "Aucune semaine type",
-        description: "Aucune vacation exploitable trouvée sur la semaine source.",
-      });
-      setWeekPropagationOpen(false);
-      return;
-    }
-
-    const targetWeekOffsets: number[] = [];
-    const sourceMonth = sourceStart.getMonth();
-    const sourceYear = sourceStart.getFullYear();
-    const nextMonthDate = new Date(sourceYear, sourceMonth + 1, 1);
-    const nextMonth = nextMonthDate.getMonth();
-    const nextMonthYear = nextMonthDate.getFullYear();
-
-    if (options.target === "next_week") {
-      targetWeekOffsets.push(1);
-    } else {
-      for (let offset = 1; offset <= 8; offset += 1) {
-        const candidate = new Date(sourceStart);
-        candidate.setDate(candidate.getDate() + offset * 7);
-
-        if (options.target === "current_month") {
-          if (candidate.getMonth() === sourceMonth && candidate.getFullYear() === sourceYear) {
-            targetWeekOffsets.push(offset);
-            continue;
-          }
-          if (
-            candidate.getFullYear() > sourceYear ||
-            (candidate.getFullYear() === sourceYear && candidate.getMonth() > sourceMonth)
-          ) {
-            break;
-          }
-        }
-
-        if (options.target === "next_month") {
-          if (
-            candidate.getMonth() === nextMonth &&
-            candidate.getFullYear() === nextMonthYear
-          ) {
-            targetWeekOffsets.push(offset);
-            continue;
-          }
-          if (
-            candidate.getFullYear() > nextMonthYear ||
-            (candidate.getFullYear() === nextMonthYear && candidate.getMonth() > nextMonth)
-          ) {
-            break;
-          }
-        }
-      }
-    }
-
-    if (targetWeekOffsets.length === 0) {
-      toast({
-        title: "Aucune période cible",
-        description: "Aucune semaine cible n'a été trouvée pour cette propagation.",
-      });
-      setWeekPropagationOpen(false);
-      return;
-    }
-
-    const existingFingerprints = new Set(
-      vacations.map((vacation) =>
-        buildVacationFingerprint(vacation.siteId, vacation.startAtIso, vacation.endAtIso, vacation.title)
-      )
-    );
-
-    const operations: Array<{ type: "create"; data: Record<string, unknown> }> = [];
-    let skipped = 0;
-
-    for (const vacation of sourceVacations) {
-      const baseStart = new Date(vacation.startAtIso!);
-      const baseEnd = new Date(vacation.endAtIso!);
-
-      for (const weekOffset of targetWeekOffsets) {
-        const nextStart = new Date(baseStart);
-        const nextEnd = new Date(baseEnd);
-        nextStart.setDate(nextStart.getDate() + weekOffset * 7);
-        nextEnd.setDate(nextEnd.getDate() + weekOffset * 7);
-
-        const fingerprint = buildVacationFingerprint(
-          vacation.siteId,
-          nextStart.toISOString(),
-          nextEnd.toISOString(),
-          vacation.title
-        );
-
-        if (options.skipDuplicates && existingFingerprints.has(fingerprint)) {
-          skipped += 1;
-          continue;
-        }
-
-        existingFingerprints.add(fingerprint);
-        operations.push({
-          type: "create",
-          data: {
-            siteId: vacation.siteId,
-            siteName: vacation.siteName,
-            startAt: nextStart.toISOString(),
-              endAt: nextEnd.toISOString(),
-              title: vacation.title,
-              missionType: vacation.missionType ?? null,
-              requiredAgents: vacation.requiredAgents || 1,
-              requiredQualification: vacation.requiredQualification ?? null,
-              notes: options.includeNotes ? vacation.notes : null,
-            assignedAgentIds: options.includeAssignments ? vacation.assignedAgentIds || [] : [],
-            isPublished: false,
-          },
-        });
-      }
-    }
-
-    if (operations.length === 0) {
-      toast({
-        title: "Propagation ignorée",
-        description:
-          skipped > 0
-            ? "Toutes les vacations ciblées existent déjà."
-            : "Aucune vacation à créer sur la période cible.",
-      });
-      setWeekPropagationOpen(false);
-      return;
-    }
-
     try {
+      const { start: sourceStart, end: sourceEnd } = parisWeekWindow(weekStart);
+
+      const sourceVacations = vacations.filter((vacation) => {
+        if (!vacation.startAtIso || !vacation.endAtIso) return false;
+        if (vacation.status === "cancelled" || vacation.status === "closed") return false;
+        if (isAbsenceVacation(vacation)) return false;
+        const start = new Date(vacation.startAtIso);
+        return start >= sourceStart && start < sourceEnd;
+      });
+
+      if (sourceVacations.length === 0) {
+        toast({
+          title: "Aucune semaine type",
+          description: "Aucune vacation exploitable trouvée sur la semaine source.",
+        });
+        setWeekPropagationOpen(false);
+        return;
+      }
+
+      const targetWeekOffsets = parisTargetWeekOffsets(sourceStart, options.target);
+
+      if (targetWeekOffsets.length === 0) {
+        toast({
+          title: "Aucune période cible",
+          description: "Aucune semaine cible n'a été trouvée pour cette propagation.",
+        });
+        setWeekPropagationOpen(false);
+        return;
+      }
+
+      const existingFingerprints = new Set(
+        vacations.map((vacation) =>
+          buildVacationFingerprint(vacation.siteId, vacation.startAtIso, vacation.endAtIso, vacation.title)
+        )
+      );
+
+      const operations: Array<{ type: "create"; data: Record<string, unknown> }> = [];
+      let skipped = 0;
+
+      for (const vacation of sourceVacations) {
+        const baseStart = new Date(vacation.startAtIso!);
+        const baseEnd = new Date(vacation.endAtIso!);
+
+        for (const weekOffset of targetWeekOffsets) {
+          const { start: nextStart, end: nextEnd } = shiftParisWindow(baseStart, baseEnd, weekOffset * 7);
+
+          const fingerprint = buildVacationFingerprint(
+            vacation.siteId,
+            nextStart.toISOString(),
+            nextEnd.toISOString(),
+            vacation.title
+          );
+
+          if (options.skipDuplicates && existingFingerprints.has(fingerprint)) {
+            skipped += 1;
+            continue;
+          }
+
+          existingFingerprints.add(fingerprint);
+          operations.push({
+            type: "create",
+            data: {
+              siteId: vacation.siteId,
+              siteName: vacation.siteName,
+              startAt: nextStart.toISOString(),
+                endAt: nextEnd.toISOString(),
+                title: vacation.title,
+                missionType: vacation.missionType ?? null,
+                requiredAgents: vacation.requiredAgents || 1,
+                requiredQualification: vacation.requiredQualification ?? null,
+                notes: options.includeNotes ? vacation.notes : null,
+              assignedAgentIds: options.includeAssignments ? vacation.assignedAgentIds || [] : [],
+              isPublished: false,
+            },
+          });
+        }
+      }
+
+      if (operations.length === 0) {
+        toast({
+          title: "Propagation ignorée",
+          description:
+            skipped > 0
+              ? "Toutes les vacations ciblées existent déjà."
+              : "Aucune vacation à créer sur la période cible.",
+        });
+        setWeekPropagationOpen(false);
+        return;
+      }
+
       setIsMutating(true);
       await apiFetch<any>("/api/vacations/bulk", {
         method: "POST",
@@ -1402,9 +1317,7 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!tenantId) return;
     setIsMutating(true);
     try {
-      const start = new Date(weekStart);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 7);
+      const { start, end } = parisWeekWindow(weekStart);
       const existingFingerprints = new Set(
         vacations.map((vacation) =>
           buildVacationFingerprint(vacation.siteId, vacation.startAtIso, vacation.endAtIso, vacation.title)
@@ -1412,7 +1325,7 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
       );
 
       const toCopy = vacations.filter((vacation) => {
-        if (!vacation.startAtIso) return false;
+        if (!vacation.startAtIso || !vacation.endAtIso) return false;
         if (vacation.status === "cancelled" || vacation.status === "closed") return false;
         if (isAbsenceVacation(vacation)) return false;
         const vacationDate = new Date(vacation.startAtIso);
@@ -1429,10 +1342,9 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
 
       let skipped = 0;
       const operations = toCopy.flatMap((vacation) => {
-        const nextStart = new Date(vacation.startAtIso!);
-        const nextEnd = new Date(vacation.endAtIso!);
-        nextStart.setDate(nextStart.getDate() + 7);
-        nextEnd.setDate(nextEnd.getDate() + 7);
+        const { start: nextStart, end: nextEnd } = shiftParisWindow(
+          new Date(vacation.startAtIso!), new Date(vacation.endAtIso!), 7
+        );
 
         const fingerprint = buildVacationFingerprint(
           vacation.siteId,
@@ -1490,7 +1402,7 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
       });
       await mutate();
     } catch (e) {
-      toast({ variant: "destructive", title: "Erreur lors de la duplication" });
+      toast({ variant: "destructive", title: "Erreur lors de la duplication", description: e instanceof Error ? e.message : "Impossible de reconduire la semaine." });
     } finally {
       setIsMutating(false);
     }

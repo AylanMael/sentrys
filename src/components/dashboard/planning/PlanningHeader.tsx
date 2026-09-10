@@ -1,4 +1,5 @@
 "use client";
+import { PlanningIndicatorNotice } from "./PlanningIndicatorNotice";
 
 import React from "react";
 import {
@@ -205,6 +206,7 @@ export const PlanningHeader: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-6 duration-700 ease-out">
+      <PlanningIndicatorNotice />
       <div className="rounded-[1.35rem] border border-border/50 bg-background/90 shadow-sm">
         <div className="flex flex-col gap-2 p-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">

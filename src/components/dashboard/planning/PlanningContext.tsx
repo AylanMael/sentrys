@@ -20,6 +20,7 @@ import { buildConflictIndex, ConflictIndex } from "@/lib/planning/conflicts";
 import { computePlanningStats, PlanningStats, VacationEvent } from "@/lib/planning/stats";
 import { type AgentDocumentItem } from "@/lib/agents/profile";
 import { cn } from "@/lib/utils";
+import { planningIndicatorScope, buildMonthlyComparisons, type MonthlyComparison } from "@/lib/planning/indicator-scope";
 import { parisRecurrenceTargets, parisTargetWeekOffsets, parisWeekWindow, pasteParisWindow, shiftParisWindow } from "@/lib/planning/paris-recurrence";
 
 // --- Types ---
@@ -156,6 +157,8 @@ export interface PropagateWeekOptions {
 }
 
 export interface PlanningContextType {
+  indicatorScope: ReturnType<typeof planningIndicatorScope>;
+  monthlyComparisons: Record<string, MonthlyComparison>;
   vacations: VacationApiItem[];
   filteredVacations: VacationApiItem[];
   sites: SiteApiItem[];
@@ -289,6 +292,7 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
   const [sitesError, setSitesError] = useState<string | null>(null);
   const [agentsError, setAgentsError] = useState<string | null>(null);
   const [sitesHasMore, setSitesHasMore] = useState(false);
+  const [confirmedTenant, setConfirmedTenant] = useState<string | null>(null);
   const [agentsHasMore, setAgentsHasMore] = useState(false);
   const sitesCursorRef = useRef<string | null>(null);
   const agentsCursorRef = useRef<string | null>(null);
@@ -380,17 +384,20 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     if (!tenantId) {
+      setConfirmedTenant(null);
       setVacations([]);
       setVacsLoading(false);
       return;
     }
 
     setVacsLoading(true);
+    setConfirmedTenant(null);
 
     // 🔥 Temps Réel: Écoute globale du Tenant (pas besoin d'index composite pour le tri ou la plage)
     const q = query(collection(db, "vacations"), where("tenantId", "==", tenantId));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+      setConfirmedTenant(null);
       const items: VacationApiItem[] = [];
       snapshot.forEach(doc => {
          const data = doc.data();
@@ -420,8 +427,10 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
       });
 
       setVacations(items);
+      setConfirmedTenant(!snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites ? tenantId : null);
       setVacsLoading(false);
     }, (err) => {
+      setConfirmedTenant(null);
       console.error("[PlanningContext] Sync Error:", err);
       toast({ variant: "destructive", title: "Erreur temps-réel", description: err.message });
       setVacsLoading(false);
@@ -588,6 +597,15 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
     [agentContractualTargets, agentQualifications, globalStatsInput, range, statsInput]
   );
   const conflictIndex = useMemo(() => buildConflictIndex(globalStatsInput), [globalStatsInput]);
+  const indicatorScope = useMemo(() => planningIndicatorScope({ range, siteId, agentId, publicationFilter, showAbsences,
+    serverConfirmed: !!tenantId && confirmedTenant === tenantId && !loading && vacations.every(v => {
+      const start = v.startAtIso ? Date.parse(v.startAtIso) : NaN;
+      const end = v.endAtIso ? Date.parse(v.endAtIso) : NaN;
+      return Number.isFinite(start) && Number.isFinite(end) && end > start;
+    }),
+  }), [range, siteId, agentId, publicationFilter, showAbsences, tenantId, confirmedTenant, loading, vacations]);
+  const monthlyComparisons = useMemo(() => buildMonthlyComparisons(stats.agentMonthlyHours, agentContractualTargets, indicatorScope.canCompareMonthly, agentId),
+    [stats.agentMonthlyHours, agentContractualTargets, indicatorScope.canCompareMonthly, agentId]);
 
   const ops = useMemo(() => {
     let total = 0, empty = 0, partial = 0, full = 0, missingAgents = 0, cancelled = 0, closed = 0, absences = 0;
@@ -1472,6 +1490,7 @@ export const PlanningProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [selectedIds, vacations, mutate, toast, clearSelection]);
 
   const value: PlanningContextType = {
+    indicatorScope, monthlyComparisons,
     vacations, filteredVacations, sites, agents, loading, sitesLoading, agentsLoading,
     siteOptions, agentOptions, sitesHasMore, agentsHasMore,
     sitesStatus, agentsStatus, sitesError, agentsError,

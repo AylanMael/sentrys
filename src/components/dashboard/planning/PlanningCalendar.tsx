@@ -71,6 +71,7 @@ export const PlanningCalendar: React.FC = () => {
     setMode,
     tensionMode,
     stats,
+    monthlyComparisons,
     conflictIndex,
     pasteMode,
     performPasteAt,
@@ -526,7 +527,7 @@ export const PlanningCalendar: React.FC = () => {
   );
 
   const renderResourceLabel = (info: CalendarResourceInfo) => (
-    <CalendarResource info={info} mode={mode} stats={stats} viewDensity={effectiveDensity} />
+    <CalendarResource info={info} mode={mode} stats={stats} comparison={monthlyComparisons[info.resource.id]} viewDensity={effectiveDensity} />
   );
 
   const handleOpenSiteTemplate = useCallback(() => {
@@ -689,7 +690,7 @@ export const PlanningCalendar: React.FC = () => {
             width: zoomedDimension(effectiveDensity === "compact" ? 185 : 220)
           },
           {
-            headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">REALISE</span>,
+            headerContent: () => <span className="text-[9px] font-black opacity-60" title="Heures des vacations sur la période filtrée, pas des pointages">PLANIFIÉ</span>,
             cellContent: (info: CalendarResourceMetricInfo) => {
                const hours = stats.agentMonthlyHours[info.resource.id] || 0;
                return <div className="text-right pr-2 text-[10px] font-black tabular-nums">{hours.toFixed(1)}h</div>;
@@ -699,17 +700,17 @@ export const PlanningCalendar: React.FC = () => {
           {
             headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">CONTRAT</span>,
             cellContent: (info: CalendarResourceMetricInfo) => {
-               const chours = stats.agentContractualHours[info.resource.id] || 151.67;
-               return <div className="text-right pr-2 text-[10px] font-black tabular-nums">{chours.toFixed(1)}h</div>;
+               const comparison = monthlyComparisons[info.resource.id];
+               return <div title="Contrat mensuel renseigné, comparaison sur mois complet uniquement" className="text-right pr-2 text-[10px] font-black tabular-nums">{comparison ? `${comparison.contract.toFixed(1)}h` : "—"}</div>;
             },
             width: zoomedDimension(effectiveDensity === "compact" ? 62 : 75)
           },
           {
             headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">DELTA</span>,
             cellContent: (info: CalendarResourceMetricInfo) => {
-               const hours = stats.agentMonthlyHours[info.resource.id] || 0;
-               const chours = stats.agentContractualHours[info.resource.id] || 151.67;
-               const delta = hours - chours;
+               const comparison = monthlyComparisons[info.resource.id];
+               if (!comparison) return <div title="Comparaison indisponible : vérifiez la période, les filtres et le contrat renseigné" className="text-right pr-2 text-[10px] text-muted-foreground">—</div>;
+               const delta = comparison.delta;
                return (
                  <div className={cn(
                    "text-right pr-2 text-[10px] font-black tabular-nums",
@@ -724,9 +725,9 @@ export const PlanningCalendar: React.FC = () => {
           {
             headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">%</span>,
             cellContent: (info: CalendarResourceMetricInfo) => {
-               const hours = stats.agentMonthlyHours[info.resource.id] || 0;
-               const chours = stats.agentContractualHours[info.resource.id] || 151.67;
-               const ratio = (hours / chours) * 100;
+               const comparison = monthlyComparisons[info.resource.id];
+               if (!comparison) return <div title="Comparaison indisponible" className="text-right pr-2 text-[10px] text-muted-foreground">—</div>;
+               const ratio = comparison.ratio;
                return <div className="text-right pr-2 text-[10px] font-black tabular-nums">{Math.round(ratio)}%</div>;
             },
             width: zoomedDimension(effectiveDensity === "compact" ? 42 : 50)

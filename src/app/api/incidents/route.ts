@@ -9,13 +9,14 @@ import { IncidentCreateSchema } from "@/lib/api/schemas";
 import { calculateDistance } from "@/lib/utils/geo";
 import { authorizeMissionWrite, validDocumentId } from "@/lib/auth/mission-access";
 import { suspensionMode } from "@/lib/auth/tenant-suspension";
+import { canReadIncidentSite } from "@/lib/auth/incident-read";
 
 export const runtime = "nodejs";
 
 /* ================= helpers ================= */
 
 function json(status: number, body: unknown) {
-  return NextResponse.json(body, { status });
+  return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
 function bad(msg: string, extra?: Record<string, unknown>) {
@@ -209,6 +210,8 @@ export async function GET(req: NextRequest) {
   const encodedCursor = normalizeText(url.searchParams.get("cursor"));
 
   try {
+    // Agents must choose an authorized site; never fall back to a tenant-wide list.
+    if (!await canReadIncidentSite(auth, siteId)) return forbidden("Access denied for this site");
     if ((incidentLimit != null || encodedCursor) && !siteId) {
       return bad("Le site est requis");
     }

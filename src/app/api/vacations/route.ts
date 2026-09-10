@@ -21,6 +21,7 @@ import {
   toTs,
 } from "@/app/api/vacations/_shared";
 import { normalizeMissionType } from "@/lib/planning/mission-types";
+import { canReadAssignedVacation } from "@/lib/auth/vacation-read";
 
 import {
   validateAssignedAgentsForSite,
@@ -119,6 +120,7 @@ export async function GET(req: NextRequest) {
     const filtersHash = digest(JSON.stringify({
       siteId: siteId || null, from: from?.toISOString() ?? null,
       to: to?.toISOString() ?? null, sortDirection,
+      agentScope: isAgentUser ? (auth.agentId || auth.uid) : null,
     }));
     const tenantHash = digest(auth.tenantId);
     const rawCursor = normalizeText(url.searchParams.get("cursor"));
@@ -128,6 +130,7 @@ export async function GET(req: NextRequest) {
     let q: FirebaseFirestore.Query = adminDb.collection("vacations")
       .where("tenantId", "==", auth.tenantId);
     if (siteId) q = q.where("siteId", "==", siteId);
+    if (isAgentUser) q = q.where("assignedAgentIds", "array-contains", auth.agentId || auth.uid);
     if (from) q = q.where("startAt", ">=", Timestamp.fromDate(from));
     if (to) q = q.where("startAt", "<", Timestamp.fromDate(to));
     q = q.orderBy("startAt", sortDirection)
@@ -136,6 +139,7 @@ export async function GET(req: NextRequest) {
       const cursorSnap = await adminDb.collection("vacations").doc(cursor.id).get();
       if (!cursorSnap.exists || cursorSnap.data()?.tenantId !== auth.tenantId) return bad("Invalid cursor");
       const cursorData = cursorSnap.data();
+      if (!cursorData || !canReadAssignedVacation(auth, cursorData)) return bad("Invalid cursor");
       if (siteId && (typeof cursorData?.siteId !== "string" || cursorData.siteId !== siteId)) {
         console.warn("[vacations.GET] Cursor site mismatch");
         return bad("Invalid cursor");

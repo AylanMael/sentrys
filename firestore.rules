@@ -417,6 +417,13 @@ service cloud.firestore {
 
     match /vacations/{id} {
 
+      function isAssignedToVacation() {
+        return isAgent()
+          && resource.data.assignedAgentIds is list
+          && myAgentId() in resource.data.assignedAgentIds
+          && isAssignedToSite(resource.data.siteId);
+      }
+
       allow create: if canWriteTenantData() && canManagePlanning()
         && sameTenantOnCreate()
         && request.resource.data.siteId is string
@@ -425,11 +432,11 @@ service cloud.firestore {
         && request.resource.data.endAt is timestamp
         && request.resource.data.requiredAgents is int;
 
-      allow read: if canReadTenantData() && sameTenantResource()
-        && (
-          canReadBackoffice()
-          || isAssignedToSite(resource.data.siteId)
-        );
+      allow get: if canReadTenantData() && sameTenantResource()
+        && (canReadBackoffice() || isAssignedToVacation());
+
+      // Agents list missions through the tenant/agent-scoped API, not raw SDK queries.
+      allow list: if canReadTenantData() && sameTenantResource() && canReadBackoffice();
 
       allow update: if canWriteTenantData() && sameTenantResource()
         && canManagePlanning()

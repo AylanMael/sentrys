@@ -671,14 +671,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </SidebarFooter>}
         </Sidebar>
 
-        <SidebarInset className="bg-transparent flex flex-col min-h-screen">
+        <SidebarInset className="bg-transparent flex min-w-0 flex-col min-h-screen">
           <header
             className={cn(
-              "flex shrink-0 items-center justify-between gap-4 border-b border-border/10 bg-background/20 backdrop-blur-2xl sticky top-0 z-40",
-              isCompactDisplay ? "h-14 px-4" : "h-20 px-8"
+              "flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/10 bg-background/20 backdrop-blur-2xl sticky top-0 z-40 sm:flex-nowrap sm:gap-4",
+              isCompactDisplay ? "min-h-14 px-4 py-2 sm:h-14 sm:py-0" : "min-h-20 px-4 py-2 sm:h-20 sm:px-8 sm:py-0"
             )}
           >
-            <div className="flex items-center gap-6">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-6">
               <SidebarTrigger className="-ml-2 hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all duration-300 rounded-lg p-2" />
 
               <div className="relative flex w-40 max-w-[45vw] min-w-0 items-center gap-2 rounded-xl border border-border/10 bg-background/40 px-3 py-2 text-muted-foreground transition focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 sm:w-72 sm:max-w-none lg:w-80">

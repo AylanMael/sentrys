@@ -225,7 +225,7 @@ export const PlanningFilters: React.FC = () => {
         {showAbsences ? "Absences Visibles" : "Absences Masquées"}
       </Button>
 
-      <div className="flex items-center rounded-xl border border-border/40 bg-white/35 p-1 shadow-inner shadow-black/5 backdrop-blur-xl dark:bg-slate-900/35">
+      <div className="flex max-w-full flex-wrap items-center rounded-xl border border-border/40 bg-white/35 p-1 shadow-inner shadow-black/5 backdrop-blur-xl dark:bg-slate-900/35">
         {publicationFilters.map((filter) => (
           <Button
             key={filter.value}

@@ -46,4 +46,16 @@ Anomalie préexistante confirmée : le bandeau de site affiche le client « SAMS
 
 ## Travaux métier ultérieurs
 
+### Complément responsive local
+
+Simulation navigateur à 390 × 844 : débordement global initial mesuré à 554 px pour une zone utile de 375 px. Correction du minimum implicite du conteneur dashboard et retour à la ligne de son en-tête ; largeur de document mesurée ensuite à 375 px. Les filtres de publication reviennent à la ligne, le calendrier conserve 512 px de hauteur minimale sur petit écran et ses quatre commandes Mois/Semaine/Jour/Grille sont visibles. L'override du navigateur a été réinitialisé après la recette.
+
+Cette vérification concerne la mise en page, pas une validation complète du planning tactile ni un test sur téléphone physique. Le scénario de coupure réseau reste à exécuter ; aucune validation hors ligne n'est revendiquée.
+
+### Contre-vérification de la hauteur
+
+La hauteur minimale de 512 px ne suffisait pas : la zone `.fc-view-harness` mesurait 0 px à 907 px de largeur. Remplacée par une hauteur définie de 40 rem sous le breakpoint desktop (FullCalendar demande 100 %). Mesures après correction : environ 510 px pour la zone des lignes à 907 px, et 404 px à 390 px ; la ligne du site fictif est visible. Le défilement horizontal reste nécessaire pour la timeline.
+
+TypeScript et lint ciblé terminés avec succès. Trois garde-fous de structure responsive ont été ajoutés ; ils ne constituent pas des tests de rendu. La revue indépendante confirme la correction de hauteur, avec réserves à lever sur le filtre site (bandeau supplémentaire dans la hauteur disponible) et les commandes tablette entre 768 et 1023 px. Ne pas clôturer la recette mobile complète sur cette seule base.
+
 La projection dans AssignAgentsSheet reste hors périmètre : son fuseau et son contrat par défaut sont à revoir. Le classement des remplaçants utilise encore les heures de la période filtrée ; ce n'est pas la charge mensuelle complète. Les alertes sur données chargées ne garantissent ni complétude de l'historique ni conformité. Les choix d'exclusion des annulations/absences et le vrai « réalisé » issu des pointages exigent un lot métier séparé.

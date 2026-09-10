@@ -557,7 +557,7 @@ export const PlanningCalendar: React.FC = () => {
       ref={containerRef}
       style={calendarZoomStyle}
       className={cn(
-        "flex-1 w-full bg-white/40 dark:bg-[#0f121e]/40 backdrop-blur-xl border border-white/20 dark:border-white/5 rounded-2xl overflow-hidden shadow-2xl relative group flex flex-col transition-all duration-500 excel-grid",
+        "h-[40rem] shrink-0 lg:h-auto lg:flex-1 lg:min-h-0 w-full bg-white/40 dark:bg-[#0f121e]/40 backdrop-blur-xl border border-white/20 dark:border-white/5 rounded-2xl overflow-hidden shadow-2xl relative group flex flex-col transition-all duration-500 excel-grid",
         effectiveDensity === "compact" ? "density-compact" : "density-comfortable"
       )}
     >
@@ -909,6 +909,18 @@ export const PlanningCalendar: React.FC = () => {
         @media (min-width: 768px) {
           .excel-grid .fc-header-toolbar {
             padding-right: 160px !important;
+          }
+        }
+
+        @media (max-width: 767px) {
+          .excel-grid .fc-header-toolbar {
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 12px;
+          }
+          .excel-grid .fc-toolbar-title {
+            font-size: 1.25rem;
+            text-align: center;
           }
         }
 

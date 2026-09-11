@@ -10,7 +10,7 @@ import {
   type AgentDocumentItem,
 } from "@/lib/agents/profile";
 import { deleteTenantFile, uploadTenantFile } from "@/lib/uploads/tenant-files";
-import { parseFirebaseStoragePath, secureAgentFileUrl } from "@/lib/uploads/agent-file-access";
+import { isAgentStoragePath, parseFirebaseStoragePath, secureAgentFileUrl } from "@/lib/uploads/agent-file-access";
 import {
   hasExpectedFileSignature,
   isAllowedAgentDocumentMimeType,
@@ -240,6 +240,11 @@ export async function DELETE(
       const documents = normalizeAgentDocuments(previousProfile.documents);
       const document = documents.find((item) => item.id === documentId);
       if (!document) return { status: "document-not-found" as const, path: null };
+      const documentPath = document.path || parseFirebaseStoragePath(document.url);
+      if (documentPath && (!isAgentStoragePath(documentPath, auth.tenantId, agentId)
+        || !documentPath.startsWith(`tenants/${auth.tenantId}/agents/${agentId}/documents/`))) {
+        throw new Error("INVALID_DOCUMENT_PATH");
+      }
 
       transaction.set(
         agentRef,
@@ -256,7 +261,7 @@ export async function DELETE(
 
       return {
         status: "deleted" as const,
-        path: document.path || parseFirebaseStoragePath(document.url),
+        path: documentPath,
       };
     });
 
@@ -270,8 +275,8 @@ export async function DELETE(
     let storageCleanup = "not-required";
     if (result.path) {
       try {
-        await deleteTenantFile({ path: result.path, tenantId: auth.tenantId });
-        storageCleanup = "deleted";
+        const cleanup = await deleteTenantFile({ path: result.path, tenantId: auth.tenantId });
+        storageCleanup = cleanup.deleted ? "deleted" : "not-found";
       } catch (error) {
         storageCleanup = "pending";
         console.error("[agent-document.DELETE] storage cleanup failed", {

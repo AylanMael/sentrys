@@ -579,7 +579,7 @@ export default function AgentDétailPage() {
 
     setDeletingDocumentId(documentId);
     try {
-      await apiFetch<{ ok: boolean; documentId: string }>(
+      const response = await apiFetch<{ ok: boolean; documentId: string; storageCleanup?: string }>(
         `/api/agents/${id}/documents`,
         { method: "DELETE", body: { documentId } }
       );
@@ -593,10 +593,14 @@ export default function AgentDétailPage() {
             }
           : current
       );
-      feedback.success(
-        "Document supprime",
-        "Le document a ete retire du dossier RH."
-      );
+      if (response.storageCleanup === "pending") {
+        feedback.warning(
+          "Référence retirée — nettoyage à vérifier",
+          "Le document a été retiré du dossier RH, mais la suppression du fichier n’a pas pu être confirmée. Contactez le support."
+        );
+      } else {
+        feedback.success("Document supprimé", "Le document a été retiré du dossier RH.");
+      }
     } catch (error) {
       feedback.error(error, {
         title: "Suppression impossible",

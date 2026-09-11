@@ -351,8 +351,38 @@ export async function openAuthenticatedFile(url: string) {
     return;
   }
 
-  const blob = await apiFetchBlob(url);
-  const objectUrl = URL.createObjectURL(blob);
-  window.open(objectUrl, "_blank", "noopener,noreferrer");
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  // Reserve the tab during the click, before authentication/network awaits.
+  // noopener in window.open can return null even on success: detach explicitly
+  // while this tab is still a same-origin, empty about:blank document.
+  const preview = window.open("about:blank", "_blank");
+  if (!preview) {
+    throw new ApiFetchError({
+      url,
+      code: "FILE_WINDOW_BLOCKED",
+      message: "Votre navigateur bloque l’ouverture du document. Autorisez les fenêtres pour ce site, puis réessayez.",
+    });
+  }
+
+  let objectUrl: string | undefined;
+  try {
+    preview.opener = null;
+    preview.document.title = "Chargement du document — Sentrys";
+    preview.document.body.textContent = "Chargement sécurisé du document…";
+    const blob = await apiFetchBlob(url);
+    // Closing the waiting tab is a cancellation, not permission to reopen it.
+    if (preview.closed) return;
+    objectUrl = URL.createObjectURL(blob);
+    preview.location.replace(objectUrl);
+    const loadedUrl = objectUrl;
+    window.setTimeout(() => URL.revokeObjectURL(loadedUrl), 60_000);
+  } catch (error) {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    if (!preview.closed) preview.close();
+    if (isApiFetchError(error)) throw error;
+    throw new ApiFetchError({
+      url,
+      code: "FILE_OPEN_FAILED",
+      message: "Impossible d’ouvrir le document. Vérifiez votre connexion puis réessayez.",
+    });
+  }
 }

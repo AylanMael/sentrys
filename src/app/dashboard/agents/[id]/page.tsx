@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 
 import { apiFetch, openAuthenticatedFile } from "@/lib/api/client-fetch";
 import { SecureAgentPhoto } from "@/components/agents/secure-agent-photo";
+import { hasPrivateDocumentReference } from "@/lib/agents/document-availability";
 import { useAuth } from "@/lib/auth-provider";
 import { canManageAgents, normalizeRole } from "@/lib/auth/role";
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,7 @@ import {
 
 type Agent = {
   id: string;
+  tenantId?: string;
   firstName?: string | null;
   lastName?: string | null;
   email?: string | null;
@@ -1549,6 +1551,7 @@ export default function AgentDétailPage() {
               <div className="space-y-3">
                 {(agent.documents ?? []).length > 0 ? (
                   (agent.documents ?? []).map((document) => {
+                    const canOpenDocument = hasPrivateDocumentReference(document, agent.id, agent.tenantId ?? "");
                     const expiryDays = daysUntil(document.expiresAt);
                     const fileSize = formatFileSize(document.size);
                     const isExpired = expiryDays !== null && expiryDays < 0;
@@ -1562,7 +1565,7 @@ export default function AgentDétailPage() {
                       >
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-semibold text-foreground">
+                            <p className="break-words font-semibold text-foreground">
                               {document.label}
                             </p>
                             <Badge variant="secondary" className="text-[10px]">
@@ -1575,8 +1578,20 @@ export default function AgentDétailPage() {
                             )}
                           </div>
                           <p className="mt-1 break-all text-xs text-muted-foreground">
-                            {document.fileName || document.url}
+                            {document.fileName || "Référence documentaire conservée"}
                           </p>
+                          {!canOpenDocument && (
+                            <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
+                              <p className="flex items-start gap-2 font-semibold">
+                                <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                                Fichier indisponible — à remplacer
+                              </p>
+                              <p className="mt-1 text-xs leading-relaxed">
+                                Aucun chemin privé exploitable n’est associé à cette référence. L’historique est conservé.
+                                {canWrite ? " Ajoutez le justificatif dans le formulaire ci-dessous, sans supprimer cette entrée." : " Demandez à un responsable d’ajouter le justificatif."}
+                              </p>
+                            </div>
+                          )}
                           {document.expiresAt && (
                             <p
                               className={cn(
@@ -1597,7 +1612,10 @@ export default function AgentDétailPage() {
                             type="button"
                             variant="outline"
                             size="sm"
+                            disabled={!canOpenDocument}
+                            aria-label={canOpenDocument ? `Ouvrir ${document.label}` : `Fichier indisponible : ${document.label}`}
                             onClick={() => {
+                              if (!canOpenDocument) return;
                               void openAuthenticatedFile(document.url).catch((error) => {
                                 feedback.error(error, {
                                   title: "Ouverture impossible",

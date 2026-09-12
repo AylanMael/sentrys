@@ -25,6 +25,8 @@ Le code actuel conserve `cleanupPath` côté serveur et ne le renvoie pas dans l
 
 ## Phase 2 — Action autorisée et ciblée
 
+Socle d'inspection disponible en local : `document-storage-inspection.ts` relance le diagnostic, exige une liste explicite de buckets et lit uniquement leurs métadonnées puis celles de l'objet. Il conserve la génération exacte sous forme de chaîne, rejette une identité incohérente et ne renvoie ni contenu, ni jeton, ni chemin privé. Un bucket inaccessible (même avec une réponse 404) reste non vérifié ; seule une réponse 404 de l'objet après vérification du bucket est notée absente. La présence de métadonnées non vérifiées rend l'inspection incomplète. Les tests unitaires utilisent des doubles de stockage ; la recette sur émulateur a confirmé le refus conservateur lorsque les métadonnées du bucket ne sont pas disponibles (voir Conditions de livraison). Le parcours positif complet reste à valider sur un stockage de recette compatible. Les états renvoyés sont des observations, jamais une autorisation de suppression ni une mise à jour de la trace. La liste exhaustive des buckets doit être fournie par un appelant serveur autorisé, pas par le navigateur. Aucune route ou tâche n'utilise encore ce module.
+
 Avant implémentation, résoudre la concurrence entre la vérification des références et la suppression : une simple lecture suivie d'une suppression laisse une fenêtre de réutilisation. Les chemins d'upload neufs sont uniques, mais cela ne suffit pas à prouver l'absence de réaffectation par tous les autres chemins d'écriture.
 
 - Exiger une autorisation serveur adaptée et un motif d'intervention. Conserver le périmètre exact de l'opération, sans permissions de téléchargement supplémentaires.
@@ -53,5 +55,7 @@ Le helper actuel `deleteTenantFile` parcourt les buckets candidats sans précond
 | Historique consulté après intervention | Traces conservées, aucun lien vers l'ancien fichier |
 
 ## Conditions de livraison
+
+Recette Storage locale (projet `demo-sentrys-inspection`, hôte explicite loopback) : l'objet fictif a été créé, inspecté sans changement de génération, puis retiré par le test et son absence vérifiée via l'API objet. L'émulateur installé ne confirme pas les métadonnées du bucket avec l'API utilisée ; le module conserve donc correctement `incomplete/unverified` avant et après retrait. Cette recette prouve le refus conservateur, pas le parcours positif d'inspection complète. Celui-ci reste couvert par des tests unitaires et devra être validé sur un stockage de recette compatible avant activation. Aucun contrôle de sécurité n'a été contourné pour faire passer la recette. Test : `tests/emulator/document-storage-inspection.test.mjs`, variable obligatoire `FIREBASE_STORAGE_EMULATOR_HOST`.
 
 Implémentation dédiée, tests exécutant la logique, recette sur émulateurs, revue indépendante puis validation explicite du périmètre de production. Pas de suppression globale, de bouton de purge de masse ni de tâche automatique à ce stade.

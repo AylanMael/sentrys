@@ -2,6 +2,8 @@
 
 Statut : spécification de recette et d'implémentation. Aucun outil de reprise automatique n'est livré par ce document. Aucune intervention de production n'est autorisée par cette procédure seule.
 
+Premier socle local : `src/lib/uploads/document-cleanup-diagnostic.ts` fournit un contrôle pur, sans accès réseau ni écriture. Il vérifie le périmètre, le chemin, le statut de la trace et un inventaire de références fourni par l'appelant serveur. Son résultat positif signifie uniquement « inspection du stockage nécessaire ». Le collecteur exhaustif de références, la vérification des buckets/générations, la protection contre la concurrence et l'exécution restent à construire. Les tests unitaires ne constituent pas une recette sur émulateurs ni une validation de données réelles.
+
 ## Périmètre
 
 Traiter une trace de remplacement `documentReplacementTraces` dont `cleanupStatus` vaut `pending`. Le nouveau document reste utilisable. Ne pas supprimer la trace, ni modifier les autres documents. Ne pas confondre cette reprise avec les suppressions ordinaires ou les fichiers orphelins, qui nécessitent un traitement distinct.

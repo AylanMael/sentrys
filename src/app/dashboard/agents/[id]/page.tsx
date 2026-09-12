@@ -1633,7 +1633,7 @@ export default function AgentDétailPage() {
                               </p>
                               <p className="mt-1 text-xs leading-relaxed">
                                 Aucun chemin privé exploitable n’est associé à cette référence. L’historique est conservé.
-                                {canWrite ? " Ajoutez le justificatif dans le formulaire ci-dessous, sans supprimer cette entrée." : " Demandez à un responsable d’ajouter le justificatif."}
+                                {canWrite ? " Cliquez sur « Remplacer » pour fournir un nouveau justificatif sans créer de doublon. Le motif et la référence précédente seront conservés dans les traces." : " Demandez à un responsable de remplacer ce justificatif. La référence précédente sera conservée dans les traces."}
                               </p>
                             </div>
                           )}
@@ -1733,7 +1733,7 @@ export default function AgentDétailPage() {
                   {replacement && (
                     <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
                       <p className="break-words font-semibold">Remplacer : {replacement.label}</p>
-                      <p className="text-sm text-muted-foreground">L’ancien fichier reste disponible pendant l’envoi. Après enregistrement, il sera supprimé ; seules les traces seront conservées.</p>
+                      <p className="text-sm text-muted-foreground">La référence actuelle est conservée pendant l’envoi. Après enregistrement, le nouveau justificatif la remplace et la suppression de l’ancien fichier est effectuée s’il existe. Si cette suppression ne peut pas être confirmée, une alerte apparaît dans l’historique. Celui-ci conserve les traces du remplacement, sans lien vers l’ancien fichier.</p>
                       <Label htmlFor="replacement-reason">Motif obligatoire (12 à 500 caractères)</Label>
                       <Textarea id="replacement-reason" maxLength={500} disabled={uploadingDocument} value={replacementReason} onChange={event => setReplacementReason(event.target.value)} />
                       <label className="flex items-start gap-2 text-sm">

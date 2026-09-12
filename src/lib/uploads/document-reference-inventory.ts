@@ -1,12 +1,15 @@
 import "server-only";
 
-type AgentRecord = { id: string; tenantId: unknown; profile?: unknown };
+type AgentRecord = {
+  id: string; tenantId: unknown; profile?: unknown;
+  documents?: unknown; photoPath?: unknown; photoUrl?: unknown;
+};
 type ReferencePage = { agents: readonly AgentRecord[]; nextCursor: string | null };
 type Inventory = { complete: boolean; paths: string[]; unresolved: number; agentsRead: number };
 type RecordValue = Record<string, unknown>;
 const record = (value: unknown): value is RecordValue => !!value && typeof value === "object" && !Array.isArray(value);
 
-/** Read-only scan of current agent profiles. Does not inspect Storage or lock writes. */
+/** Read-only scan of nested and legacy root references. Does not inspect Storage or lock writes. */
 export async function collectDocumentReferences(input: {
   tenantId: string;
   readPage: (cursor: string | null) => Promise<ReferencePage>;
@@ -41,6 +44,17 @@ export async function collectDocumentReferences(input: {
     } catch { unresolved++; }
   }
 
+  function scanFields(fields: { photoPath?: unknown; photoUrl?: unknown; documents?: unknown }) {
+    addReference(fields.photoPath, fields.photoUrl);
+    if (fields.documents == null) return;
+    if (!Array.isArray(fields.documents)) { unresolved++; return; }
+    for (const document of fields.documents) {
+      if (!record(document)) { unresolved++; continue; }
+      if (!document.path && !document.url) { unresolved++; continue; }
+      addReference(document.path, document.url);
+    }
+  }
+
   let cursor: string | null = null;
   try {
     for (let pageNumber = 0; pageNumber < maxPages; pageNumber++) {
@@ -49,17 +63,11 @@ export async function collectDocumentReferences(input: {
       for (const agent of page.agents) {
         if (!agent || typeof agent.id !== "string" || !agent.id || agents.has(agent.id) || agent.tenantId !== input.tenantId) return result(false);
         agents.add(agent.id);
+        // Scan both schemas, not a fallback: either may contain a live reference.
+        scanFields(agent);
         if (agent.profile == null) continue;
         if (!record(agent.profile)) { unresolved++; continue; }
-        const profile = agent.profile;
-        addReference(profile.photoPath, profile.photoUrl);
-        if (profile.documents == null) continue;
-        if (!Array.isArray(profile.documents)) { unresolved++; continue; }
-        for (const document of profile.documents) {
-          if (!record(document)) { unresolved++; continue; }
-          if (!document.path && !document.url) { unresolved++; continue; }
-          addReference(document.path, document.url);
-        }
+        scanFields(agent.profile);
       }
       if (page.nextCursor === null) return result(true);
       if (typeof page.nextCursor !== "string" || !page.nextCursor || cursors.has(page.nextCursor)) return result(false);

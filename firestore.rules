@@ -314,8 +314,28 @@ service cloud.firestore {
 
     match /agents/{id} {
 
+      // File references are maintained only by the authenticated server routes.
+      function noFileReferencesOnCreate() {
+        let profile = request.resource.data.get("profile", {});
+        return !request.resource.data.keys().hasAny(["documents", "photoUrl", "photoPath"])
+          && profile is map
+          && !profile.keys().hasAny(["documents", "photoUrl", "photoPath"]);
+      }
+
+      function fileReferencesUnchanged() {
+        let before = resource.data.get("profile", {});
+        let after = request.resource.data.get("profile", {});
+        return !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(["documents", "photoUrl", "photoPath"])
+          && (!resource.data.keys().hasAny(["documents", "photoUrl", "photoPath"])
+            || (("profile" in resource.data) == ("profile" in request.resource.data)))
+          && (before == after || (before is map && after is map
+            && !after.diff(before).affectedKeys().hasAny(["documents", "photoUrl", "photoPath"])));
+      }
+
       allow create: if canWriteTenantData() && canManagePlanning()
         && sameTenantOnCreate()
+        && noFileReferencesOnCreate()
         && request.resource.data.firstName is string
         && request.resource.data.lastName is string
         && request.resource.data.status in ["active", "inactive", "disabled"];
@@ -328,6 +348,7 @@ service cloud.firestore {
 
       allow update: if canWriteTenantData() && canManagePlanning()
         && sameTenantResource()
+        && fileReferencesUnchanged()
         && forbidChange(["tenantId", "createdAt", "createdBy"]);
 
       allow delete: if canWriteTenantData() && isAdmin() && sameTenantResource();

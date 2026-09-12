@@ -282,6 +282,12 @@ export async function PATCH(
 
     const prev = loaded.data;
 
+    if (["documents", "photoUrl", "photoPath"].some((field) => body[field] !== undefined)) {
+      return bad("Actualisez la page. Les fichiers doivent être modifiés depuis les actions Documents ou Photo.", {
+        code: "DEDICATED_FILE_ACTION_REQUIRED",
+      });
+    }
+
     const prevStatus: AgentStatus = normalizeStatus(prev?.status);
 
     const patch: Record<string, unknown> = {};
@@ -335,7 +341,6 @@ export async function PATCH(
     }
 
     const profileFields = [
-      "photoUrl",
       "employeeNumber",
       "birthDate",
       "addressLine1",
@@ -369,17 +374,6 @@ export async function PATCH(
       if (JSON.stringify(value) !== JSON.stringify(previousProfile.qualifications ?? [])) {
         changes.qualifications = {
           from: previousProfile.qualifications ?? [],
-          to: value,
-        };
-      }
-    }
-
-    if (body.documents !== undefined) {
-      const value = normalizeAgentDocuments(body.documents);
-      profilePatch.documents = value;
-      if (JSON.stringify(value) !== JSON.stringify(previousProfile.documents ?? [])) {
-        changes.documents = {
-          from: previousProfile.documents ?? [],
           to: value,
         };
       }
@@ -432,10 +426,6 @@ export async function PATCH(
       return bad("firstName/lastName cannot be empty");
     }
 
-    if (Object.keys(profilePatch).length > 0) {
-      patch.profile = nextProfile;
-    }
-
     patch.search = buildSearch(
       nextFirst as string,
       nextLast as string,
@@ -446,7 +436,23 @@ export async function PATCH(
     patch.updatedAt = FieldValue.serverTimestamp();
     patch.updatedBy = auth.uid;
 
-    await loaded.ref.set(patch, { merge: true });
+    await adminDb.runTransaction(async (transaction) => {
+      const current = await transaction.get(loaded.ref);
+      const currentData = current.data();
+      if (!current.exists || currentData?.tenantId !== auth.tenantId) {
+        throw new Error("Agent scope changed during update");
+      }
+      const write = { ...patch };
+      if (Object.keys(profilePatch).length > 0) {
+        // Preserve the current schema without migrating or copying stale file references.
+        if (currentData.profile && typeof currentData.profile === "object") {
+          write.profile = profilePatch;
+        } else {
+          Object.assign(write, profilePatch);
+        }
+      }
+      transaction.set(loaded.ref, write, { merge: true });
+    });
 
     if (statusChanged) {
       if (prevStatus === "active" && nextStatus === "inactive") {

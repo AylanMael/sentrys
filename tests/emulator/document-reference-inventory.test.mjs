@@ -97,3 +97,33 @@ test('legacy Firebase URL on a later page blocks cleanup without exposing its to
     trace:{tenantId,agentId:'owner',cleanupPath:path,cleanupStatus:'pending'},references:inventory}).reason,'still-referenced');
   assert.doesNotMatch(JSON.stringify(inventory),/TEST_ONLY|token=/);
 });
+
+test('Firestore projection retains legacy root references even beside a newer profile',async()=>{
+  const tenantId=`qa-${randomUUID()}`;
+  const path=`tenants/${tenantId}/agents/owner/documents/old.pdf`;
+  const photo=`tenants/${tenantId}/agents/owner/photo/old.png`;
+  const newer=`tenants/${tenantId}/agents/owner/documents/new.pdf`;
+  const original=[];
+  for(let i=0;i<3;i++){
+    const id=`${tenantId}-${i}`;ids.push(id);
+    const value={tenantId,profile:{documents:[{path:newer}]},
+      ...(i===2?{documents:[{path}],photoPath:photo,photoUrl:`https://firebasestorage.googleapis.com/v0/b/demo/o/${encodeURIComponent(photo)}?token=ROOT_TEST_SECRET`}:{}),untouched:'keep'};
+    original.push(value);await db.collection('agents').doc(id).create(value);
+  }
+  const inventory=await collectDocumentReferences({tenantId,readPage:createDocumentReferenceReader(db,tenantId,1)});
+  assert.equal(inventory.complete,true);assert.equal(inventory.unresolved,0);
+  for(const reference of [path,photo,newer])assert.ok(inventory.paths.includes(reference));
+  assert.equal(diagnoseDocumentCleanup({tenantId,agentId:'owner',agentTenantId:tenantId,
+    trace:{tenantId,agentId:'owner',cleanupPath:path,cleanupStatus:'pending'},references:inventory}).reason,'still-referenced');
+  assert.doesNotMatch(JSON.stringify(inventory),/ROOT_TEST_SECRET|token=/);
+  for(let i=0;i<3;i++)assert.deepEqual((await db.collection('agents').doc(`${tenantId}-${i}`).get()).data(),original[i]);
+});
+
+test('ambiguous root document blocks cleanup despite an empty nested profile',async()=>{
+  const tenantId=`qa-${randomUUID()}`,id=`${tenantId}-0`;ids.push(id);
+  await db.collection('agents').doc(id).create({tenantId,profile:{documents:[]},documents:{unexpected:'format'}});
+  const inventory=await collectDocumentReferences({tenantId,readPage:createDocumentReferenceReader(db,tenantId,1)});
+  assert.equal(inventory.complete,true);assert.ok(inventory.unresolved>0);
+  assert.equal(diagnoseDocumentCleanup({tenantId,agentId:'owner',agentTenantId:tenantId,
+    trace:{tenantId,agentId:'owner',cleanupPath:`tenants/${tenantId}/agents/owner/documents/old.pdf`,cleanupStatus:'pending'},references:inventory}).reason,'incomplete-references');
+});

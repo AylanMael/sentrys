@@ -59,3 +59,35 @@ test('legacy reference to another agent is retained, not silently discarded',asy
   const result=await single({documents:[{path:'tenants/t/agents/other/documents/old.pdf'}]});
   assert.ok(result.paths.includes('tenants/t/agents/other/documents/old.pdf'));
 });
+
+const rootInventory = fields => collect({tenantId:'t',readPage:async()=>({agents:[{id:'a',tenantId:'t',...fields}],nextCursor:null})});
+for (const profile of [undefined, null, {}, {documents:[]}]) {
+  test(`root references survive profile=${JSON.stringify(profile)}`,async()=>{
+    const photo='tenants/t/agents/a/photo/old.png';
+    const result=await rootInventory({profile,documents:[{path}],photoPath:photo});
+    assert.equal(result.complete,true);assert.equal(result.unresolved,0);
+    assert.ok(result.paths.includes(path));assert.ok(result.paths.includes(photo));
+  });
+}
+test('coexisting schemas are combined and deduplicated, not treated as alternatives',async()=>{
+  const other='tenants/t/agents/other/documents/other.pdf';
+  const result=await rootInventory({documents:[{path}],profile:{documents:[{path},{path:other}]}});
+  assert.equal(result.paths.length,2);assert.equal(result.unresolved,0);
+  assert.ok(result.paths.includes(path));assert.ok(result.paths.includes(other));
+});
+test('legacy root Firebase URL is retained without its token',async()=>{
+  const result=await rootInventory({photoUrl:`https://firebasestorage.googleapis.com/v0/b/demo/o/${encodeURIComponent(path)}?token=ROOT_SECRET`,profile:{}});
+  assert.ok(result.paths.includes(path));assert.equal(result.unresolved,0);
+  assert.doesNotMatch(JSON.stringify(result),/ROOT_SECRET|token=/);
+});
+for (const fields of [
+  {documents:{},profile:{documents:[{path}]}},
+  {photoUrl:'https://unknown.invalid/old',profile:{documents:[]}},
+  {documents:[{}],profile:{}},
+  {documents:[{path}],profile:'invalid'},
+]) {
+  test(`ambiguity in either schema blocks cleanup: ${JSON.stringify(fields)}`,async()=>{
+    const result=await rootInventory(fields);
+    assert.ok(result.unresolved>0);
+  });
+}

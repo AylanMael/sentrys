@@ -131,11 +131,17 @@ async function run() {
     }
 
     try {
+      const lastUpdateTime = documentSnapshot.updateTime;
+      if (!lastUpdateTime) {
+        throw new Error("Repair refused: snapshot updateTime is unavailable");
+      }
+
       for (const target of targets) {
         await revokeToken(storage, target);
         report.revokedTokens += 1;
       }
 
+      // Storage revocation may race with profile edits; never overwrite a newer document.
       await documentSnapshot.ref.update({
         profile,
         updatedAt: FieldValue.serverTimestamp(),
@@ -143,7 +149,7 @@ async function run() {
           agentFilesPrivateAt: FieldValue.serverTimestamp(),
           agentFilesPrivateVersion: 1,
         },
-      });
+      }, { lastUpdateTime });
       report.repairedAgents += 1;
     } catch (error) {
       report.errors.push({

@@ -1172,7 +1172,6 @@ export default function AgentDétailPage() {
                         email: agent.email,
                         phone: agent.phone,
                         monthlyContractHours: agent.monthlyContractHours ?? null,
-                        photoUrl: agent.photoUrl,
                         employeeNumber: agent.employeeNumber,
                         birthDate: agent.birthDate,
                         addressLine1: agent.addressLine1,
@@ -1182,7 +1181,6 @@ export default function AgentDétailPage() {
                         qualifications: agent.qualifications ?? [],
                         emergencyContactName: agent.emergencyContactName,
                         emergencyContactPhone: agent.emergencyContactPhone,
-                        documents: agent.documents ?? [],
                         equipmentItems: agent.equipmentItems ?? [],
                         notes: agent.notes,
                       })

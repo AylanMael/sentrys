@@ -12,7 +12,7 @@ runInNewContext(ts.transpileModule(readFileSync(new URL('../src/lib/uploads/file
 
 function fixture({ role = 'manager', tenantId = 't', bytes = [137,80,78,71,13,10,26,10] } = {}) {
   const uploads = [], writes = [];
-  const ref = { get: async () => ({ exists: true, data: () => ({ tenantId, profile: {} }) }), set: async value => writes.push(value) };
+  const ref = { get: async () => ({ exists: true, data: () => ({ tenantId, profile: { documents: [{ id: 'old', path: 'old.pdf' }], notes: 'Existing notes' } }) }), set: async value => writes.push(value) };
   const mocks = {
     'next/server': { NextResponse: { json: (value, options) => Response.json(value, options) } },
     'firebase-admin/firestore': { FieldValue: { serverTimestamp: () => 'timestamp' } },
@@ -35,6 +35,9 @@ test('manager photo API still calls server upload and stores private path', asyn
   assert.equal(f.uploads[0].tenantId, 't');
   assert.deepEqual(Array.from(f.uploads[0].folderSegments), ['agents', 'a', 'photo']);
   assert.equal(f.writes[0].profile.photoUrl, null);
+  assert.deepEqual(Object.keys(f.writes[0].profile).sort(), ['photoPath', 'photoUrl']);
+  assert.equal('documents' in f.writes[0].profile, false);
+  assert.equal('notes' in f.writes[0].profile, false);
 });
 for (const [options, status] of [[{ role: 'agent' }, 403], [{ role: 'viewer' }, 403], [{ tenantId: 'foreign' }, 404], [{ bytes: [1,2,3] }, 400]]) {
   test(`photo API rejects unauthorized or invalid input: ${JSON.stringify(options)}`, async () => {

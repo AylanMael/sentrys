@@ -8,11 +8,15 @@ export function createDocumentReferenceReader(db: Firestore, tenantId: string, p
   return async (cursor: string | null) => {
     if (cursor !== null && (!cursor || /[\\/\u0000-\u001f]/.test(cursor))) throw new Error("Invalid inventory cursor");
     let query = db.collection("agents").where("tenantId", "==", tenantId)
-      .orderBy(FieldPath.documentId()).select("tenantId", "profile").limit(pageSize);
+      .orderBy(FieldPath.documentId()).select("tenantId", "profile", "documents", "photoPath", "photoUrl").limit(pageSize);
     if (cursor !== null) query = query.startAfter(cursor);
     const snapshot = await query.get();
     return {
-      agents: snapshot.docs.map(doc => ({id: doc.id, tenantId: doc.data().tenantId, profile: doc.data().profile})),
+      agents: snapshot.docs.map(doc => {
+        const data = doc.data();
+        return { id: doc.id, tenantId: data.tenantId, profile: data.profile,
+          documents: data.documents, photoPath: data.photoPath, photoUrl: data.photoUrl };
+      }),
       // A full page requires a further read, even if it turns out to be empty.
       nextCursor: snapshot.size === pageSize ? snapshot.docs[snapshot.size - 1].id : null,
     };

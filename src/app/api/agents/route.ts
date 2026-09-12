@@ -474,12 +474,27 @@ export async function POST(req: NextRequest) {
     return bad("Invalid JSON body");
   }
 
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return bad("Invalid JSON body");
+  }
+  const suppliedProfile = body.profile;
+  const fileFields = ["documents", "photoUrl", "photoPath"];
+  if (fileFields.some((field) =>
+    Object.prototype.hasOwnProperty.call(body, field) ||
+    (suppliedProfile !== null && typeof suppliedProfile === "object" &&
+      Object.prototype.hasOwnProperty.call(suppliedProfile, field))
+  )) {
+    return bad("Créez d’abord l’agent, puis ajoutez ses fichiers depuis les actions Documents ou Photo.", {
+      code: "DEDICATED_FILE_ACTION_REQUIRED",
+    });
+  }
+
   const firstName = normalizeText(body.firstName);
   const lastName = normalizeText(body.lastName);
   const email = normalizeText(body.email) || null;
   const phone = normalizeText(body.phone) || null;
   const profile: AgentProfileFields = {
-    photoUrl: normalizeAgentProfileField(body.photoUrl),
+    photoUrl: null,
     employeeNumber: normalizeAgentProfileField(body.employeeNumber),
     birthDate: normalizeAgentProfileField(body.birthDate),
     addressLine1: normalizeAgentProfileField(body.addressLine1),
@@ -491,7 +506,7 @@ export async function POST(req: NextRequest) {
     qualifications: normalizeAgentQualifications(body.qualifications),
     emergencyContactName: normalizeAgentProfileField(body.emergencyContactName),
     emergencyContactPhone: normalizeAgentProfileField(body.emergencyContactPhone),
-    documents: normalizeAgentDocuments(body.documents),
+    documents: [],
     notes: normalizeAgentProfileField(body.notes),
   };
   let monthlyContractHours: number | null = null;

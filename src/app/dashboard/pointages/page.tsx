@@ -6,7 +6,7 @@ import { ArrowRight, CalendarClock, RefreshCw, ShieldCheck } from "lucide-react"
 import { useAuth } from "@/lib/auth-provider";
 import { canReadBackoffice } from "@/lib/auth/role";
 import { apiFetch, getApiErrorMessage } from "@/lib/api/client-fetch";
-import { attendanceLabels, type AttendanceRow } from "@/lib/agents/attendance";
+import { attendanceLabels, attendanceObservations, type AttendanceRow } from "@/lib/agents/attendance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -52,7 +52,7 @@ export default function PointagesPage() {
     return invalidate;
   }, [load, invalidate, allowed, date, user?.uid, user?.tenantId, user?.tenant?.status, user?.tenant?.suspensionMode]);
   const filtered = rows.filter(row => normalize(row.agentName).includes(normalize(agent)) && normalize(row.siteName).includes(normalize(site)));
-  const attention = rows.filter(row => ["not_checked_in", "missing_out", "inconsistent"].includes(row.status)).length;
+  const attention = rows.filter(row => attendanceObservations(row).length > 0).length;
   if (!allowed) return <div className="rounded-2xl border bg-card p-8"><h1 className="text-xl font-semibold">Pointages</h1><p className="mt-2 text-muted-foreground">Cette vue est réservée aux responsables autorisés de l’agence.</p></div>;
   return <main className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6">
     <header className="relative overflow-hidden rounded-3xl border border-primary/15 bg-card p-6 shadow-sm sm:p-8">
@@ -95,6 +95,11 @@ export default function PointagesPage() {
           <div><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Prise de service réelle</dt><dd className="mt-2 text-sm font-medium tabular-nums">{stamp(row.checkedInAt)}</dd></div>
           <div><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Fin de service réelle</dt><dd className="mt-2 text-sm font-medium tabular-nums">{stamp(row.checkedOutAt)}</dd></div>
         </dl>
+        {attendanceObservations(row).length > 0 && <div className="mx-5 mb-5 rounded-xl border border-amber-600/25 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-100">
+          <p className="font-semibold">Écarts à vérifier</p>
+          <ul className="mt-2 list-disc space-y-2 pl-5">{attendanceObservations(row).map(message => <li key={message}>{message}</li>)}</ul>
+          <p className="mt-3 text-xs leading-5">Comparaison avec les horaires actuellement prévus, sans tolérance appliquée. Ces écarts ne constituent pas une conclusion sur la présence effective de l’agent.</p>
+        </div>}
       </article>)}
     </section>
     {cursor && <div className="text-center"><Button variant="outline" className="min-h-11 rounded-xl" disabled={loading} onClick={() => void load(cursor)}>Charger les missions suivantes</Button><p className="mt-2 text-xs text-muted-foreground">Liste et compteurs encore partiels.</p></div>}

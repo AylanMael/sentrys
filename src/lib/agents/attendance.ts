@@ -11,6 +11,31 @@ export const attendanceLabels: Record<AttendanceRow["status"], string> = {
   completed: "Service terminé", missing_out: "Sortie manquante", inconsistent: "À vérifier",
 };
 type Data = Record<string, unknown>;
+
+/** Descriptive differences against the current plan, never a verdict about physical presence. */
+export function attendanceObservations(row: AttendanceRow): string[] {
+  if (row.status === "inconsistent") return ["Pointages incohérents : vérification nécessaire avant de comparer les horaires."];
+  const start = Date.parse(row.startAt), end = Date.parse(row.endAt);
+  const entry = row.checkedInAt === null ? null : Date.parse(row.checkedInAt);
+  const exit = row.checkedOutAt === null ? null : Date.parse(row.checkedOutAt);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start
+    || (entry !== null && !Number.isFinite(entry)) || (exit !== null && !Number.isFinite(exit))
+    || (exit !== null && (entry === null || exit < entry))) return ["Horaires incohérents : comparaison indisponible."];
+  const duration = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return "moins d’une minute";
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    return [hours ? `${hours} h` : "", minutes % 60 ? `${minutes % 60} min` : "", seconds % 60 ? `${seconds % 60} s` : ""].filter(Boolean).join(" ");
+  };
+  const messages: string[] = [];
+  if (entry !== null && entry > start) messages.push(`Prise de service enregistrée avec ${duration(entry - start)} de retard par rapport au planning.`);
+  if (exit !== null && exit < end) messages.push(`Fin de service enregistrée ${duration(end - exit)} avant l’heure prévue.`);
+  if (row.status === "missing_out") messages.push("Fin prévue dépassée, sans pointage de sortie enregistré. Situation à vérifier.");
+  if (row.status === "not_checked_in") messages.push("Aucune prise de service enregistrée. Cela ne confirme pas une absence sur le site.");
+  return messages;
+}
+
 const text = (v: unknown) => typeof v === "string" ? v.trim() : "";
 export function attendanceRow(input: {
   tenantId: string; vacationId: string; agentId: string; now: number;

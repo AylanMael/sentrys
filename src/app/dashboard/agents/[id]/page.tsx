@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 
 import { apiFetch, openAuthenticatedFile } from "@/lib/api/client-fetch";
 import { SecureAgentPhoto } from "@/components/agents/secure-agent-photo";
+import { hasPrivateDocumentReference } from "@/lib/agents/document-availability";
 import { useAuth } from "@/lib/auth-provider";
 import { canManageAgents, normalizeRole } from "@/lib/auth/role";
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,7 @@ import {
 
 type Agent = {
   id: string;
+  tenantId?: string;
   firstName?: string | null;
   lastName?: string | null;
   email?: string | null;
@@ -99,6 +101,14 @@ type DocumentUploadResponse = {
   document: AgentDocumentItem;
   path: string;
   storageMode: string;
+  replacedDocumentId?: string | null;
+  storageCleanup?: string;
+};
+
+type DocumentTrace = {
+  id: string; label: string; previousFileName: string | null; newFileName: string;
+  reason: string; actorUid: string; actorName: string | null;
+  createdAt: string | null; cleanupStatus: string;
 };
 
 type ComplianceAlert = {
@@ -427,6 +437,12 @@ export default function AgentDétailPage() {
   const [documentKind, setDocumentKind] = useState("professional_card");
   const [documentExpiresAt, setDocumentExpiresAt] = useState("");
   const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [replacement, setReplacement] = useState<AgentDocumentItem | null>(null);
+  const [replacementReason, setReplacementReason] = useState("");
+  const [replacementConfirmed, setReplacementConfirmed] = useState(false);
+  const [documentTraces, setDocumentTraces] = useState<DocumentTrace[] | null>(null);
+  const [tracesLoading, setTracesLoading] = useState(false);
+  const [tracesHaveMore, setTracesHaveMore] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -529,7 +545,8 @@ export default function AgentDétailPage() {
   }
 
   async function uploadDocument() {
-    if (!agent || !documentFile || !canWrite) return;
+    if (!agent || !documentFile || !canWrite || uploadingDocument) return;
+    if (replacement && (!replacementConfirmed || replacementReason.trim().length < 12)) return;
 
     setUploadingDocument(true);
     try {
@@ -538,6 +555,10 @@ export default function AgentDétailPage() {
       formData.append("label", documentLabel.trim() || documentFile.name);
       formData.append("kind", documentKind);
       formData.append("expiresAt", documentExpiresAt.trim());
+      if (replacement) {
+        formData.append("replaceId", replacement.id);
+        formData.append("reason", replacementReason.trim());
+      }
 
       const response = await apiFetch<DocumentUploadResponse>(
         `/api/agents/${id}/documents`,
@@ -551,14 +572,24 @@ export default function AgentDétailPage() {
         current
           ? {
               ...current,
-              documents: [...(current.documents ?? []), response.document],
+              documents: response.replacedDocumentId
+                ? (current.documents ?? []).map(item => item.id === response.replacedDocumentId ? response.document : item)
+                : [...(current.documents ?? []), response.document],
             }
           : current
       );
       setDocumentLabel("");
       setDocumentExpiresAt("");
       setDocumentFile(null);
-      feedback.success(
+      setReplacement(null);
+      setReplacementReason("");
+      setReplacementConfirmed(false);
+      setDocumentTraces(null);
+      if (response.storageCleanup === "pending") {
+        feedback.warning("Document remplacé — nettoyage à vérifier", "Le nouveau fichier est enregistré. La suppression de l’ancien fichier n’est pas confirmée ; contactez le support.");
+      } else if (response.replacedDocumentId) {
+        feedback.success("Document remplacé", "Le nouveau fichier est enregistré. Seule la trace de l’ancienne version est conservée dans l’historique.");
+      } else feedback.success(
         "Document ajoute",
         "Le fichier est archive dans le dossier de l'agent."
       );
@@ -572,12 +603,24 @@ export default function AgentDétailPage() {
     }
   }
 
+  async function loadDocumentTraces() {
+    if (!canWrite || tracesLoading) return;
+    setTracesLoading(true);
+    try {
+      const result = await apiFetch<{ traces: DocumentTrace[]; hasMore: boolean }>(`/api/agents/${id}/documents`);
+      setDocumentTraces(result.traces);
+      setTracesHaveMore(result.hasMore);
+    } catch (error) {
+      feedback.error(error, { title: "Historique indisponible", fallback: "Impossible de charger les traces." });
+    } finally { setTracesLoading(false); }
+  }
+
   async function deleteDocument(documentId: string) {
     if (!agent || !canWrite) return;
 
     setDeletingDocumentId(documentId);
     try {
-      await apiFetch<{ ok: boolean; documentId: string }>(
+      const response = await apiFetch<{ ok: boolean; documentId: string; storageCleanup?: string }>(
         `/api/agents/${id}/documents`,
         { method: "DELETE", body: { documentId } }
       );
@@ -591,10 +634,14 @@ export default function AgentDétailPage() {
             }
           : current
       );
-      feedback.success(
-        "Document supprime",
-        "Le document a ete retire du dossier RH."
-      );
+      if (response.storageCleanup === "pending") {
+        feedback.warning(
+          "Référence retirée — nettoyage à vérifier",
+          "Le document a été retiré du dossier RH, mais la suppression du fichier n’a pas pu être confirmée. Contactez le support."
+        );
+      } else {
+        feedback.success("Document supprimé", "Le document a été retiré du dossier RH.");
+      }
     } catch (error) {
       feedback.error(error, {
         title: "Suppression impossible",
@@ -1125,7 +1172,6 @@ export default function AgentDétailPage() {
                         email: agent.email,
                         phone: agent.phone,
                         monthlyContractHours: agent.monthlyContractHours ?? null,
-                        photoUrl: agent.photoUrl,
                         employeeNumber: agent.employeeNumber,
                         birthDate: agent.birthDate,
                         addressLine1: agent.addressLine1,
@@ -1135,7 +1181,6 @@ export default function AgentDétailPage() {
                         qualifications: agent.qualifications ?? [],
                         emergencyContactName: agent.emergencyContactName,
                         emergencyContactPhone: agent.emergencyContactPhone,
-                        documents: agent.documents ?? [],
                         equipmentItems: agent.equipmentItems ?? [],
                         notes: agent.notes,
                       })
@@ -1549,6 +1594,7 @@ export default function AgentDétailPage() {
               <div className="space-y-3">
                 {(agent.documents ?? []).length > 0 ? (
                   (agent.documents ?? []).map((document) => {
+                    const canOpenDocument = hasPrivateDocumentReference(document, agent.id, agent.tenantId ?? "");
                     const expiryDays = daysUntil(document.expiresAt);
                     const fileSize = formatFileSize(document.size);
                     const isExpired = expiryDays !== null && expiryDays < 0;
@@ -1562,7 +1608,7 @@ export default function AgentDétailPage() {
                       >
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-semibold text-foreground">
+                            <p className="break-words font-semibold text-foreground">
                               {document.label}
                             </p>
                             <Badge variant="secondary" className="text-[10px]">
@@ -1575,8 +1621,20 @@ export default function AgentDétailPage() {
                             )}
                           </div>
                           <p className="mt-1 break-all text-xs text-muted-foreground">
-                            {document.fileName || document.url}
+                            {document.fileName || "Référence documentaire conservée"}
                           </p>
+                          {!canOpenDocument && (
+                            <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
+                              <p className="flex items-start gap-2 font-semibold">
+                                <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                                Fichier indisponible — à remplacer
+                              </p>
+                              <p className="mt-1 text-xs leading-relaxed">
+                                Aucun chemin privé exploitable n’est associé à cette référence. L’historique est conservé.
+                                {canWrite ? " Cliquez sur « Remplacer » pour fournir un nouveau justificatif sans créer de doublon. Le motif et la référence précédente seront conservés dans les traces." : " Demandez à un responsable de remplacer ce justificatif. La référence précédente sera conservée dans les traces."}
+                              </p>
+                            </div>
+                          )}
                           {document.expiresAt && (
                             <p
                               className={cn(
@@ -1593,11 +1651,23 @@ export default function AgentDétailPage() {
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
+                          {canWrite && (
+                            <Button type="button" variant="outline" size="sm" disabled={uploadingDocument || deletingDocumentId !== null}
+                              onClick={() => {
+                                setReplacement(document); setReplacementReason(""); setReplacementConfirmed(false);
+                                setDocumentLabel(document.label); setDocumentKind(document.kind ?? "other");
+                                setDocumentExpiresAt(document.expiresAt ?? ""); setDocumentFile(null);
+                                window.document.getElementById("document-import-form")?.scrollIntoView({ block: "center", behavior: "smooth" });
+                              }}>Remplacer</Button>
+                          )}
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
+                            disabled={!canOpenDocument}
+                            aria-label={canOpenDocument ? `Ouvrir ${document.label}` : `Fichier indisponible : ${document.label}`}
                             onClick={() => {
+                              if (!canOpenDocument) return;
                               void openAuthenticatedFile(document.url).catch((error) => {
                                 feedback.error(error, {
                                   title: "Ouverture impossible",
@@ -1617,7 +1687,7 @@ export default function AgentDétailPage() {
                                   variant="outline"
                                   size="sm"
                                   aria-label={`Supprimer ${document.label}`}
-                                  disabled={deletingDocumentId === document.id}
+                                  disabled={deletingDocumentId === document.id || uploadingDocument || replacement?.id === document.id}
                                 >
                                   {deletingDocumentId === document.id ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1657,7 +1727,20 @@ export default function AgentDétailPage() {
               </div>
 
               {canWrite && (
-                <div className="rounded-2xl border bg-muted/10 p-4 space-y-4">
+                <div id="document-import-form" className="rounded-2xl border bg-muted/10 p-4 space-y-4">
+                  {replacement && (
+                    <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                      <p className="break-words font-semibold">Remplacer : {replacement.label}</p>
+                      <p className="text-sm text-muted-foreground">La référence actuelle est conservée pendant l’envoi. Après enregistrement, le nouveau justificatif la remplace et la suppression de l’ancien fichier est effectuée s’il existe. Si cette suppression ne peut pas être confirmée, une alerte apparaît dans l’historique. Celui-ci conserve les traces du remplacement, sans lien vers l’ancien fichier.</p>
+                      <Label htmlFor="replacement-reason">Motif obligatoire (12 à 500 caractères)</Label>
+                      <Textarea id="replacement-reason" maxLength={500} disabled={uploadingDocument} value={replacementReason} onChange={event => setReplacementReason(event.target.value)} />
+                      <label className="flex items-start gap-2 text-sm">
+                        <input type="checkbox" className="mt-1" disabled={uploadingDocument} checked={replacementConfirmed} onChange={event => setReplacementConfirmed(event.target.checked)} />
+                        Je confirme le remplacement et la suppression de l’ancien fichier après réussite.
+                      </label>
+                      <Button type="button" variant="outline" disabled={uploadingDocument} onClick={() => { setReplacement(null); setDocumentFile(null); setReplacementReason(""); setReplacementConfirmed(false); }}>Annuler le remplacement</Button>
+                    </div>
+                  )}
                   <div className="grid gap-3 md:grid-cols-[220px_1fr_180px]">
                     <div className="space-y-2">
                       <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -1735,7 +1818,7 @@ export default function AgentDétailPage() {
                     <Button
                       type="button"
                       onClick={uploadDocument}
-                      disabled={!documentFile || uploadingDocument}
+                      disabled={!documentFile || uploadingDocument || (!!replacement && (!replacementConfirmed || replacementReason.trim().length < 12))}
                       className="h-full min-h-16 rounded-xl font-semibold"
                     >
                       {uploadingDocument ? (
@@ -1743,11 +1826,29 @@ export default function AgentDétailPage() {
                       ) : (
                         <UploadCloud className="mr-2 h-4 w-4" />
                       )}
-                      Importer
+                      {replacement ? "Confirmer le remplacement" : "Importer"}
                     </Button>
                   </div>
 
                 </div>
+              )}
+              {canWrite && (
+                <section className="space-y-3 border-t pt-4" aria-label="Historique des remplacements">
+                  <Button type="button" variant="outline" onClick={loadDocumentTraces} disabled={tracesLoading}>
+                    {tracesLoading ? "Chargement…" : "Consulter les traces de remplacement"}
+                  </Button>
+                  {documentTraces?.length === 0 && <p className="text-sm text-muted-foreground">Aucun remplacement enregistré.</p>}
+                  {documentTraces?.map(trace => (
+                    <div key={trace.id} className="space-y-1 rounded-xl border p-3 text-sm break-words">
+                      <p className="font-semibold">{trace.label}</p>
+                      <p>{trace.previousFileName ?? "Ancienne référence"} → {trace.newFileName}</p>
+                      <p>{trace.actorName || trace.actorUid} · {trace.createdAt ? new Date(trace.createdAt).toLocaleString("fr-FR", { timeZone: "Europe/Paris" }) : "Date indisponible"} (Paris)</p>
+                      <p>Motif : {trace.reason}</p>
+                      {trace.cleanupStatus === "pending" && <p className="text-amber-700 dark:text-amber-300">Suppression de l’ancien fichier non confirmée — support requis.</p>}
+                    </div>
+                  ))}
+                  {tracesHaveMore && <p className="text-sm text-muted-foreground">Les 50 derniers remplacements sont affichés. Les traces plus anciennes sont conservées.</p>}
+                </section>
               )}
             </CardContent>
           </Card>

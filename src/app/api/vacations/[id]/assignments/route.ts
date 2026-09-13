@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/role";
 import { logActivity } from "@/lib/activity/logger";
 import { FieldValue } from "firebase-admin/firestore";
+import { canReadAssignedVacation } from "@/lib/auth/vacation-read";
 import {
   normalizeText,
   safeArr,
@@ -81,6 +82,8 @@ export async function GET(
   const loaded = await loadVacationOr404(vacationId, auth.tenantId);
   if (!loaded.ok) return notFound(loaded.error);
 
+  if (!canReadAssignedVacation(auth, loaded.data)) return forbidden("Insufficient rights");
+
   const allowed = await canUserAccessSite({
     tenantId: auth.tenantId,
     uid: auth.uid,
@@ -96,7 +99,9 @@ export async function GET(
     .where("vacationId", "==", vacationId)
     .get();
 
-  const assignments = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const assignments = snap.docs
+    .filter((d) => auth.role !== "agent" || d.data().agentId === (auth.agentId || auth.uid))
+    .map((d) => ({ id: d.id, ...d.data() }));
 
   return json(200, {
     ok: true,

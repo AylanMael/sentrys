@@ -125,6 +125,7 @@ export const OperationsActionCenter: React.FC = () => {
     filteredVacations,
     conflictIndex,
     stats,
+    monthlyComparisons,
     sites,
     agents,
     siteId,
@@ -446,19 +447,12 @@ export const OperationsActionCenter: React.FC = () => {
       });
     });
 
-    const overtimeAgents = Object.entries(stats.agentMonthlyHours)
-      .map(([agentId, hours]) => {
-        const contract =
-          stats.agentContractualHours[agentId] ??
-          agents.find((agent) => agent.id === agentId)?.monthlyContractHours ??
-          151.67;
-
+    const overtimeAgents = Object.entries(monthlyComparisons)
+      .map(([agentId, comparison]) => {
         return {
           agentId,
           name: agentLabel(agentId),
-          hours,
-          contract,
-          delta: hours - contract,
+          ...comparison,
         };
       })
       .filter((entry) => entry.delta > 0.01)
@@ -471,8 +465,8 @@ export const OperationsActionCenter: React.FC = () => {
         priority: 50,
         tone: "amber",
         icon: CalendarCheck2,
-        title: "Depassement horaire",
-        description: `${agent.name} depasse son volume contractuel.`,
+        title: "Planifié au-delà du contrat",
+        description: `${agent.name} : heures planifiées supérieures au contrat mensuel renseigné.`,
         meta: `${agent.hours.toFixed(1)}h / ${agent.contract.toFixed(1)}h (+${agent.delta.toFixed(1)}h)`,
         actionLabel: "Voir agent",
         onAction: () => {
@@ -553,6 +547,7 @@ export const OperationsActionCenter: React.FC = () => {
     siteId,
     sites,
     stats.agentContractualHours,
+    monthlyComparisons,
     stats.agentMonthlyHours,
     stats.maxDurationViolations,
     stats.sstCoverageWarnings,
@@ -568,7 +563,7 @@ export const OperationsActionCenter: React.FC = () => {
           className="h-12 rounded-2xl border-emerald-500/30 bg-background/95 px-4 font-black text-emerald-700 shadow-2xl shadow-slate-900/15 backdrop-blur-xl hover:bg-emerald-500/10 dark:text-emerald-300"
         >
           <CheckCircle2 className="mr-2 h-4 w-4" />
-          Tout est calme
+          Aucune action détectée
         </Button>
       </div>
     );

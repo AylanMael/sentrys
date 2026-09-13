@@ -2,13 +2,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireTenantUser } from "@/app/api/_utils/withTenant";
+import { canReadBackoffice } from "@/lib/auth/role";
+import { pointageContext } from "@/lib/activity/pointage-context";
 
 export const runtime = "nodejs";
 
 /* ================= helpers ================= */
 
 function json(status: number, body: unknown) {
-  return NextResponse.json(body, { status });
+  return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
 function serverError(e: unknown, tag: string) {
@@ -43,6 +45,7 @@ function normalize(v: string | null): string {
 export async function GET(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
+  if (!canReadBackoffice(auth.role)) return json(403, { ok: false, error: "Accès réservé au backoffice." });
 
   const url = new URL(req.url);
   const limit = parseLimit(url.searchParams.get("limit"), 20);
@@ -50,6 +53,7 @@ export async function GET(req: NextRequest) {
   const entityType = normalize(url.searchParams.get("entityType"));
   const action = normalize(url.searchParams.get("action"));
   const cursor = normalize(url.searchParams.get("cursor")); // last doc id
+  const excludePointages = url.searchParams.get("excludePointages") === "true";
 
   try {
     // ✅ where() d'abord
@@ -68,13 +72,17 @@ export async function GET(req: NextRequest) {
       const cursorSnap = await adminDb.collection("activity").doc(cursor).get();
       if (cursorSnap.exists) {
         const d = cursorSnap.data() as Record<string, unknown> | undefined;
+        if (d?.tenantId !== auth.tenantId) return json(403, { ok: false, error: "Curseur non autorisé." });
         q = q.startAfter(d?.createdAt ?? null, cursorSnap.id);
       }
     }
 
     const snap = await q.limit(limit).get();
 
-    const items = snap.docs.map((d) => {
+    const context = pointageContext(auth.tenantId, async (collection, id) =>
+      (await adminDb.collection(collection).doc(id).get()).data());
+    const visible = snap.docs.filter(d => !excludePointages || !["assignment.checked_in", "assignment.checked_out"].includes(d.data().action));
+    const items = await Promise.all(visible.map(async (d) => {
       const x = d.data() as Record<string, unknown>;
       return {
         id: d.id,
@@ -86,10 +94,12 @@ export async function GET(req: NextRequest) {
         actorEmail: (x.actorEmail as string) ?? null,
         actorRole: (x.actorRole as string) ?? null,
         createdAtIso: toIso(x.createdAt),
+        ...await context(x),
       };
-    });
+    }));
 
-    const nextCursor = snap.docs.length ? snap.docs[snap.docs.length - 1].id : null;
+    // Cursor follows scanned documents, including a page containing only hidden pointages.
+    const nextCursor = snap.docs.length === limit ? snap.docs[snap.docs.length - 1].id : null;
 
     return json(200, {
       ok: true,

@@ -18,6 +18,9 @@ type ActivityItem = {
   message: string | null;
   severity: "info" | "warning" | "critical";
   actorEmail: string | null;
+  actorName?: string | null;
+  agentId?: string | null;
+  siteName?: string | null;
   actorRole: string | null;
   createdAtIso: string | null;
 };
@@ -224,7 +227,8 @@ export function ActivityFeed({ limit = 6 }: { limit?: number }) {
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                     <span>{when(it.createdAtIso)}</span>
                     <span>•</span>
-                    <span>{it.actorEmail ?? "—"}</span>
+                    <span>{it.actorName ?? it.actorEmail ?? "—"}</span>
+                    {it.siteName && <span>Site : {it.siteName}</span>}
                     {role ? (
                       <>
                         <span>•</span>

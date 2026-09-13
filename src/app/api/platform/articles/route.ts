@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { forbidden, isSuperAdmin, requireTenantUser } from "@/app/api/_utils/withTenant";
+import { requirePlatformUser as authorize } from "@/lib/auth/platform";
 import { adminDb } from "@/lib/firebase/admin";
 import { articleGuidance, buildArticleDescription, listManagedPosts, readingTimeMinutes, slugifyArticle } from "@/lib/blog";
 
 export const runtime = "nodejs";
 function json(status: number, body: unknown) { const response = NextResponse.json(body, { status }); response.headers.set("Cache-Control", "no-store"); return response; }
 function value(input: unknown) { return String(input ?? "").trim(); }
-async function authorize(req: NextRequest) { const auth = await requireTenantUser(req); if (!auth.ok) return auth; if (!isSuperAdmin(auth.role) || auth.tenantId !== "platform") return { ok: false as const, res: forbidden("Super administrateur plateforme requis") }; return auth; }
 
 export async function GET(req: NextRequest) {
   const auth = await authorize(req); if (!auth.ok) return auth.res;

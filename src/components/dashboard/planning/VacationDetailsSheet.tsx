@@ -1,4 +1,5 @@
 "use client";
+import { toParisDateTimeValue, parsePlanningEdit } from "@/lib/planning/paris-time";
 
 import React from "react";
 import {
@@ -50,12 +51,7 @@ import { MISSION_TYPE_OPTIONS } from "@/lib/planning/mission-types";
 const SLOT_STEP_MINUTES = 30;
 
 function toLocalDateTimeValue(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
+  return toParisDateTimeValue(date);
 }
 
 function buildTimeOptions() {
@@ -170,18 +166,18 @@ export const VacationDetailsSheet: React.FC = () => {
   const handleScheduleSave = async () => {
     if (isLocked) return;
 
-    const nextStart = new Date(scheduleDraft.startAt);
-    const nextEnd = new Date(scheduleDraft.endAt);
+    const nextStart = parsePlanningEdit(scheduleDraft.startAt, vacation.startAtIso);
+    const nextEnd = parsePlanningEdit(scheduleDraft.endAt, vacation.endAtIso);
 
     if (
-      Number.isNaN(nextStart.getTime()) ||
-      Number.isNaN(nextEnd.getTime()) ||
+      !nextStart ||
+      !nextEnd ||
       nextEnd.getTime() <= nextStart.getTime()
     ) {
       toast({
         variant: "destructive",
         title: "Horaires invalidés",
-        description: "La fin doit être postérieure au début.",
+        description: "La fin doit être postérieure au début. Les heures inexistantes ou ambiguës au changement d’heure de Paris ne sont pas acceptées.",
       });
       return;
     }
@@ -189,8 +185,8 @@ export const VacationDetailsSheet: React.FC = () => {
     setScheduleSaving(true);
     try {
       const ok = await updateVacation(vacation.id, {
-        startAt: scheduleDraft.startAt,
-        endAt: scheduleDraft.endAt,
+        startAt: nextStart.toISOString(),
+        endAt: nextEnd.toISOString(),
       });
 
       if (ok) {
@@ -215,11 +211,11 @@ export const VacationDetailsSheet: React.FC = () => {
     setInitialCreateData({
       startAt:
         vacation.startAtIso
-          ? toLocalDateTimeValue(new Date(vacation.startAtIso))
+          ? vacation.startAtIso
           : scheduleDraft.startAt,
       endAt:
         vacation.endAtIso
-          ? toLocalDateTimeValue(new Date(vacation.endAtIso))
+          ? vacation.endAtIso
           : scheduleDraft.endAt,
       siteId: vacation.siteId ?? undefined,
     });
@@ -324,10 +320,10 @@ export const VacationDetailsSheet: React.FC = () => {
               </span>
               <div className="flex items-center gap-2 font-medium">
                 <Calendar className="h-3.5 w-3.5 text-primary" />
-                {start ? format(start, "dd MMM yyyy", { locale: fr }) : "-"}
+                {start ? start.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "short", year: "numeric" }) : "-"}
               </div>
               <div className="text-lg font-bold">
-                {start ? format(start, "HH:mm") : "-"}
+                {start ? toParisDateTimeValue(start).slice(11) : "-"} · Paris
               </div>
             </div>
 
@@ -337,10 +333,10 @@ export const VacationDetailsSheet: React.FC = () => {
               </span>
               <div className="flex items-center gap-2 font-medium">
                 <Calendar className="h-3.5 w-3.5 text-primary" />
-                {end ? format(end, "dd MMM yyyy", { locale: fr }) : "-"}
+                {end ? end.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "short", year: "numeric" }) : "-"}
               </div>
               <div className="text-lg font-bold">
-                {end ? format(end, "HH:mm") : "-"}
+                {end ? toParisDateTimeValue(end).slice(11) : "-"} · Paris
               </div>
             </div>
           </div>

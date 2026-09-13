@@ -54,7 +54,7 @@ export function qAgentAssignments(db: Firestore, tenantId: string, agentId: stri
     collection(db, "assignments"),
     where("tenantId", "==", tenantId),
     where("agentId", "==", agentId),
-    where("status", "==", "assigned"),
+    where("status", "in", ["assigned", "present"]),
     orderBy("updatedAt", "desc"),
     limit(10)
   );

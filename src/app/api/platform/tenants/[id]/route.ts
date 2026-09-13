@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 
-import {
-  forbidden,
-  isSuperAdmin,
-  requireTenantUser,
-} from "@/app/api/_utils/withTenant";
+import { requirePlatformUser } from "@/lib/auth/platform";
 import {
   computeEffectiveLimits,
   getPlan,
@@ -19,6 +15,11 @@ export const runtime = "nodejs";
 type RiskLevel = "ok" | "watch" | "critical";
 
 type PlanId = "free" | "starter" | "pro" | "growth";
+type SuspensionMode = "commercial" | "security";
+
+function effectiveSuspensionMode(status: string, value: unknown): SuspensionMode | null {
+  return status === "suspended" ? (value === "commercial" ? "commercial" : "security") : null;
+}
 
 type TenantUserRow = {
   id: string;
@@ -525,12 +526,8 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireTenantUser(req);
+  const auth = await requirePlatformUser(req, "Super admin SaaS required");
   if (!auth.ok) return auth.res;
-
-  if (!isSuperAdmin(auth.role)) {
-    return forbidden("Super admin SaaS required");
-  }
 
   const { id: rawId } = await ctx.params;
   const tenantId = decodeURIComponent(rawId ?? "").trim();
@@ -668,6 +665,8 @@ export async function GET(
         id: tenantId,
         name: tenantName(tenantId, tenantData),
         status,
+        suspensionMode: effectiveSuspensionMode(status, tenantData.suspensionMode),
+        suspendedAtIso: toIso(tenantData.suspendedAt),
         plan: tenantPlan(tenantData),
         ownerEmail: tenantOwnerEmail(tenantData),
         createdAtIso: toIso(tenantData.createdAt),
@@ -703,12 +702,8 @@ export async function PATCH(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireTenantUser(req);
+  const auth = await requirePlatformUser(req, "Super admin SaaS required");
   if (!auth.ok) return auth.res;
-
-  if (!isSuperAdmin(auth.role)) {
-    return forbidden("Super admin SaaS required");
-  }
 
   const { id: rawId } = await ctx.params;
   const tenantId = decodeURIComponent(rawId ?? "").trim();
@@ -916,7 +911,7 @@ export async function PATCH(
       }
 
       const tenantData = tenantSnap.data() as Record<string, unknown>;
-      const previousStatus = text(tenantData.status, "pending_setup").toLowerCase();
+      let previousStatus = text(tenantData.status, "pending_setup").toLowerCase();
       if (previousStatus === "active") {
         return json(409, {
           ok: false,
@@ -958,10 +953,22 @@ export async function PATCH(
         }
 
         const now = FieldValue.serverTimestamp();
+        const freshTenantData = freshTenantSnap.data() as Record<string, unknown>;
+        previousStatus = text(freshTenantData.status, "pending_setup").toLowerCase();
+        if (previousStatus === "active") {
+          throw httpError("Agence deja active.", 409);
+        }
+        const activationPreviousMode = effectiveSuspensionMode(
+          previousStatus, freshTenantData.suspensionMode
+        );
         tx.set(
           tenantRef,
           {
             status: "active",
+            suspensionMode: FieldValue.delete(),
+            suspendedAt: FieldValue.delete(),
+            suspendedBy: FieldValue.delete(),
+            suspensionReason: FieldValue.delete(),
             onboarding: {
               status: "active",
               ownerEmail: onboarding.ownerEmail,
@@ -1006,6 +1013,8 @@ export async function PATCH(
           metadata: {
             previousStatus,
             nextStatus: "active",
+            previousSuspensionMode: activationPreviousMode,
+            nextSuspensionMode: null,
             onboarding,
             confirmation,
           },
@@ -1504,6 +1513,11 @@ export async function PATCH(
       });
     }
 
+    if (targetStatus === "suspended" && body.suspensionMode !== undefined
+      && body.suspensionMode !== "commercial" && body.suspensionMode !== "security") {
+      return json(400, { ok: false, error: "Mode invalide. Utilisez commercial ou security." });
+    }
+
     const reason = text(body.reason);
     if (reason.length < 12) {
       return json(400, {
@@ -1529,6 +1543,8 @@ export async function PATCH(
       tenantName: string;
       previousStatus: string;
       status: "active" | "suspended";
+      previousSuspensionMode: SuspensionMode | null;
+      suspensionMode: SuspensionMode | null;
       auditId: string;
     } | null = null;
 
@@ -1541,8 +1557,14 @@ export async function PATCH(
       const tenantData = tenantSnap.data() as Record<string, unknown>;
       const previousStatus = text(tenantData.status, "active").toLowerCase();
       const tenantDisplayName = tenantName(tenantId, tenantData);
+      const previousSuspensionMode = effectiveSuspensionMode(previousStatus, tenantData.suspensionMode);
+      const nextSuspensionMode: SuspensionMode | null = targetStatus === "suspended"
+        ? (body.suspensionMode as SuspensionMode | undefined) ?? previousSuspensionMode ?? "commercial"
+        : null;
+      const modeChanged = previousStatus === "suspended" && targetStatus === "suspended"
+        && previousSuspensionMode !== nextSuspensionMode;
 
-      if (previousStatus === targetStatus) {
+      if (previousStatus === targetStatus && !modeChanged) {
         throw httpError("Agence deja dans le statut " + targetStatus + ".", 409);
       }
 
@@ -1553,7 +1575,11 @@ export async function PATCH(
       };
 
       if (targetStatus === "suspended") {
-        statusPatch.suspendedAt = FieldValue.serverTimestamp();
+        statusPatch.suspensionMode = nextSuspensionMode;
+        // Keep the original mission cutoff on every mode switch, even if absent.
+        if (previousStatus !== "suspended") {
+          statusPatch.suspendedAt = FieldValue.serverTimestamp();
+        }
         statusPatch.suspendedBy = auth.uid;
         statusPatch.suspensionReason = reason;
       } else {
@@ -1561,6 +1587,7 @@ export async function PATCH(
         statusPatch.reactivatedBy = auth.uid;
         statusPatch.reactivationReason = reason;
         statusPatch.suspendedAt = FieldValue.delete();
+        statusPatch.suspensionMode = FieldValue.delete();
         statusPatch.suspendedBy = FieldValue.delete();
         statusPatch.suspensionReason = FieldValue.delete();
       }
@@ -1569,11 +1596,11 @@ export async function PATCH(
 
       tx.set(auditRef, {
         action:
-          targetStatus === "suspended"
+          modeChanged ? "tenant.suspension_mode.change" : targetStatus === "suspended"
             ? "tenant.suspend"
             : "tenant.reactivate",
         actionLabel:
-          targetStatus === "suspended"
+          modeChanged ? "Changement de mode de suspension" : targetStatus === "suspended"
             ? "Suspension agence SaaS"
             : "Reactivation agence SaaS",
         tenantId,
@@ -1589,6 +1616,8 @@ export async function PATCH(
         metadata: {
           previousStatus,
           nextStatus: targetStatus,
+          previousSuspensionMode,
+          nextSuspensionMode,
           confirmation,
         },
         createdAt: FieldValue.serverTimestamp(),
@@ -1599,6 +1628,8 @@ export async function PATCH(
         tenantName: tenantDisplayName,
         previousStatus,
         status: targetStatus,
+        previousSuspensionMode,
+        suspensionMode: nextSuspensionMode,
         auditId: auditRef.id,
       };
     });

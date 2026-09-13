@@ -1,4 +1,5 @@
 import { adminDb } from "@/lib/firebase/admin";
+import { parsePlanningDateTime } from "@/lib/planning/paris-time";
 import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { canReadBackoffice, isAgentRole } from "@/lib/auth/role";
 import { computeAgentCompliance } from "@/lib/agents/compliance";
@@ -37,10 +38,7 @@ export function normalizeText(v: unknown) {
 }
 
 export function parseDateTimeIso(v: unknown): Date | null {
-  const s = normalizeText(v);
-  if (!s) return null;
-  const d = new Date(s);
-  return Number.isFinite(d.getTime()) ? d : null;
+  return parsePlanningDateTime(v);
 }
 
 export function safeArr(v: unknown): string[] {

@@ -22,9 +22,12 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { usePlanning } from "./PlanningContext";
+import { PlanningSyncStatus } from "./PlanningSyncStatus";
 
 export const OperationalSummary: React.FC = () => {
-  const { ops, loading, stats, conflictIndex } = usePlanning();
+  const { ops, loading, stats, conflictIndex, indicatorScope } = usePlanning();
+
+  if (!indicatorScope.serverConfirmed) return <PlanningSyncStatus loading={loading} />;
 
   const coverage = ops.total > 0 ? Math.round((ops.full / ops.total) * 100) : 100;
   const conflictCount = conflictIndex.size;

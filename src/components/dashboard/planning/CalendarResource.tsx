@@ -5,6 +5,7 @@ import { AlertCircle, GripVertical, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { PlanningStats } from "@/lib/planning/stats";
+import type { MonthlyComparison } from "@/lib/planning/indicator-scope";
 
 export type CalendarResourceInfo = {
   resource: {
@@ -22,6 +23,7 @@ interface CalendarResourceProps {
   info: CalendarResourceInfo;
   mode: "site" | "agent";
   stats: PlanningStats;
+  comparison?: MonthlyComparison;
   viewDensity?: "compact" | "comfortable";
 }
 
@@ -29,6 +31,7 @@ export const CalendarResource: React.FC<CalendarResourceProps> = ({
   info,
   mode,
   stats,
+  comparison,
   viewDensity = "comfortable",
 }) => {
   void mode;
@@ -49,9 +52,7 @@ export const CalendarResource: React.FC<CalendarResourceProps> = ({
         .join("")
         .slice(0, 2) || "AG";
     const monthlyHours = stats.agentMonthlyHours[info.resource.id] || 0;
-    const contractHours = stats.agentContractualHours[info.resource.id] || 151.67;
-    const delta = monthlyHours - contractHours;
-    const isOver = delta > 0;
+    const isOver = !!comparison && comparison.delta > 0;
 
     return (
       <div
@@ -82,8 +83,8 @@ export const CalendarResource: React.FC<CalendarResourceProps> = ({
           </div>
           {!isCompact && (
             <div className="mt-0.5 flex items-center gap-2 text-[9px] font-semibold text-slate-500 dark:text-slate-400">
-              <span>{monthlyHours.toFixed(1)} h</span>
-              <span>contrat {contractHours.toFixed(1)} h</span>
+              <span>{monthlyHours.toFixed(1)} h planifiées</span>
+              {comparison && <span>contrat {comparison.contract.toFixed(1)} h</span>}
             </div>
           )}
         </div>
@@ -162,7 +163,7 @@ export const CalendarResource: React.FC<CalendarResourceProps> = ({
         <div className="pl-8 text-[8px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {pendingCount > 0
             ? `${pendingCount} vacation${pendingCount > 1 ? "s" : ""} a couvrir`
-            : "Couverture maîtrisée"}
+            : "Aucun manque détecté"}
         </div>
       )}
     </div>

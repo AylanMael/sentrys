@@ -6,6 +6,9 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
+import luxonPlugin from "@fullcalendar/luxon3";
+import { PLANNING_TIME_ZONE } from "@/lib/planning/paris-time";
+import { calendarParisMutation, parisCalendarDay, parisMonthDisplay } from "@/lib/planning/calendar-paris";
 import frLocale from "@fullcalendar/core/locales/fr";
 import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
@@ -25,22 +28,14 @@ import {
   SlotLaneContentArg,
 } from "@fullcalendar/core";
 import type { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
-import { CalendarPlus, ClipboardList, Focus, GripVertical, RotateCcw, Sparkles, ZoomIn, ZoomOut } from "lucide-react";
+import { CalendarPlus, ClipboardList, Focus, GripVertical, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 import { CalendarEvent } from "./CalendarEvent";
 import { CalendarResource, type CalendarResourceInfo } from "./CalendarResource";
 import { CalendarContextMenu } from "./CalendarContextMenu";
-
-function toLocalDateTimeValue(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
+import { PlanningSiteSummary } from "./PlanningSiteSummary";
 
 type CalendarResourceMetricInfo = {
   resource: { id: string };
@@ -77,6 +72,8 @@ export const PlanningCalendar: React.FC = () => {
     setMode,
     tensionMode,
     stats,
+    monthlyComparisons,
+    indicatorScope,
     conflictIndex,
     pasteMode,
     performPasteAt,
@@ -282,15 +279,9 @@ export const PlanningCalendar: React.FC = () => {
         let displayEnd = v.endAtIso!;
 
         if (currentView === "resourceTimelineMonth") {
-           const s = new Date(v.startAtIso!);
-           s.setHours(0, 0, 0, 0);
-           displayStart = s.toISOString();
-
-           const e = new Date(v.endAtIso!);
-           if (e.getHours() !== 0 || e.getMinutes() !== 0) {
-             e.setHours(23, 59, 59, 999);
-             displayEnd = e.toISOString();
-           }
+          const display = parisMonthDisplay(v.startAtIso!, v.endAtIso!);
+          displayStart = display.start;
+          displayEnd = display.end;
         }
 
         const baseProps = {
@@ -326,6 +317,7 @@ export const PlanningCalendar: React.FC = () => {
             originalEnd: v.endAtIso!
           },
           editable: v.status !== "cancelled" && v.status !== "closed",
+          durationEditable: currentView !== "resourceTimelineMonth" && v.status !== "cancelled" && v.status !== "closed",
         };
 
         if (mode === "agent") {
@@ -473,25 +465,7 @@ export const PlanningCalendar: React.FC = () => {
     if (pasteMode && !pasteBusy) {
       performPasteAt(arg.date);
     } else {
-      const clickedDate = arg.date as Date;
-      const start = new Date(
-        clickedDate.getFullYear(),
-        clickedDate.getMonth(),
-        clickedDate.getDate(),
-        8,
-        0,
-        0,
-        0
-      );
-      const end = new Date(
-        clickedDate.getFullYear(),
-        clickedDate.getMonth(),
-        clickedDate.getDate(),
-        18,
-        0,
-        0,
-        0
-      );
+      const { day } = parisCalendarDay(arg.date);
       const dateClick = arg as DateClickWithResource;
       const clickedResourceId =
         mode === "site" && dateClick.resource?.id && dateClick.resource.id !== "unassigned"
@@ -499,8 +473,8 @@ export const PlanningCalendar: React.FC = () => {
           : undefined;
 
       setInitialCreateData({
-        startAt: toLocalDateTimeValue(start),
-        endAt: toLocalDateTimeValue(end),
+        startAt: `${day}T08:00`,
+        endAt: `${day}T18:00`,
         siteId: clickedResourceId,
       });
       setCreateOpen(true);
@@ -511,11 +485,18 @@ export const PlanningCalendar: React.FC = () => {
   const handleEventChange = useCallback(async (arg: EventDropArg | EventResizeDoneArg) => {
     const v = arg.event.extendedProps.v as VacationApiItem;
     if (v.status === "cancelled" || v.status === "closed") { arg.revert(); return; }
-    const id = arg.event.id.split("-")[0];
-    const patch: Partial<VacationApiItem> = {
-      startAt: arg.event.startStr,
-      endAt: arg.event.endStr,
-    };
+    const id = v.id;
+    let patch: Partial<VacationApiItem>;
+    try {
+      if (!v.startAtIso || !v.endAtIso) throw new Error("Horaires source incomplets.");
+      patch = calendarParisMutation(v.startAtIso, v.endAtIso,
+        "delta" in arg ? arg.delta : arg.startDelta,
+        "delta" in arg ? arg.delta : arg.endDelta);
+    } catch (error) {
+      arg.revert();
+      toast({ variant: "destructive", title: "Déplacement impossible", description: error instanceof Error ? error.message : "Vérifiez les horaires." });
+      return;
+    }
     captureScrollPosition();
 
     const resourceChange = arg as EventChangeWithResource;
@@ -548,7 +529,7 @@ export const PlanningCalendar: React.FC = () => {
   );
 
   const renderResourceLabel = (info: CalendarResourceInfo) => (
-    <CalendarResource info={info} mode={mode} stats={stats} viewDensity={effectiveDensity} />
+    <CalendarResource info={info} mode={mode} stats={stats} comparison={monthlyComparisons[info.resource.id]} viewDensity={effectiveDensity} />
   );
 
   const handleOpenSiteTemplate = useCallback(() => {
@@ -559,120 +540,48 @@ export const PlanningCalendar: React.FC = () => {
   const handleQuickCreate = useCallback(() => {
     const baseDate = range?.from ? new Date(range.from) : new Date();
     const anchorDate = Number.isFinite(baseDate.getTime()) ? baseDate : new Date();
-    const start = new Date(anchorDate);
-    start.setHours(8, 0, 0, 0);
-
-    const end = new Date(anchorDate);
-    end.setHours(18, 0, 0, 0);
+    const { day } = parisCalendarDay(anchorDate);
 
     const preferredSiteId = siteId !== "all" ? siteId : sites[0]?.id;
 
     setInitialCreateData({
-      startAt: toLocalDateTimeValue(start),
-      endAt: toLocalDateTimeValue(end),
+      startAt: `${day}T08:00`,
+      endAt: `${day}T18:00`,
       ...(preferredSiteId ? { siteId: preferredSiteId } : {}),
     });
     setCreateOpen(true);
   }, [range?.from, setCreateOpen, setInitialCreateData, siteId, sites]);
 
-  const showEmptyStarter = !loading && filteredVacations.length === 0;
+  const showEmptyStarter = indicatorScope.serverConfirmed && !loading && filteredVacations.length === 0;
 
   return (
     <div
       ref={containerRef}
       style={calendarZoomStyle}
       className={cn(
-        "flex-1 w-full bg-white/40 dark:bg-[#0f121e]/40 backdrop-blur-xl border border-white/20 dark:border-white/5 rounded-2xl overflow-hidden shadow-2xl relative group flex flex-col transition-all duration-500 excel-grid",
+        "h-[40rem] shrink-0 lg:h-auto lg:flex-1 lg:min-h-0 w-full bg-white/40 dark:bg-[#0f121e]/40 backdrop-blur-xl border border-white/20 dark:border-white/5 rounded-2xl overflow-hidden shadow-2xl relative group flex flex-col transition-all duration-500 excel-grid",
         effectiveDensity === "compact" ? "density-compact" : "density-comfortable"
       )}
     >
-      {/* Operational Context Header (inspired by screenshot 1) */}
-      {siteId !== "all" && (
-        <div className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-border/10 p-4 flex flex-wrap items-center gap-6 animate-in slide-in-from-top duration-500">
-           <div className="flex flex-col gap-1">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Client</span>
-             <div className="h-8 px-3 rounded bg-white dark:bg-slate-800 border border-border/50 flex items-center shadow-sm">
-                <span className="text-xs font-bold text-primary truncate max-w-[200px]">SAMSIC SECURITE</span>
-             </div>
-           </div>
-           <div className="flex flex-col gap-1">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Site</span>
-             <div className="h-8 px-3 rounded bg-white dark:bg-slate-800 border border-border/50 flex items-center shadow-sm">
-                <span className="text-xs font-bold truncate max-w-[200px]">{sites.find(s => s.id === siteId)?.name || "SITE"}</span>
-             </div>
-           </div>
-           <div className="flex flex-col gap-1">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Presta</span>
-             <div className="h-8 px-3 rounded bg-white dark:bg-slate-800 border border-border/50 flex items-center shadow-sm">
-                <span className="text-xs font-bold">SURVEILLANCE GARDIENNAGE</span>
-             </div>
-           </div>
-           <div className="flex flex-col gap-1 ml-auto">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Titre</span>
-             <div className="h-8 px-3 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center shadow-sm">
-                <span className="text-[10px] font-black text-indigo-600">ADS</span>
-             </div>
-           </div>
-           <div className="flex flex-col gap-1">
-             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Activite</span>
-             <div className="h-8 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center shadow-sm">
-                <span className="text-[10px] font-black text-emerald-600 uppercase">Agent de Sécurité</span>
-             </div>
-           </div>
-        </div>
-      )}
-
+      {siteId !== "all" && <PlanningSiteSummary site={sites.find(site => site.id === siteId)} />}
       {showEmptyStarter && (
-        <div className="pointer-events-none absolute inset-x-4 top-20 z-30 flex justify-center md:top-24">
-          <div className="pointer-events-auto w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-primary/20 bg-background/95 shadow-2xl shadow-slate-900/10 backdrop-blur-xl dark:bg-slate-950/95">
-            <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
-              <div className="flex min-w-0 items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-black uppercase tracking-[0.22em] text-primary">
-                    Demarrage guide
-                  </p>
-                  <h3 className="mt-1 text-lg font-black text-foreground">
-                    Planning vierge, on le remplit proprement.
-                  </h3>
-                  <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                    Utilise un planning type pour créer une semaine complete par site,
-                    ou ajoute une premiere vacation standard 08h-18h. Le but : que
-                    meme un novice sache quoi faire en moins de dix secondes.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex shrink-0 flex-col gap-2 sm:flex-row md:flex-col">
-                <Button
-                  type="button"
-                  onClick={handleOpenSiteTemplate}
-                  className="h-11 rounded-xl px-4 text-xs font-black uppercase tracking-[0.16em]"
-                >
-                  <ClipboardList className="mr-2 h-4 w-4" />
-                  Remplir un site
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleQuickCreate}
-                  className="h-11 rounded-xl px-4 text-xs font-bold"
-                >
-                  <CalendarPlus className="mr-2 h-4 w-4" />
-                  Vacation 08h-18h
-                </Button>
-              </div>
-            </div>
+        <details className="shrink-0 border-b border-border/40 bg-primary/5 px-3 py-2 text-sm">
+          <summary className="cursor-pointer rounded font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Aucune vacation sur ce périmètre · Créer un planning</summary>
+          <div className="mt-2 flex max-h-28 flex-wrap gap-2 overflow-y-auto">
+            <Button type="button" onClick={handleOpenSiteTemplate} className="h-11 rounded-xl text-xs">
+              <ClipboardList className="mr-2 h-4 w-4" />Remplir un site
+            </Button>
+            <Button type="button" variant="outline" onClick={handleQuickCreate} className="h-11 rounded-xl text-xs">
+              <CalendarPlus className="mr-2 h-4 w-4" />Vacation 08h-18h
+            </Button>
           </div>
-        </div>
+        </details>
       )}
       {autoDensityAllowed && densityPressure && viewDensity !== "compact" && (
         <span className="sr-only">Mode compact automatique actif.</span>
       )}
 
-      <div className="pointer-events-none absolute right-4 top-2.5 z-30 max-md:relative max-md:top-0 max-md:right-0 max-md:p-2 max-md:flex max-md:justify-center max-md:pointer-events-auto">
+      <div className="pointer-events-none absolute right-4 top-2.5 z-30 max-lg:relative max-lg:top-0 max-lg:right-0 max-lg:p-2 max-lg:flex max-lg:justify-center max-lg:pointer-events-auto">
         <div className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-slate-200/80 bg-white/95 p-1 shadow-xl shadow-slate-900/10 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95">
           <Button
             type="button"
@@ -703,7 +612,8 @@ export const PlanningCalendar: React.FC = () => {
       </div>
       <FullCalendar
         ref={calendarRef}
-        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, resourceTimelinePlugin]}
+        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, resourceTimelinePlugin, luxonPlugin]}
+        timeZone={PLANNING_TIME_ZONE}
         initialView="resourceTimelineMonth"
         schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
         resourceAreaWidth={`${resourceAreaWidthPx}px`}
@@ -714,7 +624,7 @@ export const PlanningCalendar: React.FC = () => {
             width: zoomedDimension(effectiveDensity === "compact" ? 185 : 220)
           },
           {
-            headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">REALISE</span>,
+            headerContent: () => <span className="text-[9px] font-black opacity-60" title="Heures des vacations sur la période filtrée, pas des pointages">PLANIFIÉ</span>,
             cellContent: (info: CalendarResourceMetricInfo) => {
                const hours = stats.agentMonthlyHours[info.resource.id] || 0;
                return <div className="text-right pr-2 text-[10px] font-black tabular-nums">{hours.toFixed(1)}h</div>;
@@ -724,17 +634,17 @@ export const PlanningCalendar: React.FC = () => {
           {
             headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">CONTRAT</span>,
             cellContent: (info: CalendarResourceMetricInfo) => {
-               const chours = stats.agentContractualHours[info.resource.id] || 151.67;
-               return <div className="text-right pr-2 text-[10px] font-black tabular-nums">{chours.toFixed(1)}h</div>;
+               const comparison = monthlyComparisons[info.resource.id];
+               return <div title="Contrat mensuel renseigné, comparaison sur mois complet uniquement" className="text-right pr-2 text-[10px] font-black tabular-nums">{comparison ? `${comparison.contract.toFixed(1)}h` : "—"}</div>;
             },
             width: zoomedDimension(effectiveDensity === "compact" ? 62 : 75)
           },
           {
             headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">DELTA</span>,
             cellContent: (info: CalendarResourceMetricInfo) => {
-               const hours = stats.agentMonthlyHours[info.resource.id] || 0;
-               const chours = stats.agentContractualHours[info.resource.id] || 151.67;
-               const delta = hours - chours;
+               const comparison = monthlyComparisons[info.resource.id];
+               if (!comparison) return <div title="Comparaison indisponible : vérifiez la période, les filtres et le contrat renseigné" className="text-right pr-2 text-[10px] text-muted-foreground">—</div>;
+               const delta = comparison.delta;
                return (
                  <div className={cn(
                    "text-right pr-2 text-[10px] font-black tabular-nums",
@@ -749,9 +659,9 @@ export const PlanningCalendar: React.FC = () => {
           {
             headerContent: () => <span className="text-[9px] font-black pointer-events-none opacity-60">%</span>,
             cellContent: (info: CalendarResourceMetricInfo) => {
-               const hours = stats.agentMonthlyHours[info.resource.id] || 0;
-               const chours = stats.agentContractualHours[info.resource.id] || 151.67;
-               const ratio = (hours / chours) * 100;
+               const comparison = monthlyComparisons[info.resource.id];
+               if (!comparison) return <div title="Comparaison indisponible" className="text-right pr-2 text-[10px] text-muted-foreground">—</div>;
+               const ratio = comparison.ratio;
                return <div className="text-right pr-2 text-[10px] font-black tabular-nums">{Math.round(ratio)}%</div>;
             },
             width: zoomedDimension(effectiveDensity === "compact" ? 42 : 50)
@@ -778,13 +688,14 @@ export const PlanningCalendar: React.FC = () => {
         eventMinHeight={eventMinHeightPx}
         slotLaneClassNames={(arg: SlotLaneContentArg) => {
           if (!arg.date) return [];
-          const hour = arg.date.getHours();
+          const { hour, weekday } = parisCalendarDay(arg.date);
           const isNight = hour < 6 || hour >= 21;
-          const isWeekend = arg.date.getDay() === 0 || arg.date.getDay() === 6;
+          const isWeekend = weekday === 0 || weekday === 6;
           return [isNight ? "slot-night" : "", isWeekend ? "slot-weekend" : ""].filter(Boolean);
         }}
         slotLabelClassNames={(arg: SlotLabelContentArg) => {
-          const isWeekend = arg.date.getDay() === 0 || arg.date.getDay() === 6;
+          const { weekday } = parisCalendarDay(arg.date);
+          const isWeekend = weekday === 0 || weekday === 6;
           return isWeekend ? ["slot-weekend-label"] : [];
         }}
         headerToolbar={{
@@ -850,7 +761,7 @@ export const PlanningCalendar: React.FC = () => {
         snapDuration="00:15:00"
         scrollTimeReset={false}
         editable={true}
-        eventDurationEditable={true}
+        eventDurationEditable={currentView !== "resourceTimelineMonth"}
         selectable={true}
         selectMirror={true}
         unselectAuto={true}
@@ -929,9 +840,24 @@ export const PlanningCalendar: React.FC = () => {
           padding-bottom: 10px;
         }
 
-        @media (min-width: 768px) {
+        @media (min-width: 1024px) {
           .excel-grid .fc-header-toolbar {
             padding-right: 160px !important;
+          }
+        }
+
+        @media (max-width: 1023px) {
+          .excel-grid .fc-header-toolbar {
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 12px;
+          }
+          .excel-grid:has(details[open]) {
+            height: 56rem;
+          }
+          .excel-grid .fc-toolbar-title {
+            font-size: 1.25rem;
+            text-align: center;
           }
         }
 

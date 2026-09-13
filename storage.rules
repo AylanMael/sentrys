@@ -20,6 +20,20 @@ service firebase.storage {
       return firestore.get(tenantUserPath()).data;
     }
 
+    function tenantPath(tenantId) {
+      return /databases/(default)/documents/tenants/$(tenantId);
+    }
+
+    function tenantAccess(tenantId, writing) {
+      let tenant = firestore.get(tenantPath(tenantId)).data;
+      return firestore.exists(tenantPath(tenantId))
+        && (
+          (tenantId == "platform" && tenantUser().role == "super_admin")
+          || tenant.get("status", "") != "suspended"
+          || (!writing && tenant.get("suspensionMode", "security") == "commercial")
+        );
+    }
+
     function belongsToTenant(tenantId) {
       return hasActiveTenantUser()
         && tenantUser().tenantId == tenantId;
@@ -31,15 +45,12 @@ service firebase.storage {
     }
 
     function isOwnAgentRecord(tenantId, agentId) {
+      let linkedAgentId = tenantUser().get("agentId", null);
       return belongsToTenant(tenantId)
         && tenantUser().role == "agent"
-        && (
-          request.auth.uid == agentId
-          || (
-            "agentId" in tenantUser()
-            && tenantUser().agentId == agentId
-          )
-        );
+        && (linkedAgentId is string && linkedAgentId.size() > 0
+          ? linkedAgentId == agentId
+          : (linkedAgentId == null || linkedAgentId == "") && request.auth.uid == agentId);
     }
 
     function canAccessAgentFiles(tenantId, agentId) {
@@ -47,34 +58,15 @@ service firebase.storage {
         || isOwnAgentRecord(tenantId, agentId);
     }
 
-    function isAllowedPhoto() {
-      return request.resource != null
-        && request.resource.size > 0
-        && request.resource.size <= 5 * 1024 * 1024
-        && request.resource.contentType.matches("image/(jpeg|png|webp)");
-    }
-
-    function isAllowedDocument() {
-      return request.resource != null
-        && request.resource.size > 0
-        && request.resource.size <= 12 * 1024 * 1024
-        && request.resource.contentType.matches(
-          "(application/pdf|image/(jpeg|png|webp)|application/msword|application/vnd\\.openxmlformats-officedocument\\.wordprocessingml\\.document)"
-        );
-    }
-
     match /tenants/{tenantId}/agents/{agentId}/photo/{fileName} {
-      allow read: if canAccessAgentFiles(tenantId, agentId);
-      allow create, update: if canAccessAgentFiles(tenantId, agentId)
-        && isAllowedPhoto();
-      allow delete: if canAccessAgentFiles(tenantId, agentId);
+      allow read: if canAccessAgentFiles(tenantId, agentId) && tenantAccess(tenantId, false);
+      // All file mutations use authenticated server routes (Admin SDK).
+      allow create, update, delete: if false;
     }
 
     match /tenants/{tenantId}/agents/{agentId}/documents/{fileName} {
-      allow read: if canAccessAgentFiles(tenantId, agentId);
-      allow create, update: if canAccessAgentFiles(tenantId, agentId)
-        && isAllowedDocument();
-      allow delete: if canAccessAgentFiles(tenantId, agentId);
+      allow read: if isTenantDocumentManager(tenantId) && tenantAccess(tenantId, false);
+      allow create, update, delete: if false;
     }
 
     match /{allPaths=**} {

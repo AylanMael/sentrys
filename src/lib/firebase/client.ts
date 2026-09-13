@@ -1,9 +1,9 @@
 "use client";
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
+import { getAuth, connectAuthEmulator, type Auth } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator, type Firestore } from "firebase/firestore";
+import { getStorage, connectStorageEmulator, type FirebaseStorage } from "firebase/storage";
 
 function parseFirebaseWebAppConfig() {
   const raw = process.env.FIREBASE_WEBAPP_CONFIG;
@@ -65,9 +65,28 @@ if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.proj
   );
 }
 
-const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const localEmulators = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true";
+if (localEmulators && (process.env.NODE_ENV !== "development"
+  || (typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname)))) {
+  throw new Error("Les émulateurs sont réservés au développement local.");
+}
+const app: FirebaseApp = getApps().length ? getApp() : initializeApp(localEmulators ? {
+  apiKey: "demo-local-only", projectId: "demo-sentrys-accounts",
+  authDomain: "localhost", storageBucket: "demo-sentrys-accounts.appspot.com",
+  appId: "demo-sentrys-local",
+} : firebaseConfig);
 const auth: Auth = getAuth(app);
 const db: Firestore = getFirestore(app);
 const storage: FirebaseStorage = getStorage(app);
+
+// Keep the marker on the Firebase app across development hot reloads.
+const emulatorApp = app as FirebaseApp & { sentrysEmulatorsConnected?: boolean };
+if (localEmulators && !emulatorApp.sentrysEmulatorsConnected) {
+  if (app.options.projectId !== "demo-sentrys-accounts") throw new Error("Projet émulateur incohérent : redémarrez la page.");
+  connectAuthEmulator(auth, "http://127.0.0.1:9099");
+  connectFirestoreEmulator(db, "127.0.0.1", 8091);
+  connectStorageEmulator(storage, "127.0.0.1", 9199);
+  emulatorApp.sentrysEmulatorsConnected = true;
+}
 
 export { app, auth, db, storage };

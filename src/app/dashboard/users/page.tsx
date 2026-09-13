@@ -402,6 +402,7 @@ export default function UsersPage() {
           email: inviteEmail,
           name: inviteName,
           role: inviteRole,
+          ...(inviteRole === "agent" ? { agentId: inviteAgentId } : {}),
         },
       });
 

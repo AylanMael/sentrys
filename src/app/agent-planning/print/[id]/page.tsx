@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { parisDayKey, parisFields, parisMonthStart, parisDays, parisFullDay, parisEndDaySuffix, PLANNING_TIME_ZONE } from "@/lib/planning/paris-display";
 import { useParams, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, Printer } from "lucide-react";
 
@@ -128,18 +129,20 @@ function formatRange(from?: string | null, to?: string | null) {
   if (!from || !to) return "Periode";
 
   const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
 
-  return `${formatter.format(new Date(from))} - ${formatter.format(new Date(to))}`;
+  return `${formatter.format(new Date(from))} - ${formatter.format(new Date(new Date(to).getTime() - 1))}`;
 }
 
 function formatMoment(value?: string | null) {
   if (!value) return "-";
 
   return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -149,6 +152,7 @@ function formatMoment(value?: string | null) {
 
 function formatPrintDate() {
   return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -203,6 +207,7 @@ function formatHour(value?: string | null) {
   if (!value) return "--:--";
 
   return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
@@ -216,41 +221,9 @@ function formatCompactHour(value?: string | null) {
   return minute === "00" ? `${hour}h` : `${hour}h${minute}`;
 }
 
-function formatCompactHourRange(
-  startValue?: string | null,
-  endValue?: string | null
-) {
-  const startDate = startValue ? new Date(startValue) : null;
-  const endDate = endValue ? new Date(endValue) : null;
-
-  if (
-    startDate &&
-    endDate &&
-    !Number.isNaN(startDate.getTime()) &&
-    !Number.isNaN(endDate.getTime()) &&
-    startDate.getHours() === 0 &&
-    startDate.getMinutes() === 0
-  ) {
-    const sameDayEnd =
-      startDate.getFullYear() === endDate.getFullYear() &&
-      startDate.getMonth() === endDate.getMonth() &&
-      startDate.getDate() === endDate.getDate() &&
-      endDate.getHours() === 23 &&
-      endDate.getMinutes() >= 55;
-    const nextDayMidnight =
-      endDate.getTime() ===
-      new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate() + 1
-      ).getTime();
-
-    if (sameDayEnd || nextDayMidnight) return "00h-24h";
-  }
-
-  const start = formatCompactHour(startValue);
-  const end = formatCompactHour(endValue);
-  return `${start}-${end}`;
+function formatCompactHourRange(startValue?: string | null, endValue?: string | null) {
+  if (parisFullDay(startValue, endValue)) return "00h-24h";
+  return `${formatCompactHour(startValue)}-${formatCompactHour(endValue)}${parisEndDaySuffix(startValue, endValue)}`;
 }
 
 function toMillis(value?: string | null) {
@@ -323,6 +296,7 @@ function formatHourQuantity(hours: number) {
 
 function formatMonthLabel(date: Date) {
   return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     month: "long",
     year: "numeric",
   }).format(date);
@@ -330,20 +304,13 @@ function formatMonthLabel(date: Date) {
 
 function formatDayHeader(date: Date) {
   return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     weekday: "narrow",
   }).format(date);
 }
 
 function toDayKey(value?: string | Date | null) {
-  if (!value) return null;
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return parisDayKey(value);
 }
 
 function getFirstMonthDate(
@@ -363,13 +330,14 @@ function getLastMonthDate(
   toIso?: string | null,
   vacations: DispatchVacationSummary[] = []
 ) {
-  const lastEndIso =
+  const lastStartIso =
     [...vacations]
       .reverse()
-      .find((vacation) => Boolean(vacation.endAtIso))
-      ?.endAtIso ?? null;
+      .find((vacation) => Boolean(vacation.startAtIso))
+      ?.startAtIso ?? null;
 
-  if (lastEndIso) return new Date(lastEndIso);
+  // Rows belong to the start day. A night ending next month must not add an empty page.
+  if (lastStartIso) return parisMonthStart(new Date(lastStartIso), 1);
   if (toIso) return new Date(toIso);
 
   return new Date();
@@ -402,22 +370,14 @@ function buildMonthlyGroups(
 
   const groups: MonthlyGroup[] = [];
   for (
-    let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-    cursor <= end;
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+    let cursor = parisMonthStart(start);
+    cursor < end;
+    cursor = parisMonthStart(cursor, 1)
   ) {
-    const year = cursor.getFullYear();
-    const monthNumber = cursor.getMonth();
-    const dayCount = new Date(year, monthNumber + 1, 0).getDate();
-
-    const days = Array.from({ length: dayCount }, (_, index) => {
-      const date = new Date(year, monthNumber, index + 1);
-      return {
-        key: toDayKey(date) ?? `${year}-${monthNumber}-${index + 1}`,
-        date,
-        vacations: vacationsByDay[toDayKey(date) ?? ""] ?? [],
-      };
-    });
+    const { year, month: monthNumber } = parisFields(cursor);
+    const days = parisDays(cursor, parisMonthStart(cursor, 1)).map(({ key, date }) => ({
+      key, date, vacations: vacationsByDay[key] ?? [],
+    }));
 
     groups.push({
       id: `${year}-${monthNumber + 1}`,
@@ -514,7 +474,7 @@ function getMissionLegendEntries(vacations: DispatchVacationSummary[]) {
 }
 
 function isWeekend(date: Date) {
-  const day = date.getDay();
+  const day = parisFields(date).weekday;
   return day === 0 || day === 6;
 }
 
@@ -672,24 +632,6 @@ export default function AgentPlanningPrintPage() {
         setError("Planning introuvable.");
         setLoading(false);
         return;
-      }
-
-      try {
-        const cached = window.localStorage.getItem(
-          `sentrys:print-dispatch:${params.id}`
-        );
-
-        if (cached) {
-          const parsed = JSON.parse(cached) as AgentDispatchRow;
-          if (mounted && parsed?.id === params.id) {
-            setDispatch(parsed);
-            setLoading(false);
-            setError(null);
-            return;
-          }
-        }
-      } catch {
-        // Non bloquant : on retombe sur l'API.
       }
 
       if (authLoading) return;
@@ -945,7 +887,7 @@ export default function AgentPlanningPrintPage() {
                         {month.label}
                       </h1>
                       <p className="mt-1 text-[11px] font-semibold text-slate-600">
-                        {formatRange(dispatch.fromIso, dispatch.toIso)}
+                        {formatRange(dispatch.fromIso, dispatch.toIso)} · Heure de Paris
                       </p>
                       <p className="mt-1 text-[10px] font-semibold text-slate-500">
                         {dispatch.vacationCount} service(s) - {monthTotal}
@@ -1026,7 +968,7 @@ export default function AgentPlanningPrintPage() {
                                     : "text-slate-900",
                                 ].join(" ")}
                               >
-                                {day.date.getDate()}
+                                {parisFields(day.date).day}
                               </div>
                             </th>
                           ))}

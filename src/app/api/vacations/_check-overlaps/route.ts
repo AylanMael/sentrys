@@ -1,6 +1,7 @@
 // src/app/api/vacations/_check-overlaps/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { parsePlanningDateTime as parseDateTimeIso } from "@/lib/planning/paris-time";
 
 import { requireTenantUser } from "@/app/api/_utils/withTenant";
 
@@ -38,13 +39,6 @@ function safeArr(v: unknown): string[] {
 
 function uniq(arr: string[]) {
   return Array.from(new Set(arr.map((x) => String(x)).filter(Boolean)));
-}
-
-function parseDateTimeIso(v: any): Date | null {
-  const s = normalizeText(v);
-  if (!s) return null;
-  const d = new Date(s);
-  return Number.isFinite(d.getTime()) ? d : null;
 }
 
 function toIso(ts: any) {

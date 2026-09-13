@@ -71,7 +71,7 @@ export default function PointagesPage() {
     </header>
 
     <section aria-label="Filtres des pointages" className="space-y-4 rounded-2xl border bg-card p-5">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <div><label htmlFor="attendance-date" className="text-sm font-medium">Journée suivie · Paris</label><Input id="attendance-date" type="date" value={date} onChange={e => setDate(e.target.value)} className="mt-2 min-h-11" /></div>
         <div><label htmlFor="attendance-agent" className="text-sm font-medium">Agent · lignes chargées</label><Input id="attendance-agent" value={agent} onChange={e => setAgent(e.target.value)} placeholder="Rechercher un nom" className="mt-2 min-h-11" /></div>
         <div><label htmlFor="attendance-site" className="text-sm font-medium">Site · lignes chargées</label><Input id="attendance-site" value={site} onChange={e => setSite(e.target.value)} placeholder="Rechercher un site" className="mt-2 min-h-11" /></div>

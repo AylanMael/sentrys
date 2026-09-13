@@ -1,8 +1,7 @@
 // src/app/api/clients/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { getAuth } from "firebase-admin/auth";
-import { normLower, norm } from "@/lib/api/text";
+import { requireTenantUser } from "@/app/api/_utils/withTenant";
 
 export const runtime = "nodejs";
 
@@ -16,64 +15,16 @@ function errorDétails(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function getToken(req: NextRequest) {
-  const h =
-    req.headers.get("authorization") ||
-    req.headers.get("Authorization") ||
-    req.headers.get("x-auth-token") ||
-    "";
-
-  if (!h) return null;
-
-  const s = h.trim();
-  if (s.toLowerCase().startsWith("bearer ")) {
-    return s.slice(7).trim();
-  }
-
-  return s;
-}
-
-async function getContext(req: NextRequest) {
-  const token = getToken(req);
-  if (!token) {
-    return { ok: false as const, status: 401, error: "Missing token" };
-  }
-
-  const decoded = await getAuth().verifyIdToken(token, true);
-  const uid = decoded.uid;
-
-  const tuSnap = await adminDb.collection("tenantUsers").doc(uid).get();
-  if (!tuSnap.exists) {
-    return { ok: false as const, status: 401, error: "No tenant profile" };
-  }
-
-  const tu = tuSnap.data() as Record<string, unknown>;
-  const status = normLower(tu?.status);
-  if (status !== "active") {
-    return { ok: false as const, status: 401, error: "User not active" };
-  }
-
-  const tenantId = norm(tu?.tenantId);
-  const role = normLower(tu?.role);
-
-  const canReadClients = ["super_admin", "owner", "admin", "manager"].includes(role);
-  if (!canReadClients) {
-    return { ok: false as const, status: 403, error: "Forbidden" };
-  }
-
-  return {
-    ok: true as const,
-    tenantId,
-  };
-}
-
 export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authCtx = await getContext(req);
-    if (!authCtx.ok) return json(401, { ok: false, error: authCtx.error });
+    const authCtx = await requireTenantUser(req);
+    if (!authCtx.ok) return authCtx.res;
+    if (!["super_admin", "owner", "admin", "manager"].includes(authCtx.role)) {
+      return json(403, { ok: false, error: "Forbidden" });
+    }
 
     const { id } = await ctx.params;
 

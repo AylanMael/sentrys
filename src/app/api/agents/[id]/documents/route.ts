@@ -10,7 +10,7 @@ import {
   type AgentDocumentItem,
 } from "@/lib/agents/profile";
 import { deleteTenantFile, uploadTenantFile } from "@/lib/uploads/tenant-files";
-import { parseFirebaseStoragePath, secureAgentFileUrl } from "@/lib/uploads/agent-file-access";
+import { isAgentStoragePath, parseFirebaseStoragePath, secureAgentFileUrl } from "@/lib/uploads/agent-file-access";
 import {
   hasExpectedFileSignature,
   isAllowedAgentDocumentMimeType,
@@ -94,8 +94,22 @@ export async function POST(
       ? (agent.profile as Record<string, unknown>)
       : {};
   const previousDocuments = normalizeAgentDocuments(previousProfile.documents);
+  const replaceId = text(formData.get("replaceId"));
+  const reason = text(formData.get("reason"));
+  const previousDocument = replaceId ? previousDocuments.find(item => item.id === replaceId) : null;
+  if (replaceId && (!reason || reason.length < 12 || reason.length > 500)) {
+    return bad("Le motif du remplacement doit contenir entre 12 et 500 caractères.");
+  }
+  if (replaceId && !previousDocument) {
+    return json(409, { ok: false, error: "Ce document a changé. Actualisez la fiche avant de le remplacer." });
+  }
+  const oldPath = previousDocument ? previousDocument.path || parseFirebaseStoragePath(previousDocument.url) : null;
+  if (oldPath && (!isAgentStoragePath(oldPath, auth.tenantId, agentId)
+    || !oldPath.startsWith(`tenants/${auth.tenantId}/agents/${agentId}/documents/`))) {
+    return bad("Référence du fichier incohérente. Contactez le support.");
+  }
 
-  if (previousDocuments.length >= 30) {
+  if (!replaceId && previousDocuments.length >= 30) {
     return bad("Maximum 30 documents per agent");
   }
 
@@ -132,6 +146,7 @@ export async function POST(
   }
 
   const documentId = randomUUID();
+  const traceRef = replaceId ? agentRef.collection("documentReplacementTraces").doc(documentId) : null;
   const storedDocument: AgentDocumentItem = {
     id: documentId,
     label,
@@ -160,22 +175,53 @@ export async function POST(
           ? (currentAgent.profile as Record<string, unknown>)
           : {};
       const currentDocuments = normalizeAgentDocuments(currentProfile.documents);
-      if (currentDocuments.length >= 30) throw new Error("DOCUMENT_LIMIT_REACHED");
+      if (replaceId) {
+        const currentDocument = currentDocuments.find(item => item.id === replaceId);
+        if (!currentDocument || JSON.stringify(currentDocument) !== JSON.stringify(previousDocument)) {
+          throw new Error("DOCUMENT_CHANGED");
+        }
+      } else if (currentDocuments.length >= 30) throw new Error("DOCUMENT_LIMIT_REACHED");
 
       transaction.set(
         agentRef,
         {
           profile: {
             ...currentProfile,
-            documents: [...currentDocuments, storedDocument],
+            documents: replaceId
+              ? currentDocuments.map(item => item.id === replaceId ? storedDocument : item)
+              : [...currentDocuments, storedDocument],
           },
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: auth.uid,
         },
         { merge: true }
       );
+      if (traceRef && previousDocument) {
+        transaction.set(traceRef, {
+          tenantId: auth.tenantId, agentId, previousDocumentId: replaceId,
+          documentId, label: previousDocument.label, previousFileName: previousDocument.fileName ?? null,
+          newFileName: file.name, reason, actorUid: auth.uid, actorName: auth.name ?? null,
+          createdAt: FieldValue.serverTimestamp(),
+          cleanupStatus: oldPath ? "pending" : "not-required",
+          // Server-only cleanup reference, never included in the history response.
+          cleanupPath: oldPath,
+        });
+      }
     });
   } catch (error) {
+    if (traceRef) {
+      // A lost commit acknowledgement must never cause deletion of the new live file.
+      try {
+        const committedTrace = await traceRef.get();
+        if (committedTrace.exists) {
+          return json(200, { ok: true, document: responseDocument, path: uploadResult.path,
+            storageMode: uploadResult.storageMode, replacedDocumentId: replaceId,
+            storageCleanup: oldPath ? "pending" : "not-required" });
+        }
+      } catch {
+        return json(503, { ok: false, error: "L’état du remplacement n’a pas pu être confirmé. Actualisez la fiche avant de réessayer." });
+      }
+    }
     try {
       await deleteTenantFile({ path: uploadResult.path, tenantId: auth.tenantId });
     } catch (cleanupError) {
@@ -184,6 +230,9 @@ export async function POST(
     if ((error as Error).message === "DOCUMENT_LIMIT_REACHED") {
       return bad("Maximum 30 documents per agent");
     }
+    if ((error as Error).message === "DOCUMENT_CHANGED") {
+      return json(409, { ok: false, error: "Ce document vient d’être modifié. Actualisez la fiche ; votre remplacement n’a pas été appliqué." });
+    }
     if ((error as Error).message === "AGENT_NOT_FOUND") {
       return json(404, { ok: false, error: "Agent not found" });
     }
@@ -191,12 +240,50 @@ export async function POST(
     return json(500, { ok: false, error: "Impossible d'archiver le document." });
   }
 
+  let storageCleanup = "not-required";
+  if (traceRef && oldPath) {
+    try {
+      const cleanup = await deleteTenantFile({ path: oldPath, tenantId: auth.tenantId });
+      storageCleanup = cleanup.deleted ? "deleted" : "not-found";
+      await traceRef.update({ cleanupStatus: storageCleanup, cleanupPath: FieldValue.delete() });
+    } catch {
+      // The atomic trace stays pending so an operator can investigate and retry.
+      storageCleanup = "pending";
+      console.error("[agent-document.POST] replacement cleanup pending", { agentId, documentId });
+    }
+  }
+
   return json(200, {
     ok: true,
     document: responseDocument,
     path: uploadResult.path,
     storageMode: uploadResult.storageMode,
+    replacedDocumentId: replaceId || null,
+    storageCleanup,
   });
+}
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireTenantUser(req);
+  if (!auth.ok) return auth.res;
+  if (!canWrite(auth.role)) return json(403, { ok: false, error: "Action non autorisée." });
+  const { id } = await params;
+  try {
+    const ref = adminDb.collection("agents").doc(id);
+    const agent = await ref.get();
+    if (!agent.exists || agent.data()?.tenantId !== auth.tenantId) return json(404, { ok: false, error: "Agent introuvable." });
+    const snapshot = await ref.collection("documentReplacementTraces").orderBy("createdAt", "desc").limit(51).get();
+    const traces = snapshot.docs.slice(0, 50).map(doc => {
+      const data = doc.data();
+      return { id: doc.id, label: data.label, previousFileName: data.previousFileName,
+        newFileName: data.newFileName, reason: data.reason, actorUid: data.actorUid,
+        actorName: data.actorName, createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
+        cleanupStatus: data.cleanupStatus };
+    });
+    return json(200, { ok: true, traces, hasMore: snapshot.size > 50 });
+  } catch {
+    return json(503, { ok: false, error: "Historique momentanément indisponible." });
+  }
 }
 
 export async function DELETE(
@@ -240,6 +327,11 @@ export async function DELETE(
       const documents = normalizeAgentDocuments(previousProfile.documents);
       const document = documents.find((item) => item.id === documentId);
       if (!document) return { status: "document-not-found" as const, path: null };
+      const documentPath = document.path || parseFirebaseStoragePath(document.url);
+      if (documentPath && (!isAgentStoragePath(documentPath, auth.tenantId, agentId)
+        || !documentPath.startsWith(`tenants/${auth.tenantId}/agents/${agentId}/documents/`))) {
+        throw new Error("INVALID_DOCUMENT_PATH");
+      }
 
       transaction.set(
         agentRef,
@@ -256,7 +348,7 @@ export async function DELETE(
 
       return {
         status: "deleted" as const,
-        path: document.path || parseFirebaseStoragePath(document.url),
+        path: documentPath,
       };
     });
 
@@ -270,8 +362,8 @@ export async function DELETE(
     let storageCleanup = "not-required";
     if (result.path) {
       try {
-        await deleteTenantFile({ path: result.path, tenantId: auth.tenantId });
-        storageCleanup = "deleted";
+        const cleanup = await deleteTenantFile({ path: result.path, tenantId: auth.tenantId });
+        storageCleanup = cleanup.deleted ? "deleted" : "not-found";
       } catch (error) {
         storageCleanup = "pending";
         console.error("[agent-document.DELETE] storage cleanup failed", {

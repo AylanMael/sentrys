@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { requireTenantUser, canReadBackoffice } from "@/app/api/_utils/withTenant";
+import { requireTenantUser } from "@/app/api/_utils/withTenant";
 import { adminDb } from "@/lib/firebase/admin";
+import { canReadIncidentSite } from "@/lib/auth/incident-read";
 
 export const runtime = "nodejs";
 const DEFAULT_PAGE_SIZE = 20;
@@ -33,24 +34,13 @@ function toIso(value: unknown) {
   const timestamp = value as { toDate?: () => Date } | null | undefined;
   return typeof timestamp?.toDate === "function" ? timestamp.toDate().toISOString() : null;
 }
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
-}
 async function canAccessIncident(
   auth: Extract<Awaited<ReturnType<typeof requireTenantUser>>, { ok: true }>,
   incident: FirebaseFirestore.DocumentSnapshot
 ) {
   const data = incident.data();
   if (!incident.exists || data?.tenantId !== auth.tenantId) return false;
-  if (canReadBackoffice(auth.role)) return true;
-  const siteId = typeof data?.siteId === "string" ? data.siteId : "";
-  if (!siteId) return false;
-  const site = await adminDb.collection("sites").doc(siteId).get();
-  if (!site.exists || site.data()?.tenantId !== auth.tenantId) return false;
-  const siteData = site.data() ?? {};
-  return [siteData.accessUids, siteData.managerIds, siteData.agentIds].some(
-    (ids) => isStringArray(ids) && ids.includes(auth.uid)
-  );
+  return canReadIncidentSite(auth, data.siteId);
 }
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {

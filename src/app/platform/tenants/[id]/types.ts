@@ -2,6 +2,7 @@ export type RiskLevel = "ok" | "watch" | "critical";
 export type SignalTone = "critical" | "warning" | "info";
 export type PlatformPlanId = "free" | "starter" | "pro" | "growth";
 export type SupportScope = "diagnostic" | "billing" | "technical" | "security";
+export type SuspensionMode = "commercial" | "security";
 export type TenantWorkspaceTab = "situation" | "activation" | "billing" | "access" | "support" | "audit";
 
 export const TENANT_WORKSPACE_TABS = [
@@ -103,6 +104,8 @@ export type TenantDétailResponse = {
     id: string;
     name: string;
     status: string;
+    suspensionMode: SuspensionMode | null;
+    suspendedAtIso: string | null;
     plan: string;
     ownerEmail: string | null;
     createdAtIso: string | null;

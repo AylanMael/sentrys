@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { getAuth } from "firebase-admin/auth";
+import { requireTenantUser } from "@/app/api/_utils/withTenant";
 import {
   Timestamp,
   FieldValue,
@@ -21,11 +21,6 @@ function json(status: number, body: unknown) {
 
 function bad(msg: string, extra?: Record<string, unknown>) {
   return json(400, { ok: false, error: msg, ...extra });
-}
-
-async function getTenantUser(uid: string) {
-  const snap = await adminDb.collection("tenantUsers").doc(uid).get();
-  return snap.exists ? snap.data() : null;
 }
 
 function nowAdmin() {
@@ -58,17 +53,9 @@ type VacationDoc = {
 
 export async function POST(req: NextRequest) {
   try {
-    const token = req.headers.get("authorization")?.replace("Bearer ", "");
-    if (!token) return json(401, { ok: false, error: "Unauthorized" });
-
-    const decoded = await getAuth().verifyIdToken(token, true);
-    const uid = decoded.uid;
-
-    const tu = await getTenantUser(uid);
-    if (!tu) return json(401, { ok: false, error: "No tenant user profile" });
-
-    const role = tu.role;
-    const tenantId = tu.tenantId;
+    const auth = await requireTenantUser(req);
+    if (!auth.ok) return auth.res;
+    const { uid, role, tenantId } = auth;
 
     if (!["admin", "manager"].includes(role)) {
       return json(403, { ok: false, error: "Forbidden" });

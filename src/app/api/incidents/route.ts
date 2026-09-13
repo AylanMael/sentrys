@@ -5,16 +5,18 @@ import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
-import { logActivity } from "@/lib/activity/logger";
 import { IncidentCreateSchema } from "@/lib/api/schemas";
-import { isWithinGeofence } from "@/lib/utils/geo";
+import { calculateDistance } from "@/lib/utils/geo";
+import { authorizeMissionWrite, validDocumentId } from "@/lib/auth/mission-access";
+import { suspensionMode } from "@/lib/auth/tenant-suspension";
+import { canReadIncidentSite } from "@/lib/auth/incident-read";
 
 export const runtime = "nodejs";
 
 /* ================= helpers ================= */
 
 function json(status: number, body: unknown) {
-  return NextResponse.json(body, { status });
+  return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
 function bad(msg: string, extra?: Record<string, unknown>) {
@@ -208,6 +210,8 @@ export async function GET(req: NextRequest) {
   const encodedCursor = normalizeText(url.searchParams.get("cursor"));
 
   try {
+    // Agents must choose an authorized site; never fall back to a tenant-wide list.
+    if (!await canReadIncidentSite(auth, siteId)) return forbidden("Access denied for this site");
     if ((incidentLimit != null || encodedCursor) && !siteId) {
       return bad("Le site est requis");
     }
@@ -338,10 +342,10 @@ export async function GET(req: NextRequest) {
  * body: { title, description?, severity?, status?, siteId?, agentId?, vacationId?, tags? }
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireTenantUser(req);
+  const auth = await requireTenantUser(req, { access: "mission" });
   if (!auth.ok) return auth.res;
 
-  if (!canWrite(auth.role)) return forbidden("Insufficient rights");
+  if (!canWrite(auth.role) && auth.role !== "agent") return forbidden("Insufficient rights");
 
   let rawBody: any;
   try {
@@ -357,30 +361,16 @@ export async function POST(req: NextRequest) {
   }
 
   const values = validation.data;
+  if (!validDocumentId(values.siteId) || (values.vacationId && !validDocumentId(values.vacationId))) {
+    return bad("Identifiant invalide");
+  }
+  if (auth.role === "agent") {
+    values.agentId = auth.agentId || auth.uid;
+    values.status = "open";
+    if (!values.vacationId) return forbidden("Une mission affectée est requise");
+  }
 
   try {
-    // GEOFENCING CHECK
-    if (values.reportedLat && values.reportedLng) {
-      const siteSnap = await adminDb.collection("sites").doc(values.siteId).get();
-      if (siteSnap.exists) {
-        const siteData = siteSnap.data();
-        if (siteData?.latitude && siteData?.longitude) {
-          const within = isWithinGeofence(
-            values.reportedLat,
-            values.reportedLng,
-            siteData.latitude,
-            siteData.longitude,
-            500 // 500 mètres
-          );
-          if (!within) {
-            return bad("Hors périmètre", {
-              error: "Vous devez être à moins de 500m du site pour déclarer un incident."
-            });
-          }
-        }
-      }
-    }
-
     const payload: Record<string, unknown> = {
       tenantId: auth.tenantId,
       title: values.title,
@@ -407,28 +397,49 @@ export async function POST(req: NextRequest) {
       updatedBy: auth.uid,
     };
 
-    const ref = await adminDb.collection("incidents").add(payload);
-    const created = await ref.get();
-
-    // activity log
-    await logActivity({
-      tenantId: auth.tenantId,
-      actorUid: auth.uid,
-      actorEmail: (auth as any).email ?? null,
-      actorRole: auth.role ?? null,
-      action: "incident.created",
-      entityType: "incident",
-      entityId: ref.id,
-      message: `Incident créé : ${values.title}`,
-      meta: {
-        incidentId: ref.id,
-        title: values.title,
-        severity: values.severity,
-        status: values.status,
-        siteId: values.siteId
-      },
-      severity: mapSeverityToActivity(values.severity),
+    const ref = adminDb.collection("incidents").doc();
+    const activityRef = adminDb.collection("activity").doc();
+    const result = await adminDb.runTransaction(async tx => {
+      if (auth.role === "agent") {
+        if (!await authorizeMissionWrite(tx, auth, values.vacationId, values.siteId)) return 403;
+      } else if (!(auth.role === "super_admin" && auth.tenantId === "platform")) {
+        const tenant = await tx.get(adminDb.collection("tenants").doc(auth.tenantId));
+        if (suspensionMode(tenant.exists ? tenant.data() : null) !== "none") return 403;
+      }
+      const site = await tx.get(adminDb.collection("sites").doc(values.siteId));
+      if (!site.exists || site.data()?.tenantId !== auth.tenantId) return 403;
+      const siteData = site.data()!;
+      const lat = values.reportedLat;
+      const lng = values.reportedLng;
+      if (typeof lat === "number" && typeof lng === "number"
+        && Number.isFinite(lat) && Number.isFinite(lng)
+        && typeof siteData.latitude === "number" && Number.isFinite(siteData.latitude)
+        && typeof siteData.longitude === "number" && Number.isFinite(siteData.longitude)
+        && calculateDistance(lat, lng, siteData.latitude, siteData.longitude) > 500) return 400;
+      tx.create(ref, payload);
+      tx.create(activityRef, {
+        tenantId: auth.tenantId,
+        actorUid: auth.uid,
+        actorEmail: auth.email ?? null,
+        actorRole: auth.role,
+        action: "incident.created",
+        entityType: "incident",
+        entityId: ref.id,
+        message: `Incident créé : ${values.title}`,
+        meta: {
+          incidentId: ref.id,
+          title: values.title,
+          severity: values.severity,
+          status: values.status,
+          siteId: values.siteId,
+        },
+        severity: mapSeverityToActivity(values.severity),
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      return 201;
     });
+    if (result === 403) return forbidden("Mission non autorisée ou terminée");
+    if (result === 400) return bad("Vous devez être à moins de 500m du site pour déclarer un incident.");
 
     return json(201, {
       ok: true,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getAuth } from "firebase-admin/auth";
+import { suspensionMode, type SuspensionMode } from "@/lib/auth/tenant-suspension";
 import {
   normalizeRole,
   type AppRole,
@@ -25,6 +26,7 @@ export type TenantAuth =
       agentId: string | null;
       email: string | null;
       name: string | null;
+      suspension?: SuspensionMode;
     }
   | { ok: false; res: NextResponse };
 
@@ -128,7 +130,10 @@ export function canManageUsersRole(role?: string | null) {
 
 /* ================= main ================= */
 
-export async function requireTenantUser(req: NextRequest): Promise<TenantAuth> {
+export async function requireTenantUser(
+  req: NextRequest,
+  options: { access?: "read" | "write" | "mission" } = {}
+): Promise<TenantAuth> {
   const token = readAuthHeader(req);
   if (!token) return { ok: false, res: unauthorized("Missing token") };
 
@@ -162,7 +167,7 @@ export async function requireTenantUser(req: NextRequest): Promise<TenantAuth> {
       return { ok: false, res: unauthorized("No tenant assigned") };
     }
 
-    const status = String(tu?.status ?? "active").trim().toLowerCase();
+    const status = String(tu?.status ?? "").trim().toLowerCase();
     if (status !== "active") {
       return { ok: false, res: unauthorized("User disabled", { status }) };
     }
@@ -172,6 +177,20 @@ export async function requireTenantUser(req: NextRequest): Promise<TenantAuth> {
 
     if (role === "unknown") {
       return { ok: false, res: forbidden("Unknown role") };
+    }
+
+    let suspension: SuspensionMode = "none";
+    // Platform recovery remains available to an active platform administrator.
+    if (!(role === "super_admin" && tenantId === "platform")) {
+      const tenantSnap = await adminDb.collection("tenants").doc(tenantId).get();
+      suspension = suspensionMode(tenantSnap.exists ? tenantSnap.data() : null);
+      const access = options.access ?? (["GET", "HEAD"].includes(req.method) ? "read" : "write");
+      if (suspension === "security" || (suspension === "commercial"
+        && access !== "read" && !(access === "mission" && role === "agent"))) {
+        return { ok: false, res: forbidden("Accès limité : agence suspendue", {
+          code: "TENANT_SUSPENDED", suspensionMode: suspension,
+        }) };
+      }
     }
 
     const emailFromTu = normalizeEmail(tu?.email);
@@ -188,6 +207,7 @@ export async function requireTenantUser(req: NextRequest): Promise<TenantAuth> {
       agentId: normalizeText(tu?.agentId),
       email,
       name,
+      suspension,
     };
   } catch {
     return {

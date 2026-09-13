@@ -56,7 +56,10 @@ export async function GET(req: NextRequest) {
   try {
     const tenantId = auth.tenantId;
 
-    const [sub, usage] = await Promise.all([getSubscription(tenantId), getUsage(tenantId)]);
+    const [sub, usage] = await Promise.all([
+      getSubscription(tenantId),
+      getUsage(tenantId, auth.suspension === "commercial"),
+    ]);
     const plan = await getPlan(sub.planId);
     const limits = computeEffectiveLimits(plan, sub);
 

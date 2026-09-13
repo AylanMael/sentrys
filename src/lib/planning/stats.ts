@@ -1,4 +1,6 @@
 // src/lib/planning/stats.ts
+import { parisDayKey, parisDayStart, parisWeekStart, addParisDays } from "./paris-display";
+import { parsePlanningDateTime } from "./paris-time";
 
 export type VacationEvent = {
   id: string;
@@ -41,14 +43,11 @@ function calculateNightHours(start: Date, end: Date): number {
   let current = new Date(start);
 
   while (current < end) {
-    const year = current.getFullYear();
-    const month = current.getMonth();
-    const date = current.getDate();
-
-    const nightStart1 = new Date(year, month, date, 0, 0, 0);
-    const nightEnd1 = new Date(year, month, date, 6, 0, 0);
-    const nightStart2 = new Date(year, month, date, 21, 0, 0);
-    const nightEnd2 = new Date(year, month, date, 24, 0, 0);
+    const day = parisDayKey(current)!;
+    const nightStart1 = parisDayStart(current);
+    const nightEnd1 = parsePlanningDateTime(`${day}T06:00`)!;
+    const nightStart2 = parsePlanningDateTime(`${day}T21:00`)!;
+    const nightEnd2 = addParisDays(nightStart1, 1);
 
     const intersectStart1 = Math.max(current.getTime(), nightStart1.getTime());
     const intersectEnd1 = Math.min(end.getTime(), nightEnd1.getTime());
@@ -62,7 +61,7 @@ function calculateNightHours(start: Date, end: Date): number {
       nightHours += (intersectEnd2 - intersectStart2) / HOUR_MS;
     }
 
-    current = new Date(year, month, date + 1, 0, 0, 0);
+    current = nightEnd2;
   }
 
   return nightHours;
@@ -84,19 +83,16 @@ function eventBounds(event: VacationEvent) {
 }
 
 function dayKeyFromMs(ms: number) {
-  return new Date(ms).toISOString().slice(0, 10);
+  return parisDayKey(new Date(ms))!;
 }
 
-function startOfUtcDay(ms: number) {
-  const d = new Date(ms);
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+function civilDayOrdinal(ms: number) {
+  // UTC carries Paris civil dates only, so consecutive days remain 1 apart at DST.
+  return Date.parse(`${dayKeyFromMs(ms)}T00:00:00Z`);
 }
 
 function startOfIsoWeek(ms: number) {
-  const dayStart = startOfUtcDay(ms);
-  const day = new Date(dayStart).getUTCDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  return dayStart + mondayOffset * DAY_MS;
+  return parisWeekStart(new Date(ms)).getTime();
 }
 
 function normalizeQualification(value: string) {
@@ -247,7 +243,7 @@ export function computePlanningStats(
     const days = Array.from(
       new Map(
         agentEvents.map((event) => [
-          startOfUtcDay(event.startMs),
+          civilDayOrdinal(event.startMs),
           event.id,
         ])
       ).entries()
@@ -265,15 +261,18 @@ export function computePlanningStats(
 
     const eventsByWeek = new Map<number, Array<{ id: string; startMs: number; endMs: number }>>();
     for (const event of agentEvents) {
-      const weekStart = startOfIsoWeek(event.startMs);
-      const bucket = eventsByWeek.get(weekStart) ?? [];
-      bucket.push(event);
-      eventsByWeek.set(weekStart, bucket);
+      for (let weekStart = startOfIsoWeek(event.startMs); weekStart < event.endMs;) {
+        const weekEnd = addParisDays(new Date(weekStart), 7).getTime();
+        const bucket = eventsByWeek.get(weekStart) ?? [];
+        bucket.push({ ...event, startMs: Math.max(event.startMs, weekStart), endMs: Math.min(event.endMs, weekEnd) });
+        eventsByWeek.set(weekStart, bucket);
+        weekStart = weekEnd;
+      }
     }
 
     for (const [weekStart, weekEvents] of eventsByWeek.entries()) {
       weekEvents.sort((a, b) => a.startMs - b.startMs);
-      const weekEnd = weekStart + 7 * DAY_MS;
+      const weekEnd = addParisDays(new Date(weekStart), 7).getTime();
       let cursor = weekStart;
       let maxGap = 0;
 

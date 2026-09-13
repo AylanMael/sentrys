@@ -1,3 +1,6 @@
+import { parsePlanningDateTime, toParisDateTimeValue } from "./paris-time";
+import { shiftParisDays } from "./paris-recurrence";
+
 export const SITE_TEMPLATE_DAY_OPTIONS = [
   { value: 1, label: "Lundi", shortLabel: "Lun" },
   { value: 2, label: "Mardi", shortLabel: "Mar" },
@@ -56,18 +59,14 @@ export function buildHalfHourTimeOptions() {
 }
 
 export function getWeekStartMonday(date: Date) {
-  const next = new Date(date);
-  const weekday = next.getDay();
+  const next = parisTemplateDay(date);
+  const weekday = new Date(`${toParisDateTimeValue(next).slice(0, 10)}T00:00:00Z`).getUTCDay();
   const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
-  next.setDate(next.getDate() + mondayOffset);
-  next.setHours(0, 0, 0, 0);
-  return next;
+  return shiftParisDays(next, mondayOffset);
 }
 
 export function addWeeks(date: Date, weeks: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + weeks * 7);
-  return next;
+  return shiftParisDays(date, weeks * 7);
 }
 
 export function timeToMinutes(value: string) {
@@ -76,16 +75,10 @@ export function timeToMinutes(value: string) {
 }
 
 export function buildDateTimeOnDate(date: Date, time: string) {
-  const [hours, minutes] = time.split(":").map(Number);
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-    hours,
-    minutes,
-    0,
-    0
-  );
+  const value = `${toParisDateTimeValue(date).slice(0, 10)}T${time}`;
+  const instant = isHalfHourTime(time) ? parsePlanningDateTime(value) : null;
+  if (!instant) throw new Error(`Horaire ${value} invalide, inexistant ou ambigu en heure de Paris. Aucune vacation préparée : ajustez le modèle ou la période.`);
+  return instant;
 }
 
 export function buildDateRangeForTemplateEntry(
@@ -93,11 +86,9 @@ export function buildDateRangeForTemplateEntry(
   entry: Pick<SitePlanningTemplateEntry, "startTime" | "endTime">
 ) {
   const start = buildDateTimeOnDate(date, entry.startTime);
-  const end = buildDateTimeOnDate(date, entry.endTime);
-
-  if (timeToMinutes(entry.endTime) <= timeToMinutes(entry.startTime)) {
-    end.setDate(end.getDate() + 1);
-  }
+  const endDay = timeToMinutes(entry.endTime) <= timeToMinutes(entry.startTime)
+    ? shiftParisDays(parisTemplateDay(date), 1) : date;
+  const end = buildDateTimeOnDate(endDay, entry.endTime);
 
   return { start, end };
 }
@@ -106,15 +97,60 @@ export function buildDateRangeFromWeekStart(
   weekStart: Date,
   entry: Pick<SitePlanningTemplateEntry, "dayOfWeek" | "startTime" | "endTime">
 ) {
-  const targetDate = new Date(weekStart);
-  targetDate.setDate(targetDate.getDate() + (entry.dayOfWeek - 1));
+  const targetDate = shiftParisDays(parisTemplateDay(weekStart), entry.dayOfWeek - 1);
   return buildDateRangeForTemplateEntry(targetDate, entry);
 }
 
 export function matchesTemplateDay(date: Date, dayOfWeek: SiteTemplateDay) {
-  const jsDay = date.getDay();
+  const jsDay = new Date(`${toParisDateTimeValue(date).slice(0, 10)}T00:00:00Z`).getUTCDay();
   const normalized = jsDay === 0 ? 7 : jsDay;
   return normalized === dayOfWeek;
+}
+
+function parisTemplateDay(date: Date) {
+  if (!Number.isFinite(date.getTime())) throw new Error("Date de modèle invalide en heure de Paris.");
+  const day = parsePlanningDateTime(toParisDateTimeValue(date).slice(0, 10));
+  if (!day) throw new Error("Date de modèle invalide en heure de Paris.");
+  return day;
+}
+
+/** Prepare every boundary before exposing anything to the caller (DST errors are atomic). */
+export function prepareSiteTemplateWindows(
+  entries: SitePlanningTemplateEntry[],
+  target: "visible_period" | "next_week" | "next_month",
+  range?: { from?: string | null; to?: string | null } | null,
+  now = new Date()
+) {
+  const windows: Array<{ entry: SitePlanningTemplateEntry; entryIndex: number; start: Date; end: Date }> = [];
+  try {
+    const anchor = range?.from ? parsePlanningDateTime(range.from) : now;
+    if (!anchor) throw new Error("Début de période invalide en heure de Paris.");
+    const monday = getWeekStartMonday(anchor);
+    let start = range?.from ? parisTemplateDay(anchor) : monday;
+    const parsedEnd = range?.to ? parsePlanningDateTime(range.to) : addWeeks(monday, 1);
+    if (!parsedEnd) throw new Error("Fin de période invalide en heure de Paris.");
+    let end = parisTemplateDay(parsedEnd);
+    if (target === "next_week") {
+      start = addWeeks(monday, 1);
+      end = addWeeks(start, 1);
+    } else if (target === "next_month") {
+      const [year, month] = toParisDateTimeValue(anchor).slice(0, 7).split("-").map(Number);
+      // UTC carries civil month fields only; resolve the resulting days in Paris.
+      start = parsePlanningDateTime(new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10))!;
+      end = parsePlanningDateTime(new Date(Date.UTC(year, month + 1, 1)).toISOString().slice(0, 10))!;
+    }
+    if (end <= start) throw new Error("Période de modèle invalide en heure de Paris.");
+    for (let cursor = start; cursor < end; cursor = shiftParisDays(cursor, 1)) {
+      entries.forEach((entry, entryIndex) => {
+        if (!normalizeSitePlanningTemplateEntry(entry)) throw new Error("Ligne du modèle invalide. Vérifiez les jours et horaires en heure de Paris.");
+        if (!matchesTemplateDay(cursor, entry.dayOfWeek)) return;
+        windows.push({ entry, entryIndex, ...buildDateRangeForTemplateEntry(cursor, entry) });
+      });
+    }
+    return { windows, error: null };
+  } catch (error) {
+    return { windows: [] as typeof windows, error: error instanceof Error ? error.message : "Période invalide en heure de Paris. Aucune vacation préparée." };
+  }
 }
 
 export function buildTemplateFingerprint(

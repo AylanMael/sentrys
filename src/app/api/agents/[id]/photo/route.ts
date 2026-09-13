@@ -105,15 +105,9 @@ export async function POST(
 
   const photoUrl = secureAgentFileUrl(agentId, "photo");
   const photoPath = uploadResult.path;
-  const previousProfile =
-    agent.profile && typeof agent.profile === "object"
-      ? (agent.profile as Record<string, unknown>)
-      : {};
-
   await agentRef.set(
     {
       profile: {
-        ...previousProfile,
         photoUrl: null,
         photoPath,
       },

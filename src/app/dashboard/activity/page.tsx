@@ -1,7 +1,7 @@
 // src/app/dashboard/activity/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -39,6 +39,9 @@ type ActivityItem = {
   message: string | null;
   severity: "info" | "warning" | "critical";
   actorEmail: string | null;
+  actorName?: string | null;
+  agentId?: string | null;
+  siteName?: string | null;
   actorRole: string | null;
   createdAtIso: string | null;
 };
@@ -96,6 +99,7 @@ function getEntityHref(entityType: string | null, entityId: string | null) {
 const ENTITY_TYPES = [
   { value: "all", label: "Toutes les entités" },
   { value: "agent", label: "Agents" },
+  { value: "assignment", label: "Pointages et affectations" },
   { value: "site", label: "Sites" },
   { value: "vacation", label: "Vacations" },
   { value: "incident", label: "Incidents" },
@@ -117,6 +121,8 @@ const ACTIONS = [
   { value: "vacation.updated", label: "Vacation mise à jour" },
   { value: "vacation.cancelled", label: "Vacation annulée" },
   { value: "assignment.synced", label: "Affectations synchronisées" },
+  { value: "assignment.checked_in", label: "Prise de service" },
+  { value: "assignment.checked_out", label: "Fin de service" },
   { value: "incident.created", label: "Incident créé" },
   { value: "incident.updated", label: "Incident mis à jour" },
   { value: "incident.closed", label: "Incident clôturé" },
@@ -128,6 +134,8 @@ export default function ActivityPage() {
   const [entityType, setEntityType] = useState<string>("all");
   const [action, setAction] = useState<string>("all");
   const [search, setSearch] = useState<string>("");
+  const [includePointages, setIncludePointages] = useState(false);
+  const activityRequest = useRef(0);
   const [limit, setLimit] = useState<number>(20);
 
   const [items, setItems] = useState<ActivityItem[]>([]);
@@ -142,31 +150,35 @@ export default function ActivityPage() {
   const qs = useMemo(() => {
     const p = new URLSearchParams();
     p.set("limit", String(limit));
+    if (!includePointages && !["assignment.checked_in", "assignment.checked_out"].includes(action)) p.set("excludePointages", "true");
     if (entityType && entityType !== "all") p.set("entityType", entityType);
     if (action && action !== "all") p.set("action", action);
     return p.toString();
-  }, [action, entityType, limit]);
+  }, [action, entityType, limit, includePointages]);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
 
     return items.filter((it) => {
-      const hay = `${it.message ?? ""} ${it.actorEmail ?? ""} ${it.action ?? ""} ${it.entityType ?? ""}`.toLowerCase();
+      const hay = `${it.message ?? ""} ${it.actorName ?? ""} ${it.siteName ?? ""} ${it.actorEmail ?? ""} ${it.action ?? ""} ${it.entityType ?? ""}`.toLowerCase();
       return hay.includes(q);
     });
   }, [items, search]);
 
   const hasMore = useMemo(
-    () => !!cursor && canPaginate && items.length > 0,
-    [cursor, canPaginate, items.length]
+    () => !!cursor && canPaginate,
+    [cursor, canPaginate]
   );
 
-  async function loadFirstPage() {
+  const loadFirstPage = useCallback(async () => {
+    const request = ++activityRequest.current;
     setLoading(true);
+    setLoadingMore(false);
     setError(null);
     try {
       const res = await apiFetch<PagedRes>(`/api/activity?${qs}`);
+      if (request !== activityRequest.current) return;
       if (!res?.ok) {
         setItems([]); setCursor(null); setCanPaginate(false);
         setError(res?.error ?? "Impossible de charger l’activité.");
@@ -174,37 +186,46 @@ export default function ActivityPage() {
       }
       const list = Array.isArray(res.items) ? res.items : [];
       setItems(list);
-      setCursor(res.nextCursor ?? (list.length ? list[list.length - 1].id : null));
-      setCanPaginate(list.length >= limit && !!(res.nextCursor ?? (list.length ? list[list.length - 1].id : null)));
+      setCursor(res.nextCursor ?? null);
+      setCanPaginate(!!res.nextCursor);
     } catch (e: any) {
+      if (request !== activityRequest.current) return;
       setItems([]); setCursor(null); setCanPaginate(false);
       setError(e?.message ?? "Erreur lors du chargement.");
-    } finally { setLoading(false); }
-  }
+    } finally { if (request === activityRequest.current) setLoading(false); }
+  }, [qs]);
 
   async function loadMore() {
     if (!cursor) return;
+    const request = ++activityRequest.current;
     setLoadingMore(true);
     setError(null);
     try {
       const res = await apiFetch<PagedRes>(`/api/activity?${qs}&cursor=${encodeURIComponent(cursor)}`);
+      if (request !== activityRequest.current) return;
       if (!res?.ok) { setError(res?.error ?? "Impossible de charger plus d’activité."); return; }
       const next = Array.isArray(res.items) ? res.items : [];
       setItems((prev) => {
         const seen = new Set(prev.map((x) => x.id));
         return [...prev, ...next.filter((x) => !seen.has(x.id))];
       });
-      const nextCursor = res.nextCursor ?? (next.length ? next[next.length - 1].id : null);
+      const nextCursor = res.nextCursor ?? null;
       setCursor(nextCursor);
-      setCanPaginate(next.length >= limit && !!nextCursor);
-    } catch (e: any) { setError(e?.message ?? "Erreur lors du chargement."); } finally { setLoadingMore(false); }
+      setCanPaginate(!!nextCursor);
+    } catch (e: any) {
+      if (request === activityRequest.current) setError(e?.message ?? "Erreur lors du chargement.");
+    } finally { if (request === activityRequest.current) setLoadingMore(false); }
   }
 
-  useEffect(() => { loadFirstPage(); }, [qs]);
+  useEffect(() => { void loadFirstPage(); return () => { activityRequest.current++; }; }, [loadFirstPage]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-10 max-w-[1600px] mx-auto w-full">
 
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-4 text-sm">
+        <Link className="font-semibold text-primary hover:underline" href="/dashboard/pointages">Ouvrir le suivi des pointages →</Link>
+        <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={includePointages} onChange={e => setIncludePointages(e.target.checked)} />Inclure les traces de pointage dans l’audit</label>
+      </div>
       {/* ===================== HEADER ===================== */}
       <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between bg-card p-6 md:p-8 rounded-[2rem] border shadow-sm ring-1 ring-black/5 bg-gradient-to-br from-card to-muted/20 relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
@@ -245,7 +266,7 @@ export default function ActivityPage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Recherche textuelle locale (email, action...)"
+              placeholder="Rechercher dans la liste : agent, site, action…"
               className="pl-12 h-12 rounded-2xl bg-card border-border/50 font-medium text-base shadow-sm focus-visible:ring-primary/30"
             />
           </div>
@@ -308,6 +329,7 @@ export default function ActivityPage() {
               <p className="text-sm text-muted-foreground mt-2 max-w-sm">
                 Il n'y a pas de logs correspondant à ces filtres pour le moment.
               </p>
+              {hasMore && <Button className="mt-4" variant="outline" disabled={loadingMore} onClick={loadMore}>Poursuivre dans le journal</Button>}
             </div>
           ) : (
             <div className="p-6 md:p-8">
@@ -336,6 +358,7 @@ export default function ActivityPage() {
                             )}
                             <span className="text-xs font-semibold text-muted-foreground ml-auto sm:ml-2">
                               {when(it.createdAtIso)}
+                              {it.createdAtIso && <time dateTime={it.createdAtIso} className="block mt-1 font-normal">{new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "medium" }).format(new Date(it.createdAtIso))} · Paris</time>}
                             </span>
                           </div>
 
@@ -344,7 +367,8 @@ export default function ActivityPage() {
                           </p>
 
                           <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-border/50 w-fit">
-                            <span className="text-foreground">{it.actorEmail ?? "Système / Inconnu"}</span>
+                            {it.agentId ? <Link className="text-primary underline underline-offset-4" href={`/dashboard/agents/${encodeURIComponent(it.agentId)}`}>{it.actorName ?? it.actorEmail ?? "Agent"}</Link> : <span className="text-foreground">{it.actorName ?? it.actorEmail ?? "Système / Inconnu"}</span>}
+                            {it.siteName && <span>Site : <strong>{it.siteName}</strong></span>}
                             {role && (
                               <>
                                 <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />

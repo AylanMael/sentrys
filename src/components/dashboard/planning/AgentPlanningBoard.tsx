@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { addParisDays, parisWeekStart, parisDayKey, parisFields, parisEndDaySuffix, PLANNING_TIME_ZONE } from "@/lib/planning/paris-display";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -30,36 +31,19 @@ type WeekGroup = {
 };
 
 function startOfWeekMonday(date: Date) {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  const day = copy.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  copy.setDate(copy.getDate() + diff);
-  return copy;
+  return parisWeekStart(date);
 }
 
 function endOfWeekSunday(date: Date) {
-  const start = startOfWeekMonday(date);
-  const copy = new Date(start);
-  copy.setDate(copy.getDate() + 6);
-  copy.setHours(23, 59, 59, 999);
-  return copy;
+  return new Date(addParisDays(parisWeekStart(date), 7).getTime() - 1);
 }
 
 function addDays(date: Date, value: number) {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + value);
-  return copy;
+  return addParisDays(date, value);
 }
 
-function toDayKey(dateLike?: string | Date | null) {
-  if (!dateLike) return null;
-  const date = new Date(dateLike);
-  if (Number.isNaN(date.getTime())) return null;
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function toDayKey(value?: string | Date | null) {
+  return parisDayKey(value);
 }
 
 function buildWeekGroups(
@@ -87,7 +71,7 @@ function buildWeekGroups(
       : sourceStart;
 
   const start = startOfWeekMonday(sourceStart);
-  const end = endOfWeekSunday(sourceEnd);
+  const end = endOfWeekSunday(new Date(Math.max(sourceStart.getTime(), sourceEnd.getTime() - 1)));
 
   const groups: WeekGroup[] = [];
   for (let cursor = new Date(start); cursor <= end; cursor = addDays(cursor, 7)) {
@@ -105,6 +89,7 @@ function formatWeekLabel(days: Date[]) {
   const first = days[0];
   const last = days[6];
   const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     day: "2-digit",
     month: "short",
   });
@@ -113,6 +98,7 @@ function formatWeekLabel(days: Date[]) {
 
 function formatHeaderDay(date: Date) {
   const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
@@ -123,13 +109,14 @@ function formatHeaderDay(date: Date) {
 function formatHour(value?: string | null) {
   if (!value) return "--:--";
   return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: PLANNING_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
 }
 
 function isWeekend(date: Date) {
-  const day = date.getDay();
+  const day = parisFields(date).weekday;
   return day === 0 || day === 6;
 }
 
@@ -172,6 +159,7 @@ export function AgentPlanningBoard({
 
   return (
     <div className={cn("space-y-4", className)}>
+      <p className="text-xs text-muted-foreground">Horaires en heure de Paris · Missions classées par jour de début.</p>
       {weeks.map((week) => (
         <section
           key={week.id}
@@ -321,7 +309,7 @@ export function AgentPlanningBoard({
                                       : "text-foreground"
                                   )}
                                 >
-                                  {formatHour(vacation.startAtIso)} - {formatHour(vacation.endAtIso)}
+                                  {formatHour(vacation.startAtIso)} - {formatHour(vacation.endAtIso)}{parisEndDaySuffix(vacation.startAtIso, vacation.endAtIso)}
                                 </p>
                                 <p
                                   className={cn(

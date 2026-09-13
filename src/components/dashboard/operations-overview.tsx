@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PointageVerificationNotice } from "@/components/dashboard/pointage-verification-notice";
 
 type VacationRow = {
   id: string;
@@ -952,7 +953,7 @@ export function OperationsOverview({
               </Badge>
             </div>
             <p className="mt-2 text-sm font-semibold text-muted-foreground/70">
-              Les agents affectes dont la prise de service n&apos;est pas encore confirmee.
+              Vérifiez les prises et fins de service dans le suivi des pointages.
             </p>
           </div>
 
@@ -961,8 +962,8 @@ export function OperationsOverview({
             variant="outline"
             className="h-11 rounded-2xl border-border/20 bg-background/40 px-5 font-black text-[10px] uppercase tracking-[0.2em]"
           >
-            <Link href="/dashboard/planning">
-              Vérifier le planning
+            <Link href="/dashboard/pointages">
+              Vérifier les pointages
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
@@ -985,21 +986,7 @@ export function OperationsOverview({
               {error}
             </div>
           ) : summary.missingCheckIns.length === 0 ? (
-            <div className="md:col-span-2 xl:col-span-4 rounded-[1.75rem] border border-primary/10 bg-primary/5 p-6">
-              <div className="flex items-start gap-4">
-                <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">
-                    Tous les points clés sont confirmés
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-muted-foreground/70">
-                    Aucun agent démarre n&apos;apparaît en attente de pointage sur les vacations suivies.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <PointageVerificationNotice />
           ) : (
             summary.missingCheckIns.map((item) => (
               <Link

@@ -198,14 +198,16 @@ export function computeEffectiveLimits(plan: Plan, sub: Subscription) {
 
 /**
  * Usage doc: `usage/{tenantId}`
- * créé si absent.
+ * Créé si absent, sauf en lecture seule (défauts calculés sans écriture).
  */
-export async function getUsage(tenantId: string): Promise<Usage> {
+export async function getUsage(tenantId: string, readOnly = false): Promise<Usage> {
   const ref = adminDb.collection("usage").doc(tenantId);
   const snap = await ref.get();
   if (!snap.exists) {
-    const init: Usage = { agents: 0, sites: 0, activeTenants: 1, updatedAt: FieldValue.serverTimestamp() };
-    await ref.set(init, { merge: true });
+    if (!readOnly) {
+      const init: Usage = { agents: 0, sites: 0, activeTenants: 1, updatedAt: FieldValue.serverTimestamp() };
+      await ref.set(init, { merge: true });
+    }
     return { agents: 0, sites: 0, activeTenants: 1 };
   }
   const u = snap.data() as any;

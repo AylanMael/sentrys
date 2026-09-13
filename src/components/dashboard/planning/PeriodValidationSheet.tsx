@@ -1,4 +1,6 @@
 "use client";
+import { PlanningIndicatorNotice } from "./PlanningIndicatorNotice";
+import { isMonthlyAssessmentComplete } from "@/lib/planning/indicator-scope";
 
 import React from "react";
 import {
@@ -66,6 +68,7 @@ type ValidationLogAction =
   | "site_dispatch_open";
 
 type PlanningValidationLog = {
+  metrics?: Record<string, number>;
   id: string;
   fromIso: string;
   toIso: string;
@@ -170,6 +173,9 @@ export const PeriodValidationSheet: React.FC = () => {
     setTensionMode,
     range,
     stats,
+    monthlyComparisons,
+    indicatorScope,
+    agentId: filteredAgentId,
     ops,
     conflictIndex,
     publishRange,
@@ -332,24 +338,17 @@ export const PeriodValidationSheet: React.FC = () => {
 
   const overtimeAgents = React.useMemo(
     () =>
-      Object.entries(stats.agentMonthlyHours)
-        .map(([agentId, hours]) => {
-          const contract =
-            stats.agentContractualHours[agentId] ??
-            agents.find((agent) => agent.id === agentId)?.monthlyContractHours ??
-            151.67;
-
+      Object.entries(monthlyComparisons)
+        .map(([agentId, comparison]) => {
           return {
             agentId,
             name: agentLabel(agentId),
-            hours,
-            contract,
-            delta: hours - contract,
+            ...comparison,
           };
         })
         .filter((item) => item.delta > 0.01)
         .sort((left, right) => right.delta - left.delta),
-    [agentLabel, agents, stats.agentContractualHours, stats.agentMonthlyHours]
+    [agentLabel, monthlyComparisons]
   );
 
   const sitesWithoutCoverage = React.useMemo(() => {
@@ -486,6 +485,7 @@ export const PeriodValidationSheet: React.FC = () => {
     });
     return ids;
   }, [activeVacations]);
+  const monthlyAssessmentComplete = isMonthlyAssessmentComplete(indicatorScope.canCompareMonthly, filteredAgentId, stats.agentMonthlyHours, monthlyComparisons);
 
   const publicationRiskIds = React.useMemo(() => {
     const ids = new Set<string>();
@@ -524,6 +524,7 @@ export const PeriodValidationSheet: React.FC = () => {
     (complianceBlockingAgents.length > 0 ? 1 : 0) +
     (maxDurationViolationCount > 0 ? 1 : 0);
   const warningCount =
+    (!monthlyAssessmentComplete ? 1 : 0) +
     (restViolationCount > 0 ? 1 : 0) +
     (overtimeAgents.length > 0 ? 1 : 0) +
     (sitesWithoutCoverage.length > 0 ? 1 : 0) +
@@ -622,9 +623,9 @@ export const PeriodValidationSheet: React.FC = () => {
           tone: "warning" as const,
         },
         {
-          title: "Volumes horaires",
-          description: "Des agents depassent leur volume contractuel.",
-          count: overtimeAgents.length,
+          title: monthlyAssessmentComplete ? "Volumes planifiés" : "Comparaison mensuelle non évaluée complètement",
+          description: monthlyAssessmentComplete ? "Des heures planifiées dépassent le contrat mensuel renseigné." : "Période, filtres, synchronisation ou contrats incomplets : absence de dépassement non concluante.",
+          count: monthlyAssessmentComplete ? overtimeAgents.length : 1,
           tone: "warning" as const,
         },
         {
@@ -640,6 +641,7 @@ export const PeriodValidationSheet: React.FC = () => {
       ops.missingAgents,
       maxDurationViolationCount,
       overtimeAgents.length,
+      monthlyAssessmentComplete,
       restViolationCount,
       sitesWithoutCoverage.length,
       sstCoverageWarningCount,
@@ -725,13 +727,12 @@ export const PeriodValidationSheet: React.FC = () => {
       icon: ShieldCheck,
     },
     {
-      title: "Depassements horaires",
+      title: "Planifié / contrat mensuel",
       description:
-        overtimeAgents.length > 0
-          ? "Des agents depassent leur volume contractuel."
-          : "Aucun depassement agent détecté.",
+        !monthlyAssessmentComplete ? "Non évalué complètement : vérifiez période, filtres, synchronisation et contrats."
+          : overtimeAgents.length > 0 ? "Des heures planifiées dépassent le contrat renseigné." : "Aucun dépassement du planifié détecté sur ce périmètre.",
       count: overtimeAgents.length,
-      tone: overtimeAgents.length > 0 ? "warning" : "ok",
+      tone: !monthlyAssessmentComplete || overtimeAgents.length > 0 ? "warning" : "ok",
       icon: CalendarCheck2,
     },
     {
@@ -779,6 +780,8 @@ export const PeriodValidationSheet: React.FC = () => {
               complianceBlockingAgentCount: complianceBlockingAgents.length,
               complianceWarningAgentCount: complianceWarningAgents.length,
               overtimeAgentCount: overtimeAgents.length,
+              overtimeEvaluated: monthlyAssessmentComplete ? 1 : 0,
+              overtimeAgentFiltered: filteredAgentId !== "all" ? 1 : 0,
               sitesWithoutCoverageCount: sitesWithoutCoverage.length,
               riskyVacationCount: riskyVacationsToPublish.length,
             },
@@ -800,6 +803,8 @@ export const PeriodValidationSheet: React.FC = () => {
     },
     [
       activeAssignedAgentIds.size,
+      monthlyAssessmentComplete,
+      filteredAgentId,
       activeSiteIds.size,
       activeVacations.length,
       complianceBlockingAgents.length,
@@ -954,11 +959,19 @@ export const PeriodValidationSheet: React.FC = () => {
       });
     }
 
-    if (actions.length === 0) {
+    if (!monthlyAssessmentComplete) {
+      actions.push({
+        title: "Contrôle mensuel non évalué complètement",
+        description: "Vérifiez le mois complet, les filtres, la synchronisation et les contrats. Un filtre agent ne constitue pas un bilan de l’agence.",
+        tone: "warning", actionLabel: "Voir détails", onAction: focusCorrections,
+      });
+    }
+
+    if (actions.length === 0 && monthlyAssessmentComplete) {
       actions.push({
         title: "Planning prêt pour le terrain",
         description:
-          "Tous les voyants principaux sont au vert. La prochaine action logique est la publication puis la diffusion.",
+          "Aucune action prioritaire détectée sur les données contrôlées. Vérifiez les limites du contrôle avant publication.",
         tone: "ok",
         actionLabel: "Previsualiser",
         onAction: handlePreviewPublish,
@@ -973,6 +986,7 @@ export const PeriodValidationSheet: React.FC = () => {
     focusConflicts,
     focusCorrections,
     handlePreviewPublish,
+    monthlyAssessmentComplete,
     ops.missingAgents,
     ops.total,
     maxDurationViolationCount,
@@ -1014,6 +1028,7 @@ export const PeriodValidationSheet: React.FC = () => {
         </SheetHeader>
 
         <div className="space-y-6 py-6">
+          <PlanningIndicatorNotice />
           <div
             className={cn(
               "relative overflow-hidden rounded-[2rem] border p-5",
@@ -1040,7 +1055,7 @@ export const PeriodValidationSheet: React.FC = () => {
 
               <div className="rounded-[1.5rem] border border-border/50 bg-background/85 p-4 text-center shadow-sm">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
-                  Score santé
+                  {monthlyAssessmentComplete ? "Score indicatif" : "Score partiel — contrôle incomplet"}
                 </p>
                 <p className="mt-1 text-5xl font-black text-foreground">
                   {readinessScore}
@@ -1049,7 +1064,7 @@ export const PeriodValidationSheet: React.FC = () => {
                   <div
                     className={cn(
                       "h-full rounded-full transition-all",
-                      readinessScore >= 90
+                      monthlyAssessmentComplete && readinessScore >= 90
                         ? "bg-emerald-500"
                         : readinessScore >= 70
                           ? "bg-amber-500"
@@ -1235,7 +1250,7 @@ export const PeriodValidationSheet: React.FC = () => {
                     >
                       <span className="font-bold">{agent.name}</span>
                       {" : "}
-                      {agent.hours.toFixed(1)}h realisees / {agent.contract.toFixed(1)}h contrat
+                      {agent.hours.toFixed(1)}h planifiées / {agent.contract.toFixed(1)}h contrat
                       {" "}
                       <span className="font-black text-amber-700 dark:text-amber-300">
                         (+{agent.delta.toFixed(1)}h)
@@ -1333,7 +1348,7 @@ export const PeriodValidationSheet: React.FC = () => {
                           {validationActionLabel(entry.action)}
                         </Badge>
                         <span className="text-sm font-black text-foreground">
-                          Score {entry.score}/100
+                          {entry.metrics?.overtimeEvaluated === 0 ? "Score partiel" : "Score"} {entry.score}/100
                         </span>
                       </div>
                       <p className="mt-1 text-xs font-semibold text-muted-foreground">

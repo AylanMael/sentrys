@@ -1,9 +1,9 @@
 // src/app/api/me/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getAuth } from "firebase-admin/auth";
-import { adminDb } from "@/lib/firebase/admin";
+import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { normalizeRole } from "@/lib/auth/role";
 import { appLogger } from "@/lib/observability/logger";
+import { suspensionMode } from "@/lib/auth/tenant-suspension";
 
 export const runtime = "nodejs";
 
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
   let decoded: { uid: string; email?: string; name?: string };
 
   try {
-    const vérifiéd = await getAuth().verifyIdToken(token, true);
+    const vérifiéd = await adminAuth.verifyIdToken(token, true);
 
     decoded = {
       uid: vérifiéd.uid,
@@ -102,6 +102,11 @@ export async function GET(req: NextRequest) {
       name: (vérifiéd as { name?: string }).name,
     };
   } catch (error) {
+    if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true") {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
+      const allowed = ["app/no-app", "app/invalid-credential", "auth/invalid-credential", "auth/argument-error", "auth/invalid-id-token", "auth/id-token-expired", "auth/user-not-found", "auth/internal-error"];
+      return json(401, { ok: false, error: "Local emulator authentication failed", diagnostic: allowed.includes(code) ? code : "unknown", authEmulatorConfigured: process.env.FIREBASE_AUTH_EMULATOR_HOST === "127.0.0.1:9099", demoProjectConfigured: adminAuth.app.options.projectId === "demo-sentrys-accounts" });
+    }
     appLogger.warning("auth.token.invalid", { route: "/api/me" });
     return unauthorized("Invalid or expired token");
   }
@@ -131,7 +136,7 @@ export async function GET(req: NextRequest) {
     const role = normalizeRole(tenantUser?.role);
     const status = normalizeStatus(tenantUser?.status);
 
-    if (status === "disabled") {
+    if (status !== "active" || !role) {
       return forbidden("User disabled");
     }
 
@@ -143,12 +148,16 @@ export async function GET(req: NextRequest) {
       if (tenantSnap.exists) {
         const tenantData = tenantSnap.data() as Record<string, unknown>;
 
-        tenant = {
+        tenant = suspensionMode(tenantData) === "security" && !(tenantId === "platform" && role === "super_admin")
+          ? { id: tenantSnap.id, status: "suspended", suspensionMode: "security" }
+          : {
           id: tenantSnap.id,
           ...tenantData,
           createdAtIso: toIso(tenantData?.createdAt),
           updatedAtIso: toIso(tenantData?.updatedAt),
         };
+      } else {
+        tenant = { id: tenantId, status: "suspended", suspensionMode: "security" };
       }
     }
 
@@ -161,6 +170,7 @@ export async function GET(req: NextRequest) {
       role,
       status,
       hasTenant: Boolean(tenantId),
+      agentId: normalizeText(tenantUser?.agentId),
       createdAtIso: toIso(tenantUser?.createdAt),
       updatedAtIso: toIso(tenantUser?.updatedAt),
       tenant,

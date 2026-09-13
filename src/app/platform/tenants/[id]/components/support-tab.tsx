@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { formatDate, formatTime, sessionStatusClass, SUPPORT_DURATIONS, SUPPORT_SCOPES, supportScopeLabel } from "../format";
-import type { SupportSessionRow, SupportScope, TenantDétailResponse } from "../types";
+import type { SupportSessionRow, SupportScope, SuspensionMode, TenantDétailResponse } from "../types";
 
 export function SupportSessionAction({
   open,
@@ -163,6 +163,8 @@ export function SupportSessionAction({
 
 export function StatusGovernanceAction({
   tenant,
+  targetStatus,
+  suspensionMode,
   open,
   reason,
   confirmation,
@@ -173,8 +175,14 @@ export function StatusGovernanceAction({
   onReasonChange,
   onConfirmationChange,
   onSubmit,
+  onTargetChange,
+  onModeChange,
 }: {
   tenant: TenantDétailResponse["tenant"] | null | undefined;
+  targetStatus: "active" | "suspended";
+  suspensionMode: SuspensionMode;
+  onTargetChange: (status: "active" | "suspended") => void;
+  onModeChange: (mode: SuspensionMode) => void;
   open: boolean;
   reason: string;
   confirmation: string;
@@ -186,22 +194,25 @@ export function StatusGovernanceAction({
   onConfirmationChange: (confirmation: string) => void;
   onSubmit: (
     targetStatus: "active" | "suspended",
-    expectedConfirmation: string
+    suspensionMode: SuspensionMode
   ) => Promise<void>;
 }) {
   const currentStatus = String(tenant?.status ?? "active").toLowerCase();
   const isSuspended = currentStatus === "suspended";
-  const targetStatus: "active" | "suspended" = isSuspended
-    ? "active"
-    : "suspended";
-  const expectedConfirmation = isSuspended ? "REACTIVER" : "SUSPENDRE";
-  const actionLabel = isSuspended ? "Reactiver l'agence" : "Suspendre l'agence";
-  const actionTone = isSuspended
+  const currentMode = tenant?.suspensionMode === "commercial" ? "commercial" : "security";
+  const expectedConfirmation = targetStatus === "active" ? "REACTIVER" : "SUSPENDRE";
+  const actionLabel = targetStatus === "active" ? "Réactiver l'agence"
+    : isSuspended ? "Changer le mode de suspension" : "Suspendre l'agence";
+  const modeDescription = suspensionMode === "commercial"
+    ? "Lecture et exports autorisés. Écritures métier bloquées, sauf pointages et incidents des agents affectés à une mission encore en cours, commencée au plus tard à la suspension."
+    : "Tous les accès métier sont bloqués. Seuls le diagnostic du compte et le support restent accessibles.";
+  const actionTone = targetStatus === "active"
     ? "border-emerald-500/25 bg-emerald-500/10"
     : "border-red-500/25 bg-red-500/10";
   const canSubmit =
     reason.trim().length >= 12 &&
     confirmation.trim().toUpperCase() === expectedConfirmation &&
+    !(isSuspended && targetStatus === "suspended" && suspensionMode === currentMode) &&
     !submitting;
 
   if (!open) {
@@ -210,6 +221,12 @@ export function StatusGovernanceAction({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="font-black">Suspendre / réactiver</p>
+            {isSuspended ? (
+              <p className="mt-1 text-sm font-bold">
+                Suspension {currentMode === "commercial" ? "commerciale" : "de sécurité"}
+                {tenant?.suspendedAtIso ? ` depuis le ${formatTime(tenant.suspendedAtIso)}` : " — date de suspension indisponible"}
+              </p>
+            ) : null}
             <p className="mt-1 text-sm font-semibold leading-5 text-muted-foreground">
               Action sensible avec motif obligatoire, confirmation explicite et audit automatique.
             </p>
@@ -225,7 +242,7 @@ export function StatusGovernanceAction({
             className="rounded-2xl font-black"
             onClick={() => onOpenChange(true)}
           >
-            {isSuspended ? "Reactiver" : "Suspendre"}
+            {isSuspended ? "Gérer la suspension" : "Suspendre"}
           </Button>
         </div>
       </div>
@@ -238,7 +255,7 @@ export function StatusGovernanceAction({
         <div>
           <p className="font-black">{actionLabel}</p>
           <p className="mt-1 text-sm font-semibold leading-5 text-muted-foreground">
-            Cette action modifié le statut SaaS de l'agence et créé une tracé platformAuditLog.
+            Cette action exige un motif et sera enregistrée dans l'audit plateforme.
           </p>
         </div>
         <Badge variant="outline" className="w-fit rounded-full">
@@ -247,6 +264,32 @@ export function StatusGovernanceAction({
       </div>
 
       <div className="mt-4 space-y-3">
+        {isSuspended ? (
+          <div className="flex flex-wrap gap-2" aria-label="Action de suspension">
+            <Button type="button" variant={targetStatus === "active" ? "default" : "outline"}
+              disabled={submitting} onClick={() => onTargetChange("active")}>Réactiver</Button>
+            <Button type="button" variant={targetStatus === "suspended" ? "default" : "outline"}
+              disabled={submitting} onClick={() => onTargetChange("suspended")}>Changer de mode</Button>
+          </div>
+        ) : null}
+        {targetStatus === "suspended" ? (
+          <fieldset disabled={submitting} className="space-y-2">
+            <legend className="text-sm font-bold">Mode de suspension</legend>
+            <div className="flex flex-wrap gap-4">
+              {(["commercial", "security"] as const).map((mode) => (
+                <label key={mode} className="flex items-center gap-2 text-sm font-semibold">
+                  <input type="radio" name="suspension-mode" value={mode}
+                    checked={suspensionMode === mode} onChange={() => onModeChange(mode)} />
+                  {mode === "commercial" ? "Commerciale" : "Sécurité"}
+                </label>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground">{modeDescription}</p>
+            {isSuspended ? <p className="text-xs text-muted-foreground">
+              Le changement de mode conserve la date de suspension initiale.
+            </p> : null}
+          </fieldset>
+        ) : <p className="text-sm text-muted-foreground">Les accès métier seront rétablis selon les droits de chaque utilisateur.</p>}
         <div className="space-y-2">
           <label className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
             Motif obligatoire
@@ -297,7 +340,7 @@ export function StatusGovernanceAction({
               targetStatus === "suspended" && "bg-red-600 text-white hover:bg-red-700"
             )}
             disabled={!canSubmit}
-            onClick={() => void onSubmit(targetStatus, expectedConfirmation)}
+            onClick={() => void onSubmit(targetStatus, suspensionMode)}
           >
             {submitting ? "Application..." : actionLabel}
           </Button>

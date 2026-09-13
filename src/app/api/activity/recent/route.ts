@@ -2,13 +2,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireTenantUser } from "@/app/api/_utils/withTenant";
+import { canReadBackoffice } from "@/lib/auth/role";
+import { pointageContext } from "@/lib/activity/pointage-context";
 
 export const runtime = "nodejs";
 
 /* ================= helpers ================= */
 
 function json(status: number, body: unknown) {
-  return NextResponse.json(body, { status });
+  return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
 function serverError(e: unknown, tag: string) {
@@ -37,6 +39,7 @@ function parseLimit(v: string | null, def = 10) {
 export async function GET(req: NextRequest) {
   const auth = await requireTenantUser(req);
   if (!auth.ok) return auth.res;
+  if (!canReadBackoffice(auth.role)) return json(403, { ok: false, error: "Accès réservé au backoffice." });
 
   const url = new URL(req.url);
   const limit = parseLimit(url.searchParams.get("limit"), 10);
@@ -49,7 +52,9 @@ export async function GET(req: NextRequest) {
       .limit(limit)
       .get();
 
-    const items = snap.docs.map((d) => {
+    const context = pointageContext(auth.tenantId, async (collection, id) =>
+      (await adminDb.collection(collection).doc(id).get()).data());
+    const items = await Promise.all(snap.docs.map(async (d) => {
       const x = d.data() as Record<string, unknown>;
       return {
         id: d.id,
@@ -62,8 +67,9 @@ export async function GET(req: NextRequest) {
         actorEmail: (x.actorEmail as string) ?? null,
         actorRole: (x.actorRole as string) ?? null,
         createdAtIso: toIso(x.createdAt),
+        ...await context(x),
       };
-    });
+    }));
 
     return json(200, { ok: true, tenantId: auth.tenantId, count: items.length, items });
   } catch (e: unknown) {

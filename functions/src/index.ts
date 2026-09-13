@@ -57,9 +57,28 @@ export const agentsAvailable = onRequest(async (req, res) => {
     }
 
     const decoded = await getAuth().verifyIdToken(token, true);
-    const tenantId = (decoded as any)?.tenantId as string | undefined;
-    if (!tenantId) {
-      json(res, 403, {ok: false, error: "Missing tenantId in token claims"});
+    const db = getFirestore();
+    const memberSnap = await db.collection("tenantUsers").doc(decoded.uid).get();
+    const member = memberSnap.data();
+    if (!memberSnap.exists || member?.status !== "active") {
+      json(res, 403, {ok: false, error: "Active tenant membership required"});
+      return;
+    }
+    const tenantId = typeof member.tenantId === "string" ? member.tenantId.trim() : "";
+    if (!tenantId || tenantId.includes("/")) {
+      json(res, 403, {ok: false, error: "Missing or invalid tenantId"});
+      return;
+    }
+    const tenantSnap = await db.collection("tenants").doc(tenantId).get();
+    if (!tenantSnap.exists) {
+      json(res, 403, {ok: false, error: "Tenant not found"});
+      return;
+    }
+    const tenant = tenantSnap.data();
+    // This function only reads availability, including when called with POST.
+    // Suspended tenants may read only with the explicit commercial mode.
+    if (tenant?.status === "suspended" && tenant.suspensionMode !== "commercial") {
+      json(res, 403, {ok: false, error: "Tenant suspended", code: "TENANT_SUSPENDED"});
       return;
     }
 
@@ -75,8 +94,6 @@ export const agentsAvailable = onRequest(async (req, res) => {
       json(res, 400, {ok: false, error: "`to` must be > `from`"});
       return;
     }
-
-    const db = getFirestore();
 
     // --- 1) Charger les agents actifs
     const agentsSnap = await db

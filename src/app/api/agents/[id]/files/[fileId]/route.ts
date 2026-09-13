@@ -38,6 +38,8 @@ export async function GET(
 
   const { id: agentId, fileId } = await params;
   if (!canWrite(auth.role) && !isAgent(auth.role)) return forbidden("Forbidden");
+  // Personal documents are backoffice-only; retain the existing own-photo access.
+  if (isAgent(auth.role) && fileId !== "photo") return forbidden("Forbidden");
   if (isAgent(auth.role) && (auth.agentId ?? auth.uid) !== agentId) {
     return forbidden("Forbidden");
   }
@@ -77,6 +79,9 @@ export async function GET(
 
   if (!storagePath || !isAgentStoragePath(storagePath, auth.tenantId, agentId)) {
     return json(404, { ok: false, error: "File not found" });
+  }
+  if (isAgent(auth.role) && !storagePath.startsWith(`tenants/${auth.tenantId}/agents/${agentId}/photo/`)) {
+    return forbidden("Forbidden");
   }
 
   try {

@@ -82,6 +82,7 @@ import { cn } from "@/lib/utils";
 import { DashboardGate } from "@/components/auth/DashboardGate";
 import { useBillingUsage } from "@/hooks/use-billing-usage";
 import { apiFetch } from "@/lib/api/client-fetch";
+import { suspensionMode } from "@/lib/auth/tenant-suspension";
 
 const userAvatar = PlaceHolderImages.find((p) => p.id === "user-avatar-1");
 
@@ -209,7 +210,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
 
-  const billing = useBillingUsage(Boolean(user));
+  const billing = useBillingUsage(Boolean(user) && user?.role !== "agent");
   const [complianceOpenCount, setComplianceOpenCount] = useState(0);
   const [notifications, setNotifications] = useState<InternalNotification[]>([]);
   const [notificationsUnreadCount, setNotificationsUnreadCount] = useState(0);
@@ -285,10 +286,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return norm((user as any)?.tenant?.onboarding?.status);
   }, [user]);
   const isPlatformSuperAdmin = role === "super_admin" && user?.tenantId === "platform";
+  const agencySuspension = isPlatformSuperAdmin ? "none" : suspensionMode(user?.tenant);
   const needsAgencyOnboarding = useMemo(() => {
     if (!user?.tenantId || user.tenantId === "platform") return false;
     if (!hasRole(role, ["owner", "admin", "manager"])) return false;
     if (!tenantStatus) return false;
+    if (tenantStatus === "suspended") return false;
     return !["active", "trial", "trialing", "ok"].includes(tenantStatus);
   }, [role, tenantStatus, user?.tenantId]);
 
@@ -448,16 +451,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 
   const menuGroups = useMemo(() => {
+    if (role === "agent") return [{ label: "Mon espace agent", items: [
+      { href: "/dashboard/terrain", icon: MapPin, label: "Mes missions", keywords: "terrain présence pointage incident" },
+      { href: "/dashboard/agent-planning", icon: Bell, label: "Mes diffusions", keywords: "planning horaires confirmation" },
+    ] }];
     return [
       {
         label: "Quotidien",
         items: [
           { href: "/dashboard", icon: LayoutDashboard, label: "Vue d'ensemble", keywords: "accueil synthèse" },
-          ...(role === "agent"
-            ? [{ href: "/dashboard/agent-planning", icon: Bell, label: "Mes diffusions", keywords: "missions affectations" }]
-            : []),
           { href: "/dashboard/planning", icon: CalendarDays, label: "Planning", keywords: "calendrier affectations" },
           { href: "/dashboard/vacations", icon: CalendarClock, label: "Vacations", keywords: "missions horaires" },
+          ...(canSeeBackoffice ? [{ href: "/dashboard/pointages", icon: CalendarClock, label: "Pointages", keywords: "présence entrée sortie prise fin service agents" }] : []),
           { href: "/dashboard/incidents", icon: Siren, label: "Incidents", keywords: "alertes déclarations" },
           { href: "/dashboard/commandes", icon: ClipboardList, label: "Commandes clients", keywords: "demandes prestations" },
         ],
@@ -494,7 +499,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ],
       },
     ];
-  }, [canSeeUsersTeam, isPlatformSuperAdmin, needsAgencyOnboarding, role, tenantOnboardingStatus]);
+  }, [canSeeBackoffice, canSeeUsersTeam, isPlatformSuperAdmin, needsAgencyOnboarding, role, tenantOnboardingStatus]);
 
   const navigationResults = useMemo(() => {
     const query = navigationSearch.trim().toLocaleLowerCase("fr");
@@ -504,14 +509,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       ...menuGroups.flatMap((group) =>
         group.items.map((item) => ({ ...item, group: group.label }))
       ),
-      { href: "/dashboard/billing", icon: CreditCard, label: "Abonnement", keywords: "facturation offre quotas", group: "Gestion" },
-      { href: "/dashboard/settings", icon: Settings, label: "Configuration", keywords: "paramètres agence", group: "Gestion" },
+      ...(role === "agent" ? [] : [
+        { href: "/dashboard/billing", icon: CreditCard, label: "Abonnement", keywords: "facturation offre quotas", group: "Gestion" },
+        { href: "/dashboard/settings", icon: Settings, label: "Configuration", keywords: "paramètres agence", group: "Gestion" },
+      ]),
     ]
       .filter((item) =>
         `${item.label} ${item.keywords}`.toLocaleLowerCase("fr").includes(query)
       )
       .slice(0, 8);
-  }, [menuGroups, navigationSearch]);
+  }, [menuGroups, navigationSearch, role]);
 
   const handleLogout = async () => {
     await auth.signOut();
@@ -573,6 +580,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
+  if (user?.tenantId && agencySuspension === "security") return (
+    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-5 p-6">
+      <ShieldCheck className="h-10 w-10 text-primary" aria-hidden="true" />
+      <h1 className="text-2xl font-semibold">Accès métier suspendu</h1>
+      <p className="text-muted-foreground">Votre agence fait l’objet d’une suspension de sécurité. Aucun accès aux données métier n’est disponible. Contactez le support pour la suite.</p>
+      <Button asChild><Link href="/contact?reason=support">Contacter le support</Link></Button>
+      <Button variant="outline" onClick={() => window.location.reload()}>Vérifier mon accès</Button>
+      <Button variant="ghost" onClick={() => auth.signOut()}>Se déconnecter</Button>
+    </main>
+  );
+
   return (
     <DashboardGate>
       <SidebarProvider>
@@ -610,7 +628,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <SidebarSeparator className="mx-4 my-4 opacity-10" />
 
-            <SidebarGroup>
+            {role !== "agent" && <SidebarGroup>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <NavLink
@@ -637,10 +655,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   )}
                 </SidebarMenuItem>
               </SidebarMenu>
-            </SidebarGroup>
+            </SidebarGroup>}
           </SidebarContent>
 
-          <SidebarFooter className={cn("border-t border-border/10", isCompactDisplay ? "p-3" : "p-6")}>
+          {role !== "agent" && <SidebarFooter className={cn("border-t border-border/10", isCompactDisplay ? "p-3" : "p-6")}>
             <SidebarMenu>
               <SidebarMenuItem>
                 <NavLink
@@ -650,17 +668,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 />
               </SidebarMenuItem>
             </SidebarMenu>
-          </SidebarFooter>
+          </SidebarFooter>}
         </Sidebar>
 
-        <SidebarInset className="bg-transparent flex flex-col min-h-screen">
+        <SidebarInset className="bg-transparent flex min-w-0 flex-col min-h-screen">
           <header
             className={cn(
-              "flex shrink-0 items-center justify-between gap-4 border-b border-border/10 bg-background/20 backdrop-blur-2xl sticky top-0 z-40",
-              isCompactDisplay ? "h-14 px-4" : "h-20 px-8"
+              "flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/10 bg-background/20 backdrop-blur-2xl sticky top-0 z-40 sm:flex-nowrap sm:gap-4",
+              isCompactDisplay ? "min-h-14 px-4 py-2 sm:h-14 sm:py-0" : "min-h-20 px-4 py-2 sm:h-20 sm:px-8 sm:py-0"
             )}
           >
-            <div className="flex items-center gap-6">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-6">
               <SidebarTrigger className="-ml-2 hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all duration-300 rounded-lg p-2" />
 
               <div className="relative flex w-40 max-w-[45vw] min-w-0 items-center gap-2 rounded-xl border border-border/10 bg-background/40 px-3 py-2 text-muted-foreground transition focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 sm:w-72 sm:max-w-none lg:w-80">
@@ -740,7 +758,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </span>
               </Button>
 
-              <DropdownMenu onOpenChange={(open) => open && void loadNotifications()}>
+              {role !== "agent" && <DropdownMenu onOpenChange={(open) => open && void loadNotifications()}>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
@@ -882,7 +900,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     )}
                   </div>
                 </DropdownMenuContent>
-              </DropdownMenu>
+              </DropdownMenu>}
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -969,6 +987,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     : "max-w-[1600px] min-h-[calc(100vh-14rem)]"
                 )}
               >
+                {agencySuspension === "commercial" && (
+                  <aside role="status" className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+                    <p className="font-semibold">Agence suspendue — consultation seule</p>
+                    <p>Les modifications sont bloquées. Les agents affectés peuvent uniquement pointer et déclarer un incident sur les missions déjà commencées, jusqu’à leur fin prévue.</p>
+                    {role === "agent" && <Link className="mt-2 inline-block font-semibold underline" href="/dashboard/terrain">Ouvrir mes actions terrain</Link>}
+                    <Link className="ml-3 inline-block underline" href="/contact?reason=support">Contacter le support</Link>
+                  </aside>
+                )}
                 {children}
               </div>
             </div>

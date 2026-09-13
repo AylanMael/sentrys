@@ -1,4 +1,5 @@
 "use client";
+import { toParisDateTimeValue, parsePlanningDateTime, planningInputToIso } from "@/lib/planning/paris-time";
 
 import React from "react";
 import { useForm } from "react-hook-form";
@@ -32,61 +33,35 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { usePlanning } from "./PlanningContext";
 import { useToast } from "@/hooks/use-toast";
+import { getApiErrorMessage } from "@/lib/api/client-fetch";
 import { Loader2 } from "lucide-react";
 import { MISSION_TYPE_OPTIONS } from "@/lib/planning/mission-types";
 
 const SLOT_STEP_MINUTES = 30;
 
 function toLocalDateTimeValue(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
+  return toParisDateTimeValue(date);
 }
 
 function roundDateToStep(date: Date, stepMinutes = SLOT_STEP_MINUTES) {
-  const rounded = new Date(date);
-  rounded.setSeconds(0, 0);
-  const roundedMinutes =
-    Math.round(rounded.getMinutes() / stepMinutes) * stepMinutes;
-  rounded.setMinutes(roundedMinutes);
-  return rounded;
+  return new Date(Math.round(date.getTime() / (stepMinutes * 60000)) * stepMinutes * 60000);
 }
 
 function normalizeDateTimeInput(value: string) {
   if (!value) return "";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return toLocalDateTimeValue(roundDateToStep(parsed));
+  const parsed = parsePlanningDateTime(value);
+  if (!parsed) return planningInputToIso(value);
+  return roundDateToStep(parsed).toISOString();
 }
 
 function buildDefaultVacationWindow(baseDate?: Date) {
   const source =
     baseDate && !Number.isNaN(baseDate.getTime()) ? baseDate : new Date();
-  const start = new Date(
-    source.getFullYear(),
-    source.getMonth(),
-    source.getDate(),
-    8,
-    0,
-    0,
-    0
-  );
-  const end = new Date(
-    source.getFullYear(),
-    source.getMonth(),
-    source.getDate(),
-    18,
-    0,
-    0,
-    0
-  );
+  const day = toLocalDateTimeValue(source).slice(0, 10);
 
   return {
-    startAt: toLocalDateTimeValue(start),
-    endAt: toLocalDateTimeValue(end),
+    startAt: `${day}T08:00`,
+    endAt: `${day}T18:00`,
   };
 }
 
@@ -162,7 +137,7 @@ export const CreateVacationSheet: React.FC = () => {
   React.useEffect(() => {
     if (createOpen) {
       const seededDate = initialCreateData?.startAt
-        ? new Date(initialCreateData.startAt)
+        ? parsePlanningDateTime(initialCreateData.startAt) ?? parsePlanningDateTime(initialCreateData.startAt.slice(0, 10)) ?? new Date()
         : new Date();
       const nextWindow = buildDefaultVacationWindow(seededDate);
 
@@ -215,6 +190,12 @@ export const CreateVacationSheet: React.FC = () => {
           description: "Impossible de créer la vacation.",
         });
       }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Création impossible",
+        description: getApiErrorMessage(error, "Impossible de créer la vacation. Réessayez dans quelques instants."),
+      });
     } finally {
       setSaving(false);
     }
@@ -226,7 +207,7 @@ export const CreateVacationSheet: React.FC = () => {
         <SheetHeader>
           <SheetTitle className="text-xl font-bold">Nouvelle vacation</SheetTitle>
           <SheetDescription>
-            La vacation démarre par défaut a 08:00 et se termine a 18:00 le meme jour.
+            Horaires en heure de Paris (été/hiver). Par défaut : 08:00 à 18:00 le même jour.
           </SheetDescription>
         </SheetHeader>
 

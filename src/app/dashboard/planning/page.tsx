@@ -21,7 +21,7 @@ import { SiteDispatchSheet } from "@/components/dashboard/planning/SiteDispatchS
 export default function PlanningPage() {
   return (
     <PlanningProvider>
-      <div className="relative flex flex-col h-[calc(100vh-theme(spacing.16))] w-full overflow-hidden bg-slate-50 dark:bg-[#030712] antialiased font-sans">
+      <div className="relative flex flex-col min-h-screen lg:h-[calc(100vh-theme(spacing.16))] lg:min-h-0 w-full overflow-hidden bg-slate-50 dark:bg-[#030712] antialiased font-sans">
 
         {/* --- Immersive Background pour Glassmorphism --- */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
@@ -31,7 +31,7 @@ export default function PlanningPage() {
         </div>
 
         {/* --- Main Content (Elevated above background) --- */}
-        <div className="relative z-10 flex flex-col h-full w-full gap-3 p-3 lg:p-4">
+        <div className="relative z-10 flex flex-col lg:h-full w-full gap-3 p-3 lg:p-4">
           {/* Module Header & Summary (Contains Filters) */}
           <PlanningHeader />
 

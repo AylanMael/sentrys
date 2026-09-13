@@ -31,9 +31,10 @@ for (const path of [
 const storageRules = read("storage.rules");
 assert.match(storageRules, /role in \["super_admin", "owner", "admin", "manager"\]/);
 assert.match(storageRules, /tenantUser\(\)\.role == "agent"/);
-assert.match(storageRules, /tenantUser\(\)\.agentId == agentId/);
-assert.match(storageRules, /size <= 5 \* 1024 \* 1024/);
-assert.match(storageRules, /size <= 12 \* 1024 \* 1024/);
+assert.match(storageRules, /linkedAgentId == agentId/);
+assert.equal((storageRules.match(/allow create, update, delete: if false/g) ?? []).length, 2);
+assert.match(read("src/app/api/agents/[id]/photo/route.ts"), /MAX_PHOTO_SIZE = 5 \* 1024 \* 1024/);
+assert.match(read("src/app/api/agents/[id]/documents/route.ts"), /MAX_DOCUMENT_SIZE = 12 \* 1024 \* 1024/);
 assert.match(storageRules, /allow read, write: if false/);
 assert.doesNotMatch(storageRules, /"client"|"viewer"/);
 

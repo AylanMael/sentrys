@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
@@ -104,7 +105,7 @@ async function saveToLocalPrivateUpload({
   const absolutePath = join(process.cwd(), ...relativePath.split("/"));
 
   await mkdir(dirname(absolutePath), { recursive: true });
-  await writeFile(absolutePath, buffer);
+  await writeFile(absolutePath, buffer, { flag: "wx" });
 
   return {
     url: null,
@@ -122,7 +123,11 @@ export async function uploadTenantFile({
   folderSegments,
   metadata = {},
 }: UploadTenantFileInput): Promise<TenantFileUploadResult> {
-  const safeName = `${Date.now()}-${sanitizeUploadFileName(originalName)}`;
+  const segments = [tenantId, ...folderSegments];
+  if (segments.some(segment => !segment || segment.includes("..") || /[\\/\u0000]/.test(segment))) {
+    throw new Error("Invalid tenant storage path");
+  }
+  const safeName = `${randomUUID()}-${sanitizeUploadFileName(originalName).replace(/\.{2,}/g, "-")}`;
   const path = ["tenants", tenantId, ...folderSegments, safeName].join("/");
   const cleanMetadata = Object.fromEntries(
     Object.entries({
@@ -184,15 +189,17 @@ export async function deleteTenantFile({
   }
 
   let lastError: unknown = null;
+  let deleted = false;
   for (const bucketName of storageBucketCandidates()) {
     try {
-      await adminStorage.bucket(bucketName).file(normalizedPath).delete({ ignoreNotFound: true });
-      return { deleted: true, storageMode: "firebase" as const };
+      // A missing object in one bucket does not prove absence in fallback buckets.
+      await adminStorage.bucket(bucketName).file(normalizedPath).delete();
+      deleted = true;
     } catch (error) {
-      lastError = error;
+      if (String((error as { code?: unknown }).code) !== "404") lastError = error;
     }
   }
 
   if (lastError) throw lastError;
-  return { deleted: false, storageMode: "firebase" as const };
+  return { deleted, storageMode: "firebase" as const };
 }

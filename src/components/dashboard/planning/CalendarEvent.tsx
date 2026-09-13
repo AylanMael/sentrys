@@ -129,12 +129,14 @@ export const CalendarEvent: React.FC<CalendarEventProps> = ({
 
   const startTime = startSource
     ? new Date(startSource).toLocaleTimeString("fr-FR", {
+        timeZone: "Europe/Paris",
         hour: "2-digit",
         minute: "2-digit",
       })
     : "--:--";
   const endTime = endSource
     ? new Date(endSource).toLocaleTimeString("fr-FR", {
+        timeZone: "Europe/Paris",
         hour: "2-digit",
         minute: "2-digit",
       })

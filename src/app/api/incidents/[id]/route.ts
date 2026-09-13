@@ -5,13 +5,14 @@ import { z } from "zod";
 
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import { logActivity } from "@/lib/activity/logger";
+import { canReadIncidentSite } from "@/lib/auth/incident-read";
 
 export const runtime = "nodejs";
 
 /* ================= helpers ================= */
 
 function json(status: number, body: unknown) {
-  return NextResponse.json(body, { status });
+  return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
 function bad(msg: string, extra?: Record<string, unknown>) {
@@ -164,6 +165,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const loaded = await loadIncidentOr404(incidentId, auth.tenantId);
     if (!loaded.ok) return loaded.res;
+
+    if (!await canReadIncidentSite(auth, loaded.data.siteId)) return forbidden("Access denied for this site");
 
     return json(200, {
       ok: true,

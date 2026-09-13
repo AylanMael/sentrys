@@ -40,14 +40,11 @@ import { apiFetch } from "@/lib/api/client-fetch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { MISSION_TYPE_OPTIONS } from "@/lib/planning/mission-types";
+import { PLANNING_TIME_ZONE } from "@/lib/planning/paris-time";
 import {
-  addWeeks,
-  buildDateRangeForTemplateEntry,
-  buildDateRangeFromWeekStart,
+  prepareSiteTemplateWindows,
   buildHalfHourTimeOptions,
   buildTemplateFingerprint,
-  getWeekStartMonday,
-  matchesTemplateDay,
   normalizeSitePlanningTemplateEntry,
   SITE_TEMPLATE_DAY_OPTIONS,
   type SitePlanningTemplate,
@@ -546,8 +543,8 @@ export const SiteTemplateSheet: React.FC = () => {
       normalizedEntries: SitePlanningTemplateEntry[],
       siteName: string | null
     ) => {
-      const anchorDate = range?.from ? new Date(range.from) : new Date();
-      const visibleWeekStart = getWeekStartMonday(anchorDate);
+      const prepared = prepareSiteTemplateWindows(normalizedEntries, target, { from: range?.from, to: range?.to });
+      if (prepared.error) return { operations: [] as GénérationOperation[], skipped: 0, error: prepared.error };
 
       const existingFingerprints = new Set(
         vacations.map((vacation) =>
@@ -600,65 +597,11 @@ export const SiteTemplateSheet: React.FC = () => {
         });
       };
 
-      if (target === "visible_period") {
-        const visibleStart = range?.from ? new Date(range.from) : visibleWeekStart;
-        const visibleEnd = range?.to ? new Date(range.to) : addWeeks(visibleWeekStart, 1);
-
-        for (
-          let cursor = new Date(visibleStart);
-          cursor < visibleEnd;
-          cursor.setDate(cursor.getDate() + 1)
-        ) {
-          normalizedEntries.forEach((entry, entryIndex) => {
-            if (!matchesTemplateDay(cursor, entry.dayOfWeek)) return;
-            const { start, end } = buildDateRangeForTemplateEntry(
-              new Date(cursor),
-              entry
-            );
-            pushOperation(entry, start, end, entryIndex);
-          });
-        }
-      } else if (target === "next_week") {
-        const weekStart = addWeeks(visibleWeekStart, 1);
-
-        normalizedEntries.forEach((entry, entryIndex) => {
-          const { start, end } = buildDateRangeFromWeekStart(weekStart, entry);
-          pushOperation(entry, start, end, entryIndex);
-        });
-      } else {
-        const nextMonthAnchor = new Date(
-          anchorDate.getFullYear(),
-          anchorDate.getMonth() + 1,
-          1
-        );
-        const monthStart = new Date(
-          nextMonthAnchor.getFullYear(),
-          nextMonthAnchor.getMonth(),
-          1
-        );
-        const monthEnd = new Date(
-          nextMonthAnchor.getFullYear(),
-          nextMonthAnchor.getMonth() + 1,
-          0
-        );
-
-        for (
-          let cursor = new Date(monthStart);
-          cursor <= monthEnd;
-          cursor.setDate(cursor.getDate() + 1)
-        ) {
-          normalizedEntries.forEach((entry, entryIndex) => {
-            if (!matchesTemplateDay(cursor, entry.dayOfWeek)) return;
-            const { start, end } = buildDateRangeForTemplateEntry(
-              new Date(cursor),
-              entry
-            );
-            pushOperation(entry, start, end, entryIndex);
-          });
-        }
+      for (const { entry, entryIndex, start, end } of prepared.windows) {
+        pushOperation(entry, start, end, entryIndex);
       }
 
-      return { operations, skipped };
+      return { operations, skipped, error: null };
     },
     [range?.from, range?.to, selectedSiteId, skipDuplicates, target, vacations]
   );
@@ -755,11 +698,12 @@ export const SiteTemplateSheet: React.FC = () => {
         assignedCount: 0,
         openCount: 0,
         conflicts: [] as GénérationConflict[],
+        error: null,
       };
     }
 
     const site = sites.find((entry) => entry.id === selectedSiteId);
-    const { operations, skipped } = buildOperationsFromEntries(
+    const { operations, skipped, error } = buildOperationsFromEntries(
       previewEntries,
       site?.name ?? null
     );
@@ -777,6 +721,7 @@ export const SiteTemplateSheet: React.FC = () => {
       assignedCount,
       openCount: operations.length - assignedCount,
       conflicts,
+      error,
     };
   }, [
     analyzeOperationConflicts,
@@ -1029,10 +974,14 @@ export const SiteTemplateSheet: React.FC = () => {
       siteName: string | null,
       options: { safeOnly?: boolean } = {}
     ) => {
-      const { operations, skipped } = buildOperationsFromEntries(
+      const { operations, skipped, error } = buildOperationsFromEntries(
         normalizedEntries,
         siteName
       );
+      if (error) {
+        toast({ variant: "destructive", title: "Horaires du modèle à corriger", description: error });
+        return false;
+      }
       const conflicts = analyzeOperationConflicts(operations);
       const conflictIndexes = new Set(
         conflicts.map((conflict) => conflict.operationIndex)
@@ -1131,6 +1080,11 @@ export const SiteTemplateSheet: React.FC = () => {
     const normalizedEntries = sanitizeEntries();
     if (!normalizedEntries) return;
 
+    const prepared = buildOperationsFromEntries(normalizedEntries, null);
+    if (prepared.error) {
+      toast({ variant: "destructive", title: "Horaires du modèle à corriger", description: prepared.error });
+      return;
+    }
     const savedTemplate = await saveTemplate(true);
     if (!savedTemplate) return;
 
@@ -1141,6 +1095,8 @@ export const SiteTemplateSheet: React.FC = () => {
       site?.name ?? savedTemplate.siteName ?? null
     );
   }, [
+    buildOperationsFromEntries,
+    toast,
     generateFromEntries,
     sanitizeEntries,
     saveTemplate,
@@ -1163,6 +1119,11 @@ export const SiteTemplateSheet: React.FC = () => {
     }
 
     const site = sites.find((entry) => entry.id === selectedSiteId);
+    const prepared = buildOperationsFromEntries(preset, site?.name ?? null);
+    if (prepared.error) {
+      toast({ variant: "destructive", title: "Horaires du modèle à corriger", description: prepared.error });
+      return;
+    }
     const response = await apiFetch<{
       ok: boolean;
       template?: SitePlanningTemplate;
@@ -1209,6 +1170,7 @@ export const SiteTemplateSheet: React.FC = () => {
 
     await generateFromEntries(preset, site?.name ?? response.template.siteName ?? null);
   }, [
+    buildOperationsFromEntries,
     generateFromEntries,
     selectedSiteId,
     sites,
@@ -1221,6 +1183,11 @@ export const SiteTemplateSheet: React.FC = () => {
     const normalizedEntries = sanitizeEntries();
     if (!normalizedEntries) return;
 
+    const prepared = buildOperationsFromEntries(normalizedEntries, null);
+    if (prepared.error) {
+      toast({ variant: "destructive", title: "Horaires du modèle à corriger", description: prepared.error });
+      return;
+    }
     const savedTemplate = await saveTemplate(true);
     if (!savedTemplate) return;
 
@@ -1232,6 +1199,8 @@ export const SiteTemplateSheet: React.FC = () => {
       { safeOnly: true }
     );
   }, [
+    buildOperationsFromEntries,
+    toast,
     generateFromEntries,
     sanitizeEntries,
     saveTemplate,
@@ -1770,6 +1739,12 @@ export const SiteTemplateSheet: React.FC = () => {
               </p>
             </div>
 
+            {générationPreview.error && (
+              <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                {générationPreview.error}
+              </div>
+            )}
+            <p className="mb-3 text-sm text-muted-foreground">Tous les horaires sont en heure de Paris (été/hiver).</p>
             <div className="mb-4 grid gap-3 md:grid-cols-4">
               <div className="rounded-2xl border border-border/50 bg-background p-4">
                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
@@ -1870,17 +1845,20 @@ export const SiteTemplateSheet: React.FC = () => {
                           <span className="font-bold">{conflict.agentName}</span>
                           {" - "}
                           {new Date(conflict.startAt).toLocaleDateString("fr-FR", {
+                            timeZone: PLANNING_TIME_ZONE,
                             weekday: "short",
                             day: "2-digit",
                             month: "2-digit",
                           })}
                           {" "}
                           {new Date(conflict.startAt).toLocaleTimeString("fr-FR", {
+                            timeZone: PLANNING_TIME_ZONE,
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
                           {" -> "}
                           {new Date(conflict.endAt).toLocaleTimeString("fr-FR", {
+                            timeZone: PLANNING_TIME_ZONE,
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
@@ -1927,11 +1905,13 @@ export const SiteTemplateSheet: React.FC = () => {
                           <p className="text-sm font-black text-foreground">
                             {suggestion.conflict.agentName} bloqué le{" "}
                             {new Date(suggestion.conflict.startAt).toLocaleDateString("fr-FR", {
+                              timeZone: PLANNING_TIME_ZONE,
                               weekday: "short",
                               day: "2-digit",
                               month: "2-digit",
                             })}{" "}
                             {new Date(suggestion.conflict.startAt).toLocaleTimeString("fr-FR", {
+                              timeZone: PLANNING_TIME_ZONE,
                               hour: "2-digit",
                               minute: "2-digit",
                             })}

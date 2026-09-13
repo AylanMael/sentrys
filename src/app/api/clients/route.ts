@@ -1,7 +1,7 @@
 // src/app/api/clients/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { getAuth } from "firebase-admin/auth";
+import { requireTenantUser } from "@/app/api/_utils/withTenant";
 import { FieldValue } from "firebase-admin/firestore";
 import { decodeCursor, encodeCursor } from "@/lib/api/cursor";
 import { normLower, norm } from "@/lib/api/text";
@@ -37,48 +37,6 @@ function canReadClients(role: string) {
 
 function canWriteClients(role: string) {
   return ["super_admin", "owner", "admin", "manager"].includes(role);
-}
-
-function getToken(req: NextRequest) {
-  const h =
-    req.headers.get("authorization") ||
-    req.headers.get("Authorization") ||
-    req.headers.get("x-auth-token") ||
-    "";
-  if (!h) return null;
-  const s = h.trim();
-  if (s.toLowerCase().startsWith("bearer ")) return s.slice(7).trim();
-  return s;
-}
-
-async function getContext(req: NextRequest) {
-  const token = getToken(req);
-  if (!token) return { ok: false as const, error: "Missing token" };
-
-  const decoded = await getAuth().verifyIdToken(token, true);
-  const uid = decoded.uid;
-
-  const tuSnap = await adminDb.collection("tenantUsers").doc(uid).get();
-  if (!tuSnap.exists) return { ok: false as const, error: "No tenant profile" };
-
-  const tu = tuSnap.data() as Record<string, unknown>;
-  const status = normLower(tu?.status);
-  if (status !== "active") return { ok: false as const, error: "User not active" };
-
-  const tenantId = norm(tu?.tenantId);
-  const role = normLower(tu?.role);
-
-  if (!tenantId) return { ok: false as const, error: "Missing tenantId" };
-
-  if (!canReadClients(role)) return { ok: false as const, error: "Forbidden" };
-
-  return {
-    ok: true as const,
-    uid,
-    tenantId,
-    role,
-    email: norm(decoded.email),
-  };
 }
 
 function parseLimit(v: string | null) {
@@ -171,8 +129,9 @@ function clientSortMs(client: Record<string, unknown>) {
 
 export async function GET(req: NextRequest) {
   try {
-    const ctx = await getContext(req);
-    if (!ctx.ok) return json(401, { ok: false, error: ctx.error });
+    const ctx = await requireTenantUser(req);
+    if (!ctx.ok) return ctx.res;
+    if (!canReadClients(ctx.role)) return json(403, { ok: false, error: "Forbidden" });
 
     const { tenantId } = ctx;
 
@@ -234,8 +193,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const ctx = await getContext(req);
-    if (!ctx.ok) return json(401, { ok: false, error: ctx.error });
+    const ctx = await requireTenantUser(req);
+    if (!ctx.ok) return ctx.res;
     if (!canWriteClients(ctx.role)) {
       return json(403, { ok: false, error: "Forbidden" });
     }

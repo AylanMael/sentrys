@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 
 import { requireTenantUser, canWrite } from "@/app/api/_utils/withTenant";
 import { isAdminLike } from "@/lib/auth/role";
+import { canReadAssignedVacation } from "@/lib/auth/vacation-read";
 import { logActivity } from "@/lib/activity/logger";
 
 import {
@@ -86,6 +87,8 @@ export async function GET(
   try {
     const loaded = await loadVacationOr404(vacationId, auth.tenantId);
     if (!loaded.ok) return notFound(loaded.error);
+
+    if (!canReadAssignedVacation(auth, loaded.data)) return forbidden("Insufficient rights");
 
     const allowed = await canUserAccessSite({
       tenantId: auth.tenantId,

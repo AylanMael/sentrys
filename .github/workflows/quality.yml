@@ -31,6 +31,13 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run security:check
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm run test:rules:accounts
+      - run: npm run test:rules:integrity
+      - run: npm run test:rules:suspension
       - run: npm --prefix functions run lint
       - run: npm --prefix functions run build
       - run: npm run build

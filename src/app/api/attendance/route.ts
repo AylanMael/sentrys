@@ -24,14 +24,16 @@ export async function GET(req: NextRequest) {
       if (!member || member.status !== "active" || member.tenantId !== auth.tenantId
         || !canReadBackoffice(member.role) || suspensionMode(tenant) === "security") return null;
       let query = adminDb.collection("vacations").where("tenantId", "==", auth.tenantId)
-        .where("startAt", ">=", range.start).where("startAt", "<", range.end)
-        .orderBy("startAt", "desc").orderBy("__name__", "desc").limit(PAGE_SIZE + 1);
+        .where("endAt", ">", range.start).where("startAt", "<", range.end)
+        .orderBy("startAt", "desc").orderBy("endAt", "desc").orderBy("__name__", "desc").limit(PAGE_SIZE + 1);
       if (cursor) {
         const snap = await tx.get(adminDb.collection("vacations").doc(cursor));
         const data = snap.data();
         const ms = data?.startAt?.toMillis?.();
+        const endMs = data?.endAt?.toMillis?.();
         if (!data || data.tenantId !== auth.tenantId || typeof ms !== "number"
-          || ms < range.start.getTime() || ms >= range.end.getTime()) return null;
+          || typeof endMs !== "number" || !Number.isFinite(ms) || !Number.isFinite(endMs)
+          || endMs <= ms || endMs <= range.start.getTime() || ms >= range.end.getTime()) return null;
         query = query.startAfter(snap);
       }
       const page = await tx.get(query);

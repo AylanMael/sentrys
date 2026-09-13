@@ -19,7 +19,7 @@ export function PointageVerificationNotice() {
             <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0" />
           </Link>
           <p className="mt-2 text-xs text-muted-foreground">
-            Mission commencée la veille ? Sélectionnez sa date de début dans les pointages.
+            Mission commencée la veille ? Elle apparaît aussi dans les pointages des journées qu’elle chevauche.
           </p>
         </div>
       </div>

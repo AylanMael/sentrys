@@ -72,11 +72,11 @@ export default function PointagesPage() {
 
     <section aria-label="Filtres des pointages" className="space-y-4 rounded-2xl border bg-card p-5">
       <div className="grid gap-4 md:grid-cols-3">
-        <div><label htmlFor="attendance-date" className="text-sm font-medium">Date de début des missions · Paris</label><Input id="attendance-date" type="date" value={date} onChange={e => setDate(e.target.value)} className="mt-2 min-h-11" /></div>
+        <div><label htmlFor="attendance-date" className="text-sm font-medium">Journée suivie · Paris</label><Input id="attendance-date" type="date" value={date} onChange={e => setDate(e.target.value)} className="mt-2 min-h-11" /></div>
         <div><label htmlFor="attendance-agent" className="text-sm font-medium">Agent · lignes chargées</label><Input id="attendance-agent" value={agent} onChange={e => setAgent(e.target.value)} placeholder="Rechercher un nom" className="mt-2 min-h-11" /></div>
         <div><label htmlFor="attendance-site" className="text-sm font-medium">Site · lignes chargées</label><Input id="attendance-site" value={site} onChange={e => setSite(e.target.value)} placeholder="Rechercher un site" className="mt-2 min-h-11" /></div>
       </div>
-      <p className="text-xs leading-5 text-muted-foreground">Pour une mission de nuit, sélectionnez sa date de début. Cette vue suit les affectations actuelles du planning ; les anciennes affectations retirées restent consultables dans les traces d’audit.</p>
+      <p className="text-xs leading-5 text-muted-foreground">Les missions qui chevauchent cette journée sont incluses, même si elles ont commencé la veille. Cette vue suit les affectations actuelles du planning ; les anciennes affectations retirées restent consultables dans les traces d’audit.</p>
     </section>
 
     {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">{error} Les données affichées peuvent ne plus être à jour.</p>}

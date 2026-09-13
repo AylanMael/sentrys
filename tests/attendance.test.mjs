@@ -58,8 +58,8 @@ for (const [date, start, hours] of [
 });
 for (const invalid of ['', 'bad', '2026-02-30', '2026-13-01', '2026-9-1']) test('invalid Paris date ' + invalid, () => assert.equal(parisDayRange(invalid), null));
 
-function routeFixture({ count = 1, role = 'owner', member = {}, tenant = {}, vacation = {}, site = {}, assignment = {} } = {}) {
-  const day = parisDayRange('2026-09-09');
+function routeFixture({ count = 1, date = '2026-09-09', role = 'owner', member = {}, tenant = {}, vacation = {}, site = {}, assignment = {} } = {}) {
+  const day = parisDayRange(date);
   const d = data();
   const rows = new Map([
     ['tenantUsers/u', { tenantId: 't', status: 'active', role, ...member }],
@@ -77,8 +77,16 @@ function routeFixture({ count = 1, role = 'owner', member = {}, tenant = {}, vac
     if (ref === query) {
       assert.equal(clauses[0][0], 'tenantId'); assert.equal(clauses[0][2], 't');
       assert.equal(+clauses[1][2], +day.start); assert.equal(+clauses[2][2], +day.end);
-      assert.deepEqual(JSON.parse(JSON.stringify(orders)), [['startAt', 'desc'], ['__name__', 'desc']]);
-      let docs = [...rows.keys()].filter(k => k.startsWith('vacations/')).sort().reverse().map(snap);
+      assert.deepEqual(clauses.map(([field, op]) => [field, op]), [['tenantId', '=='], ['endAt', '>'], ['startAt', '<']]);
+      assert.deepEqual(JSON.parse(JSON.stringify(orders)), [['startAt', 'desc'], ['endAt', 'desc'], ['__name__', 'desc']]);
+      let docs = [...rows.keys()].filter(k => k.startsWith('vacations/')).map(snap)
+        .filter(s => clauses.every(([field, op, expected]) => {
+          const raw = s.data()[field];
+          const value = raw?.toMillis ? raw.toMillis() : raw;
+          return op === '==' ? value === expected : op === '>' ? value > +expected : value < +expected;
+        }))
+        .sort((a, b) => b.data().startAt.toMillis() - a.data().startAt.toMillis()
+          || b.data().endAt.toMillis() - a.data().endAt.toMillis() || b.id.localeCompare(a.id));
       if (query.cursor) docs = docs.slice(docs.findIndex(s => s.id === query.cursor) + 1);
       docs = docs.slice(0, 21); return { docs, size: docs.length };
     }
@@ -97,8 +105,77 @@ function routeFixture({ count = 1, role = 'owner', member = {}, tenant = {}, vac
   runInNewContext(ts.transpileModule(readFileSync(new URL('../src/app/api/attendance/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
     exports, Date, require: name => { assert.ok(name in mocks, name); return mocks[name]; },
   });
-  return { rows, reads, get: (suffix = '') => exports.GET({ nextUrl: new URL('http://localhost/api/attendance?date=2026-09-09' + suffix) }) };
+  return { rows, reads, get: (suffix = '') => exports.GET({ nextUrl: new URL('http://localhost/api/attendance?date=' + date + suffix) }) };
 }
+
+for (const date of ['2026-09-09', '2026-03-29', '2026-10-25']) test('overnight overlap and midnight boundaries in Paris ' + date, async () => {
+  const day = parisDayRange(date);
+  for (const [start, end, included] of [
+    [+day.start - 4 * 3600000, +day.start + 8 * 3600000, true],
+    [+day.start - 48 * 3600000, +day.end + 3600000, true],
+    [+day.start - 3600000, +day.start, false],
+    [+day.end, +day.end + 3600000, false],
+    [+day.start, +day.end, true],
+  ]) {
+    const f = routeFixture({ date, vacation: { startAt: stamp(start), endAt: stamp(end) } });
+    const response = await f.get();
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).rows.length, included ? 1 : 0);
+  }
+});
+
+test('overnight pages accept an overlapping cursor from yesterday without duplicates', async () => {
+  const day = parisDayRange('2026-09-09');
+  const options = { count: 25, vacation: { startAt: stamp(+day.start - 3600000), endAt: stamp(+day.start + 3600000) } };
+  const first = await (await routeFixture(options).get()).json();
+  assert.equal(first.rows.length, 20);
+  const response = await routeFixture(options).get('&cursor=' + first.nextCursor);
+  assert.equal(response.status, 200);
+  const second = await response.json();
+  assert.equal(second.rows.length, 5);
+  assert.equal(second.nextCursor, null);
+  assert.equal(new Set([...first.rows, ...second.rows].map(r => r.id)).size, 25);
+});
+
+test('cursor ending at midnight is outside the selected day', async () => {
+  const day = parisDayRange('2026-09-09');
+  const f = routeFixture({ vacation: { startAt: stamp(+day.start - 3600000), endAt: stamp(+day.start) } });
+  assert.equal((await f.get('&cursor=v00')).status, 403);
+});
+
+test('mixed daytime and overnight pages keep stable ordering when start times tie', async () => {
+  const day = parisDayRange('2026-09-09');
+  const fixture = () => {
+    const f = routeFixture({ count: 25 });
+    for (let i = 0; i < 25; i++) {
+      const v = f.rows.get('vacations/v' + String(i).padStart(2, '0'));
+      v.startAt = stamp(+day.start + (i < 12 ? -3600000 : 3600000));
+      v.endAt = stamp(+day.start + (2 + i % 3) * 3600000);
+    }
+    return f;
+  };
+  const first = await (await fixture().get()).json();
+  const second = await (await fixture().get('&cursor=' + first.nextCursor)).json();
+  const rows = [...first.rows, ...second.rows];
+  assert.equal(rows.length, 25);
+  assert.equal(new Set(rows.map(r => r.id)).size, 25);
+  assert.equal(second.nextCursor, null);
+  for (let i = 1; i < rows.length; i++) {
+    assert.ok(rows[i - 1].startAt > rows[i].startAt
+      || (rows[i - 1].startAt === rows[i].startAt && rows[i - 1].endAt >= rows[i].endAt));
+  }
+});
+
+test('overlap query has a declared composite index', () => {
+  const config = JSON.parse(readFileSync(new URL('../firestore.indexes.json', import.meta.url), 'utf8'));
+  assert.ok(config.indexes.some(index => index.collectionGroup === 'vacations'
+    && index.queryScope === 'COLLECTION'
+    && JSON.stringify(index.fields) === JSON.stringify([
+      { fieldPath: 'tenantId', order: 'ASCENDING' },
+      { fieldPath: 'startAt', order: 'DESCENDING' },
+      { fieldPath: 'endAt', order: 'DESCENDING' },
+    ])));
+});
 test('attendance API returns minimal one-row projection, no-store, commercial read allowed', async () => {
   const f = routeFixture({ tenant: { status: 'suspended', suspensionMode: 'commercial' } });
   const r = await f.get(); assert.equal(r.status, 200); assert.equal(r.headers.get('cache-control'), 'no-store');

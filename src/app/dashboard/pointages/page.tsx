@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-provider";
 import { canReadBackoffice } from "@/lib/auth/role";
 import { apiFetch, getApiErrorMessage } from "@/lib/api/client-fetch";
 import { attendanceLabels, attendanceObservations, type AttendanceRow } from "@/lib/agents/attendance";
+import { attendanceFilters, filterAttendanceRows, type AttendanceFilter } from "@/lib/agents/attendance-filters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -16,7 +17,6 @@ const stamp = (value: string | null) => value ? new Intl.DateTimeFormat("fr-FR",
   timeZone: "Europe/Paris", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
 }).format(new Date(value)) : "Non enregistré";
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr");
 
 export default function PointagesPage() {
   const { user } = useAuth();
@@ -30,6 +30,7 @@ export default function PointagesPage() {
   const [synced, setSynced] = useState<number | null>(null);
   const [agent, setAgent] = useState("");
   const [site, setSite] = useState("");
+  const [statusFilter, setStatusFilter] = useState<AttendanceFilter>("all");
   const sequence = useRef(0);
   const invalidate = useCallback(() => { sequence.current++; }, []);
   const load = useCallback(async (after?: string) => {
@@ -51,7 +52,7 @@ export default function PointagesPage() {
     if (allowed && date) void load();
     return invalidate;
   }, [load, invalidate, allowed, date, user?.uid, user?.tenantId, user?.tenant?.status, user?.tenant?.suspensionMode]);
-  const filtered = rows.filter(row => normalize(row.agentName).includes(normalize(agent)) && normalize(row.siteName).includes(normalize(site)));
+  const filtered = filterAttendanceRows(rows, statusFilter, agent, site);
   const attention = rows.filter(row => attendanceObservations(row).length > 0).length;
   if (!allowed) return <div className="rounded-2xl border bg-card p-8"><h1 className="text-xl font-semibold">Pointages</h1><p className="mt-2 text-muted-foreground">Cette vue est réservée aux responsables autorisés de l’agence.</p></div>;
   return <main className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6">
@@ -75,6 +76,15 @@ export default function PointagesPage() {
         <div><label htmlFor="attendance-date" className="text-sm font-medium">Journée suivie · Paris</label><Input id="attendance-date" type="date" value={date} onChange={e => setDate(e.target.value)} className="mt-2 min-h-11" /></div>
         <div><label htmlFor="attendance-agent" className="text-sm font-medium">Agent · lignes chargées</label><Input id="attendance-agent" value={agent} onChange={e => setAgent(e.target.value)} placeholder="Rechercher un nom" className="mt-2 min-h-11" /></div>
         <div><label htmlFor="attendance-site" className="text-sm font-medium">Site · lignes chargées</label><Input id="attendance-site" value={site} onChange={e => setSite(e.target.value)} placeholder="Rechercher un site" className="mt-2 min-h-11" /></div>
+      </div>
+      <div role="group" aria-label="Situation des pointages" className="flex flex-wrap gap-2">
+        {attendanceFilters.map(filter => <Button key={filter.value} type="button" variant={statusFilter === filter.value ? "default" : "outline"}
+          aria-pressed={statusFilter === filter.value} className="min-h-11 rounded-xl" onClick={() => setStatusFilter(filter.value)}>{filter.label}</Button>)}
+      </div>
+      <p className="text-xs leading-5 text-muted-foreground">Filtres combinés sur les lignes chargées uniquement. « Écarts à vérifier » inclut les non-pointés, sorties manquantes, incohérences et écarts horaires. Les compteurs du haut restent ceux de toutes les lignes chargées.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p role="status" className="text-sm text-muted-foreground">{filtered.length} résultat(s) sur {rows.length} ligne(s) chargée(s){cursor ? " · liste partielle" : ""}.</p>
+        {(statusFilter !== "all" || agent || site) && <Button type="button" variant="ghost" className="min-h-11 rounded-xl" onClick={() => { setStatusFilter("all"); setAgent(""); setSite(""); }}>Réinitialiser les filtres</Button>}
       </div>
       <p className="text-xs leading-5 text-muted-foreground">Les missions qui chevauchent cette journée sont incluses, même si elles ont commencé la veille. Cette vue suit les affectations actuelles du planning ; les anciennes affectations retirées restent consultables dans les traces d’audit.</p>
     </section>
